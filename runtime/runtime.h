@@ -1,0 +1,287 @@
+/*
+ * runtime.h — X language runtime support library
+ *
+ * Included by every generated C file.  Defines the primitive types,
+ * string/array helpers, optional-type macros, and panic machinery.
+ */
+#ifndef XC_RUNTIME_H
+#define XC_RUNTIME_H
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <time.h>
+#include <ctype.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* ─── Primitive type aliases ─────────────────────────────────────────────── */
+
+typedef double          xc_number_t;
+typedef int64_t         xc_integer_t;
+typedef bool            xc_bool_t;
+typedef uint32_t        xc_char_t;      /* Unicode scalar value (UTF-32)    */
+typedef int64_t         xc_timestamp_t; /* nanoseconds since program start  */
+typedef size_t          xc_size_t;
+
+/* ─── String type ────────────────────────────────────────────────────────── */
+
+typedef struct {
+    const char* data;   /* UTF-8, NOT guaranteed NUL-terminated              */
+    xc_size_t   len;    /* byte length                                        */
+} xc_string_t;
+
+static inline xc_string_t xc_string_from_cstr(const char* s) {
+    return (xc_string_t){ .data = s, .len = s ? strlen(s) : 0 };
+}
+
+static inline xc_string_t xc_string_from_buf(const char* data, xc_size_t len) {
+    return (xc_string_t){ .data = data, .len = len };
+}
+
+/* Allocate a NUL-terminated copy (for passing to C APIs) */
+static inline char* xc_string_to_cstr(xc_string_t s) {
+    char* buf = (char*)malloc(s.len + 1);
+    if (!buf) abort();
+    memcpy(buf, s.data, s.len);
+    buf[s.len] = '\0';
+    return buf;
+}
+
+static inline xc_bool_t xc_string_eq(xc_string_t a, xc_string_t b) {
+    return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
+}
+
+/* Concatenate two strings — result is heap-allocated */
+static inline xc_string_t xc_string_concat(xc_string_t a, xc_string_t b) {
+    xc_size_t len = a.len + b.len;
+    char* buf = (char*)malloc(len + 1);
+    if (!buf) abort();
+    memcpy(buf, a.data, a.len);
+    memcpy(buf + a.len, b.data, b.len);
+    buf[len] = '\0';
+    return (xc_string_t){ .data = buf, .len = len };
+}
+
+/* Number → string */
+static inline xc_string_t xc_number_to_string(xc_number_t n) {
+    char buf[64];
+    if (n == (xc_integer_t)n)
+        snprintf(buf, sizeof(buf), "%lld", (long long)(xc_integer_t)n);
+    else
+        snprintf(buf, sizeof(buf), "%g", n);
+    return xc_string_from_cstr(strdup(buf));
+}
+
+static inline xc_string_t xc_integer_to_string(xc_integer_t n) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%lld", (long long)n);
+    return xc_string_from_cstr(strdup(buf));
+}
+
+static inline xc_string_t xc_bool_to_string(xc_bool_t b) {
+    return xc_string_from_cstr(b ? "true" : "false");
+}
+
+/* Simple regex match using libc (only ^ $ . * + ? supported) */
+xc_bool_t xc_string_matches(xc_string_t s, const char* pattern);
+
+/* ─── Array type ─────────────────────────────────────────────────────────── */
+
+typedef struct {
+    xc_string_t* data;
+    xc_size_t    len;
+    xc_size_t    cap;
+} xc_arr_string_t;
+
+typedef struct {
+    void*      data;
+    xc_size_t  len;
+    xc_size_t  cap;
+} xc_arr_any_t;
+
+/* ─── Optional helpers ───────────────────────────────────────────────────── */
+
+typedef struct { bool has_value; xc_number_t  value; } xc_opt_number_t;
+typedef struct { bool has_value; xc_integer_t value; } xc_opt_integer_t;
+typedef struct { bool has_value; xc_bool_t    value; } xc_opt_bool_t;
+typedef struct { bool has_value; xc_string_t  value; } xc_opt_string_t;
+typedef struct { bool has_value; xc_char_t    value; } xc_opt_char_t;
+typedef struct { bool has_value; xc_size_t    value; } xc_opt_size_t;
+
+#define XC_SOME(val)  { .has_value = true,  .value = (val) }
+#define XC_NONE_VAL   { .has_value = false }
+
+/* ─── Constraint checking ────────────────────────────────────────────────── */
+
+#define XC_CONSTRAINT_CHECK(cond, msg) \
+    do { \
+        if (!(cond)) { \
+            fprintf(stderr, "xc: constraint violation: %s  (at %s:%d)\n", \
+                    (msg), __FILE__, __LINE__); \
+            abort(); \
+        } \
+    } while (0)
+
+#define XC_PANIC(msg) \
+    do { \
+        fprintf(stderr, "xc: panic: %s  (at %s:%d)\n", (msg), __FILE__, __LINE__); \
+        abort(); \
+    } while (0)
+
+/* ─── System I/O ─────────────────────────────────────────────────────────── */
+
+static inline void xc_stdout_writeln(xc_string_t s) {
+    fwrite(s.data, 1, s.len, stdout);
+    fputc('\n', stdout);
+}
+
+static inline void xc_stdout_write(xc_string_t s) {
+    fwrite(s.data, 1, s.len, stdout);
+}
+
+static inline void xc_stderr_writeln(xc_string_t s) {
+    fwrite(s.data, 1, s.len, stderr);
+    fputc('\n', stderr);
+}
+
+static inline xc_opt_string_t xc_stdin_readline(void) {
+    char buf[4096];
+    if (!fgets(buf, sizeof(buf), stdin))
+        return (xc_opt_string_t){ .has_value = false };
+    xc_size_t len = strlen(buf);
+    if (len > 0 && buf[len-1] == '\n') buf[--len] = '\0';
+    char* copy = (char*)malloc(len + 1);
+    memcpy(copy, buf, len + 1);
+    return (xc_opt_string_t){ .has_value = true,
+                               .value = { .data = copy, .len = len } };
+}
+
+/* ─── Math helpers ───────────────────────────────────────────────────────── */
+
+static inline xc_number_t  xc_math_sqrt(xc_number_t x)  { return sqrt(x);  }
+static inline xc_number_t  xc_math_pow(xc_number_t x, xc_number_t y) { return pow(x,y); }
+static inline xc_number_t  xc_math_abs_n(xc_number_t x) { return fabs(x);  }
+static inline xc_integer_t xc_math_abs_i(xc_integer_t x){ return x < 0 ? -x : x; }
+static inline xc_number_t  xc_math_floor(xc_number_t x) { return floor(x); }
+static inline xc_number_t  xc_math_ceil(xc_number_t x)  { return ceil(x);  }
+static inline xc_number_t  xc_math_round(xc_number_t x) { return round(x); }
+
+/* ─── Timestamp ──────────────────────────────────────────────────────────── */
+
+static inline xc_timestamp_t xc_time_now(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (xc_timestamp_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
+/* ─── Bootstrap helpers (used by xc-in-X compiler) ──────────────────────── */
+
+/* Character at position i in string (0-terminated if out of range). */
+static inline xc_integer_t string_char_at(xc_string_t s, xc_integer_t i) {
+    return (i >= 0 && (xc_size_t)i < s.len)
+        ? (xc_integer_t)(unsigned char)s.data[(xc_size_t)i]
+        : 0;
+}
+static inline xc_integer_t string_len(xc_string_t s) { return (xc_integer_t)s.len; }
+
+/* Slice [from, to) — returned string borrows from the original. */
+static inline xc_string_t string_slice(xc_string_t s, xc_integer_t from, xc_integer_t to) {
+    if (from < 0) from = 0;
+    if ((xc_size_t)to  > s.len) to = (xc_integer_t)s.len;
+    if (from >= to) return (xc_string_t){ .data = s.data, .len = 0 };
+    return (xc_string_t){ .data = s.data + from, .len = (xc_size_t)(to - from) };
+}
+
+/* Character class helpers */
+static inline xc_bool_t is_alpha(xc_integer_t c)  { return isalpha((int)c) != 0; }
+static inline xc_bool_t is_digit(xc_integer_t c)  { return isdigit((int)c) != 0; }
+static inline xc_bool_t is_alnum(xc_integer_t c)  { return isalnum((int)c) != 0; }
+static inline xc_bool_t is_space_c(xc_integer_t c){ return isspace((int)c) != 0; }
+
+/* Integer → string conversion (heap-allocated) */
+static inline xc_string_t int_to_string(xc_integer_t n) { return xc_integer_to_string(n); }
+static inline xc_string_t number_to_str(xc_number_t  n) { return xc_number_to_string(n);  }
+
+/* File I/O */
+xc_string_t file_read_all(xc_string_t path);
+/* REPL / tooling */
+xc_string_t  read_line(void);
+xc_bool_t    stdin_eof(void);
+void         flush_out(void);
+xc_integer_t run_command(xc_string_t cmd);
+xc_string_t  get_env(xc_string_t name, xc_string_t dflt);
+
+/* Standard library primitives (wrapped by std/*.x) */
+xc_number_t  xstd_sqrt(xc_number_t);  xc_number_t xstd_pow(xc_number_t, xc_number_t);
+xc_number_t  xstd_exp(xc_number_t);   xc_number_t xstd_ln(xc_number_t);
+xc_number_t  xstd_log10(xc_number_t); xc_number_t xstd_sin(xc_number_t);
+xc_number_t  xstd_cos(xc_number_t);   xc_number_t xstd_tan(xc_number_t);
+xc_number_t  xstd_floor(xc_number_t); xc_number_t xstd_ceil(xc_number_t);
+xc_number_t  xstd_round(xc_number_t); xc_number_t xstd_fabs(xc_number_t);
+xc_number_t  xstd_pi(void);           xc_number_t xstd_e(void);
+xc_integer_t xstd_strlen(xc_string_t);
+xc_integer_t xstd_char_at(xc_string_t, xc_integer_t);
+xc_string_t  xstd_substring(xc_string_t, xc_integer_t, xc_integer_t);
+xc_string_t  xstd_trim(xc_string_t);
+xc_bool_t    xstd_starts_with(xc_string_t, xc_string_t);
+xc_bool_t    xstd_ends_with(xc_string_t, xc_string_t);
+xc_integer_t xstd_index_of(xc_string_t, xc_string_t);
+xc_bool_t    xstd_contains(xc_string_t, xc_string_t);
+xc_string_t  xstd_to_upper(xc_string_t);
+xc_string_t  xstd_to_lower(xc_string_t);
+xc_string_t  xstd_repeat(xc_string_t, xc_integer_t);
+xc_string_t  xstd_replace(xc_string_t, xc_string_t, xc_string_t);
+xc_bool_t    xstd_num_ok(xc_string_t);  xc_number_t  xstd_to_number(xc_string_t);
+xc_bool_t    xstd_int_ok(xc_string_t);  xc_integer_t xstd_to_integer(xc_string_t);
+xc_bool_t    xstd_file_exists(xc_string_t);
+void         xstd_exit(xc_integer_t);
+xc_integer_t xstd_now_nanos(void);
+void         xstd_sleep_ms(xc_integer_t);
+xc_bool_t   file_write(xc_string_t path, xc_string_t content);
+xc_bool_t   file_writeln(xc_string_t path, xc_string_t line);  /* appends newline */
+
+/* Array helpers for bootstrap compiler (typed push) */
+typedef struct { xc_string_t* data; xc_size_t len; xc_size_t cap; } xc_arr_string_heap_t;
+
+/* ─── Array literal helpers ──────────────────────────────────────────────── */
+
+/* Build an array fat pointer from a literal element list.
+ * Usage:  XC_ARRAY_LIT(xc_Player_t, elem1, elem2, elem3)             */
+#define XC_ARRAY_LIT(ElemType, ...) \
+    ((struct { ElemType* data; xc_size_t len; xc_size_t cap; }){ \
+        .data = (ElemType[]){ __VA_ARGS__ }, \
+        .len  = sizeof((ElemType[]){ __VA_ARGS__ }) / sizeof(ElemType), \
+        .cap  = sizeof((ElemType[]){ __VA_ARGS__ }) / sizeof(ElemType) \
+    })
+
+/* Empty typed array. */
+#define XC_ARRAY_EMPTY(ElemType) \
+    ((struct { ElemType* data; xc_size_t len; xc_size_t cap; }){ \
+        .data = NULL, .len = 0, .cap = 0 \
+    })
+
+/* ─── Optional helpers ───────────────────────────────────────────────────── */
+
+/* String-aware + operator: both sides must already be xc_string_t.
+ * The X compiler emits explicit xc_number_to_string / xc_integer_to_string
+ * wrapping when it knows one operand is not a string.               */
+#define xc_string_add(a, b) xc_string_concat((a), (b))
+
+/* ─── Process ────────────────────────────────────────────────────────────── */
+
+static inline void xc_process_exit(xc_integer_t code) {
+    exit((int)code);
+}
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* XC_RUNTIME_H */

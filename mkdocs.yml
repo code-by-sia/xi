@@ -1,0 +1,22 @@
+site_name: The X Programming Language
+site_description: A self-hosting, statically-typed, natively-compiled language with first-class DI.
+docs_dir: docs
+# Optional MkDocs site config (BSD-2-Clause). The pages in docs/ also read fine
+# as plain Markdown without any tooling.
+theme:
+  name: readthedocs
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - CLI & REPL: cli.md
+  - Language guide: language-guide.md
+  - Multi-file projects: multi-file.md
+  - Error handling: error-handling.md
+  - Standard library: stdlib.md
+  - How it works (self-hosting): internals.md
+markdown_extensions:
+  - admonition
+  - fenced_code
+  - tables
+  - toc:
+      permalink: true

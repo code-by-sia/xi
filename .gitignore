@@ -1,0 +1,23 @@
+# Build output (XC_OUT) and generated C
+/build/
+*.gen.c
+
+# Compiled binaries — rebuilt from source via ./compiler/bootstrap.sh
+/compiler/xc
+/compiler/repl
+/bin/
+
+# Tree-sitter / Node
+**/node_modules/
+editors/tree-sitter-x/.build/
+
+# OS / editor noise
+.DS_Store
+*.swp
+
+# Zed local grammar cache
+editors/zed/grammars/
+
+# Release artifacts
+*.tar.gz
+/x-*/

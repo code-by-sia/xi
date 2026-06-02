@@ -1,0 +1,2128 @@
+// xc code generator — Program -> C99
+// ── Expression / statement codegen from token stream ─────────────
+// Converts a Token[] body into C code string.
+
+// ── Expression / statement code generator ────────────────────────
+// A recursive-descent generator that walks body tokens and emits C,
+// tracking a small symbol table for type-aware dispatch.
+
+type ExprRes = { code: String, pos: Integer, xtyp: String }
+type GArgs   = { code: String, pos: Integer, firstRaw: String }
+
+type GCtx = {
+    prog:     Program,
+    symNames: String[],
+    symTypes: String[],
+    depNames: String[],
+    depTypes: String[],
+    retCtype: String
+}
+
+type StmtRes = { code: String, ctx: GCtx, pos: Integer }
+
+// ── token access helpers ─────────────────────────────────────────
+mapper gkind(toks: Token[], i: Integer) -> Integer {
+    return tokenArrGet(toks, i).kind
+}
+mapper gtext(toks: Token[], i: Integer) -> String {
+    return tokenArrGet(toks, i).text
+}
+
+// index of the } matching the { at openIdx
+mapper matchBrace(toks: Token[], openIdx: Integer) -> Integer {
+    let depth = 0
+    let p = openIdx
+    let n = tokenArrLen(toks)
+    let result = openIdx
+    let cont = true
+    while cont and p < n {
+        let k = gkind(toks, p)
+        if k == 102 {
+            depth = depth + 1
+        } else {
+            if k == 103 {
+                depth = depth - 1
+                if depth == 0 {
+                    result = p
+                    cont = false
+                }
+            }
+        }
+        p = p + 1
+    }
+    return result
+}
+
+// ── context helpers ───────────────────────────────────────────────
+creator mkGCtx(prog: Program) -> GCtx {
+    return GCtx { prog: prog, symNames: [], symTypes: [], depNames: [], depTypes: [], retCtype: "" }
+}
+
+mapper withRet(ctx: GCtx, ret: String) -> GCtx {
+    return GCtx {
+        prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
+        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ret
+    }
+}
+
+mapper addSym(ctx: GCtx, name: String, typ: String) -> GCtx {
+    return GCtx {
+        prog: ctx.prog,
+        symNames: appendString(ctx.symNames, name),
+        symTypes: appendString(ctx.symTypes, typ),
+        depNames: ctx.depNames,
+        depTypes: ctx.depTypes,
+        retCtype: ctx.retCtype
+    }
+}
+
+mapper addDep(ctx: GCtx, name: String, typ: String) -> GCtx {
+    return GCtx {
+        prog: ctx.prog,
+        symNames: ctx.symNames,
+        symTypes: ctx.symTypes,
+        depNames: appendString(ctx.depNames, name),
+        depTypes: appendString(ctx.depTypes, typ),
+        retCtype: ctx.retCtype
+    }
+}
+
+mapper lookupVar(ctx: GCtx, name: String) -> String {
+    let i = 0
+    let n = stringArrLen(ctx.symNames)
+    while i < n {
+        if stringArrGet(ctx.symNames, i) == name {
+            return stringArrGet(ctx.symTypes, i)
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+predicate isDepNameC(ctx: GCtx, name: String) {
+    let i = 0
+    let n = stringArrLen(ctx.depNames)
+    while i < n {
+        if stringArrGet(ctx.depNames, i) == name { return true }
+        i = i + 1
+    }
+    return false
+}
+
+mapper depTypeOf(ctx: GCtx, name: String) -> String {
+    let i = 0
+    let n = stringArrLen(ctx.depNames)
+    while i < n {
+        if stringArrGet(ctx.depNames, i) == name {
+            return stringArrGet(ctx.depTypes, i)
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+// ── name/type predicates over the program ─────────────────────────
+mapper ctypeToXName(ctype: String) -> String {
+    if ctype == "xc_string_t"  { return "String" }
+    if ctype == "xc_number_t"  { return "Number" }
+    if ctype == "xc_integer_t" { return "Integer" }
+    if ctype == "xc_bool_t"    { return "Bool" }
+    if ctype == "xc_char_t"    { return "Char" }
+    if ctype == "xc_size_t"    { return "Size" }
+    let n = string_len(ctype)
+    if n > 5 {
+        return string_slice(ctype, 3, n - 2)
+    }
+    return ""
+}
+
+// Resolve a refined type name to its underlying primitive X-type name.
+// e.g. NonEmpty -> String, Age -> Number. Compounds/interfaces pass through.
+mapper resolveX(prog: Program, xname: String) -> String {
+    if xname == "String"  { return "String" }
+    if xname == "Number"  { return "Number" }
+    if xname == "Integer" { return "Integer" }
+    if xname == "Bool"    { return "Bool" }
+    if xname == "Char"    { return "Char" }
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.name == xname {
+            if ts.isCompound {
+                return xname
+            }
+            return ctypeToXName(ts.baseCtype)
+        }
+        i = i + 1
+    }
+    return xname
+}
+
+predicate isModuleNameC(prog: Program, name: String) {
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        if moduleSpecGet(prog.modules, i).name == name { return true }
+        i = i + 1
+    }
+    return false
+}
+
+predicate isFuncNameC(prog: Program, name: String) {
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n {
+        if funcSpecGet(prog.functions, i).name == name { return true }
+        i = i + 1
+    }
+    return false
+}
+
+mapper funcRetXType(prog: Program, name: String) -> String {
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n {
+        let fs = funcSpecGet(prog.functions, i)
+        if fs.name == name { return resolveX(prog, ctypeToXName(fs.retCtype)) }
+        i = i + 1
+    }
+    return ""
+}
+
+predicate isExternNameC(prog: Program, name: String) {
+    let i = 0
+    let n = funcSpecLen(prog.externs)
+    while i < n {
+        if funcSpecGet(prog.externs, i).name == name { return true }
+        i = i + 1
+    }
+    return false
+}
+
+mapper externRetXType(prog: Program, name: String) -> String {
+    let i = 0
+    let n = funcSpecLen(prog.externs)
+    while i < n {
+        let fs = funcSpecGet(prog.externs, i)
+        if fs.name == name { return resolveX(prog, ctypeToXName(fs.retCtype)) }
+        i = i + 1
+    }
+    return ""
+}
+
+predicate isTypeNameC(prog: Program, name: String) {
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        if typeSpecGet(prog.types, i).name == name { return true }
+        i = i + 1
+    }
+    let j = 0
+    let m = classSpecLen(prog.classes)
+    while j < m {
+        if classSpecGet(prog.classes, j).name == name { return true }
+        j = j + 1
+    }
+    return false
+}
+
+// Is `name` a refined type carrying a `where` constraint?
+predicate isRefinedConstrained(prog: Program, name: String) {
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.name == name {
+            if not ts.isCompound {
+                if ts.hasWhere { return true }
+            }
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// If compound `typeName`'s `field` has a constrained refined type, return the
+// name of its check function (e.g. "xc_check_Age"); else "".
+mapper fieldCheckFn(prog: Program, typeName: String, field: String) -> String {
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.name == typeName {
+            let fi = 0
+            let fn2 = stringArrLen(ts.fields)
+            while fi < fn2 {
+                let fentry = stringArrGet(ts.fields, fi)
+                let colon = findChar(fentry, 58)
+                if string_slice(fentry, 0, colon) == field {
+                    let fctype = string_slice(fentry, colon + 1, string_len(fentry))
+                    let xname = ctypeToXName(fctype)
+                    if isRefinedConstrained(prog, xname) { return "xc_check_" + xname }
+                    return ""
+                }
+                fi = fi + 1
+            }
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+mapper fieldTypeNameC(prog: Program, typeName: String, field: String) -> String {
+    // Result<T> fields: .ok is Bool, .err is String, .value is T.
+    if field == "ok"  { return "Bool" }
+    if field == "err" { return "String" }
+    if startsWith2(typeName, "res_") and field == "value" {
+        let elem = string_slice(typeName, 4, string_len(typeName))
+        return resolveX(prog, xnameFromArrSuffix(elem))
+    }
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.name == typeName {
+            let fi = 0
+            let fn2 = stringArrLen(ts.fields)
+            while fi < fn2 {
+                let fentry = stringArrGet(ts.fields, fi)
+                let colon = findChar(fentry, 58)
+                let fname = string_slice(fentry, 0, colon)
+                if fname == field {
+                    let fctype = string_slice(fentry, colon + 1, string_len(fentry))
+                    return resolveX(prog, ctypeToXName(fctype))
+                }
+                fi = fi + 1
+            }
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+mapper builtinForPath(path: String) -> String {
+    if path == "system.stdout.writeln" { return "xc_stdout_writeln" }
+    if path == "system.stdout.write"   { return "xc_stdout_write" }
+    if path == "system.stderr.writeln" { return "xc_stderr_writeln" }
+    if path == "system.stdin.readLine" { return "xc_stdin_readline" }
+    if path == "system.process.exit"   { return "xc_process_exit" }
+    return "0 /* unknown builtin */"
+}
+
+// X type name -> C element type
+mapper xnameToCtype(xname: String) -> String {
+    if xname == "String"  { return "xc_string_t" }
+    if xname == "Number"  { return "xc_number_t" }
+    if xname == "Integer" { return "xc_integer_t" }
+    if xname == "Bool"    { return "xc_bool_t" }
+    if xname == "Char"    { return "xc_char_t" }
+    return "xc_" + xname + "_t"
+}
+
+// X type name -> array typedef suffix
+mapper arrSuffixOf(xname: String) -> String {
+    if xname == "String"  { return "string" }
+    if xname == "Number"  { return "number" }
+    if xname == "Integer" { return "integer" }
+    if xname == "Bool"    { return "bool" }
+    if xname == "Char"    { return "char" }
+    return xname
+}
+
+// array typedef suffix -> element X type name
+mapper xnameFromArrSuffix(suf: String) -> String {
+    if suf == "string"  { return "String" }
+    if suf == "number"  { return "Number" }
+    if suf == "integer" { return "Integer" }
+    if suf == "bool"    { return "Bool" }
+    if suf == "char"    { return "Char" }
+    return suf
+}
+
+predicate endsWith2(s: String, suffix: String) {
+    let sl = string_len(suffix)
+    let n = string_len(s)
+    if n < sl { return false }
+    return string_slice(s, n - sl, n) == suffix
+}
+
+predicate startsWith2(s: String, prefix: String) {
+    let pl = string_len(prefix)
+    if string_len(s) < pl { return false }
+    return string_slice(s, 0, pl) == prefix
+}
+
+// Primitive token kind -> C type (for type annotations in let statements)
+mapper primCtypeK(k: Integer) -> String {
+    if k == 260 { return "xc_number_t" }
+    if k == 261 { return "xc_integer_t" }
+    if k == 262 { return "xc_bool_t" }
+    if k == 263 { return "xc_string_t" }
+    if k == 264 { return "xc_char_t" }
+    if k == 265 { return "void" }
+    if k == 266 { return "xc_size_t" }
+    if k == 267 { return "const char*" }
+    return ""
+}
+
+// Read a type expression from a token stream and return its C type string.
+mapper typeCtypeOf(toks: Token[], start: Integer) -> String {
+    let k = gkind(toks, start)
+    let base = ""
+    let p = start
+    let pc = primCtypeK(k)
+    if string_len(pc) > 0 {
+        base = pc
+        p = start + 1
+    } else {
+        if k == 1 {
+            base = "xc_" + gtext(toks, start) + "_t"
+            p = start + 1
+        } else {
+            return "void*"
+        }
+    }
+    let suf = ctypeSuffix(base)
+    let result = base
+    let cont = true
+    while cont {
+        let pk = gkind(toks, p)
+        if pk == 127 {
+            result = "xc_opt_" + suf + "_t"
+            p = p + 1
+        } else {
+            if pk == 126 {
+                result = "xc_res_" + suf + "_t"
+                p = p + 1
+            } else {
+            if pk == 104 and gkind(toks, p + 1) == 105 {
+                result = "xc_arr_" + suf + "_t"
+                p = p + 2
+            } else {
+                cont = false
+            }
+            }
+        }
+    }
+    return result
+}
+
+// ── parameter seeding (parse the C param string) ──────────────────
+mapper addParamSym(ctx: GCtx, seg: String) -> GCtx {
+    let n = string_len(seg)
+    let s = 0
+    while s < n and string_char_at(seg, s) == 32 { s = s + 1 }
+    let lastSp = 0 - 1
+    let i = s
+    while i < n {
+        if string_char_at(seg, i) == 32 { lastSp = i }
+        i = i + 1
+    }
+    if lastSp < 0 { return ctx }
+    let ctype = string_slice(seg, s, lastSp)
+    let name  = string_slice(seg, lastSp + 1, n)
+    return addSym(ctx, name, resolveX(ctx.prog, ctypeToXName(ctype)))
+}
+
+mapper seedParams(ctx: GCtx, cparams: String) -> GCtx {
+    let result = ctx
+    let n = string_len(cparams)
+    if n == 0 { return result }
+    let start = 0
+    let i = 0
+    let cont = true
+    while cont {
+        let atEnd = i == n
+        let c = 0
+        if not atEnd { c = string_char_at(cparams, i) }
+        if atEnd or c == 44 {
+            let seg = string_slice(cparams, start, i)
+            result = addParamSym(result, seg)
+            start = i + 1
+        }
+        if atEnd { cont = false }
+        i = i + 1
+    }
+    return result
+}
+
+// coerce a C expression to a string value for concatenation
+mapper toStrC(code: String, typ: String) -> String {
+    if typ == "String" { return code }
+    if typ == "Integer" { return "xc_integer_to_string(" + code + ")" }
+    if typ == "Bool" { return "xc_bool_to_string(" + code + ")" }
+    if typ == "Number" { return "xc_number_to_string(" + code + ")" }
+    return "xc_number_to_string((xc_number_t)(" + code + "))"
+}
+
+// ── argument list ─────────────────────────────────────────────────
+mapper genArgs(toks: Token[], pos: Integer, ctx: GCtx) -> GArgs {
+    let p = pos + 1
+    let firstRaw = gtext(toks, p)
+    let out = ""
+    let first = true
+    while gkind(toks, p) != 101 and gkind(toks, p) != 0 {
+        let e = genExpr(toks, p, ctx)
+        p = e.pos
+        if not first { out = out + ", " }
+        out = out + e.code
+        first = false
+        if gkind(toks, p) == 106 { p = p + 1 }
+    }
+    if gkind(toks, p) == 101 { p = p + 1 }
+    return GArgs { code: out, pos: p, firstRaw: firstRaw }
+}
+
+// ── type literal:  TypeName { field: expr, ... } ──────────────────
+mapper genTypeLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let typeName = gtext(toks, pos)
+    let p = pos + 2
+    let out = "(xc_" + typeName + "_t){ "
+    let first = true
+    while gkind(toks, p) != 103 and gkind(toks, p) != 0 {
+        let fname = gtext(toks, p)
+        p = p + 1
+        if gkind(toks, p) == 108 { p = p + 1 }
+        let e = genExpr(toks, p, ctx)
+        p = e.pos
+        if not first { out = out + ", " }
+        // Construction is gated: if the field's type is a refined type, run its
+        // constraint check on the assigned value.
+        let chk = fieldCheckFn(ctx.prog, typeName, fname)
+        let val = e.code
+        if string_len(chk) > 0 { val = chk + "(" + e.code + ")" }
+        out = out + "." + fname + " = " + val
+        first = false
+        if gkind(toks, p) == 106 { p = p + 1 }
+    }
+    if gkind(toks, p) == 103 { p = p + 1 }
+    out = out + " }"
+    return ExprRes { code: out, pos: p, xtyp: typeName }
+}
+
+// ── primary ───────────────────────────────────────────────────────
+mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let k = gkind(toks, pos)
+    let txt = gtext(toks, pos)
+    if k == 2 { return ExprRes { code: txt + "LL", pos: pos + 1, xtyp: "Integer" } }
+    if k == 3 { return ExprRes { code: txt, pos: pos + 1, xtyp: "Number" } }
+    if k == 4 { return ExprRes { code: "xc_string_from_cstr(\"" + txt + "\")", pos: pos + 1, xtyp: "String" } }
+    if k == 236 { return ExprRes { code: "true", pos: pos + 1, xtyp: "Bool" } }
+    if k == 237 { return ExprRes { code: "false", pos: pos + 1, xtyp: "Bool" } }
+    if k == 254 { return ExprRes { code: "{0}", pos: pos + 1, xtyp: "" } }
+    if k == 253 { return ExprRes { code: "input", pos: pos + 1, xtyp: "" } }
+    if k == 243 { return ExprRes { code: "value", pos: pos + 1, xtyp: lookupVar(ctx, "value") } }
+    if k == 238 { return ExprRes { code: "self", pos: pos + 1, xtyp: "self" } }
+    if k == 100 {
+        let inner = genExpr(toks, pos + 1, ctx)
+        let p2 = inner.pos
+        if gkind(toks, p2) == 101 { p2 = p2 + 1 }
+        return ExprRes { code: "(" + inner.code + ")", pos: p2, xtyp: inner.xtyp }
+    }
+    if k == 104 {
+        // Array literal [ e1, e2, ... ]
+        let p = pos + 1
+        let out = ""
+        let count = 0
+        let firstX = ""
+        let first = true
+        while gkind(toks, p) != 105 and gkind(toks, p) != 0 {
+            let e = genExpr(toks, p, ctx)
+            p = e.pos
+            if first { firstX = e.xtyp }
+            if not first { out = out + ", " }
+            out = out + e.code
+            count = count + 1
+            first = false
+            if gkind(toks, p) == 106 { p = p + 1 }
+        }
+        if gkind(toks, p) == 105 { p = p + 1 }
+        if count == 0 {
+            return ExprRes { code: "{0}", pos: p, xtyp: "emptyarr" }
+        }
+        let arrType = "xc_arr_" + arrSuffixOf(firstX) + "_t"
+        let elemCtype = xnameToCtype(firstX)
+        let code = "(" + arrType + "){ .data = (" + elemCtype + "[]){ " + out
+                 + " }, .len = " + int_to_string(count) + ", .cap = " + int_to_string(count) + " }"
+        return ExprRes { code: code, pos: p, xtyp: arrSuffixOf(firstX) + "[]" }
+    }
+    if k == 1 {
+        if gkind(toks, pos + 1) == 102 and isTypeNameC(ctx.prog, txt) {
+            return genTypeLiteral(toks, pos, ctx)
+        }
+        if isDepNameC(ctx, txt) {
+            return ExprRes { code: "self->" + txt, pos: pos + 1, xtyp: depTypeOf(ctx, txt) }
+        }
+        if txt == "system" {
+            return ExprRes { code: "system", pos: pos + 1, xtyp: "ns:system" }
+        }
+        if isModuleNameC(ctx.prog, txt) {
+            return ExprRes { code: txt, pos: pos + 1, xtyp: "module:" + txt }
+        }
+        return ExprRes { code: txt, pos: pos + 1, xtyp: lookupVar(ctx, txt) }
+    }
+    return ExprRes { code: txt, pos: pos + 1, xtyp: "" }
+}
+
+// ── postfix:  .field  .method(args)  (call)  [index] ──────────────
+mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let base = genPrimary(toks, pos, ctx)
+    let code = base.code
+    let typ = base.xtyp
+    let bname = base.code
+    let p = base.pos
+    let cont = true
+    while cont {
+        let k = gkind(toks, p)
+        if k == 107 or k == 129 {
+            let fld = gtext(toks, p + 1)
+            if gkind(toks, p + 2) == 100 {
+                let al = genArgs(toks, p + 2, ctx)
+                if startsWith2(typ, "module:") and fld == "resolve" {
+                    // Module.resolve(I) -> automatic interface resolver
+                    code = "xc_resolve_" + al.firstRaw + "()"
+                    typ = al.firstRaw
+                } else {
+                    if startsWith2(typ, "ns:") {
+                        let path = string_slice(typ, 3, string_len(typ)) + "." + fld
+                        code = builtinForPath(path) + "(" + al.code + ")"
+                        typ = ""
+                    } else {
+                        if isInterface(ctx.prog, typ) {
+                            let sep = ""
+                            if string_len(al.code) > 0 { sep = ", " }
+                            let mret = ifaceMethodRet(ctx.prog, typ, fld)
+                            code = code + ".vtable->" + fld + "(" + code + ".self" + sep + al.code + ")"
+                            typ = mret
+                        } else {
+                            if isTypeNameC(ctx.prog, typ) {
+                                code = "xc_" + typ + "_" + fld + "(" + al.code + ")"
+                                typ = ""
+                            } else {
+                                code = code + "." + fld + "(" + al.code + ")"
+                                typ = ""
+                            }
+                        }
+                    }
+                }
+                p = al.pos
+            } else {
+                if startsWith2(typ, "ns:") {
+                    typ = "ns:" + string_slice(typ, 3, string_len(typ)) + "." + fld
+                } else {
+                    if fld == "data" and startsWith2(typ, "arr_") {
+                        // raw element pointer of an array fat pointer
+                        code = code + ".data"
+                        typ = "ptr:" + xnameFromArrSuffix(string_slice(typ, 4, string_len(typ)))
+                    } else {
+                        if typ == "String" and fld == "length" {
+                            // string `.length` -> runtime length
+                            code = "xstd_strlen(" + code + ")"
+                            typ = "Integer"
+                        } else {
+                            let ft = fieldTypeNameC(ctx.prog, typ, fld)
+                            code = code + "." + fld
+                            typ = ft
+                        }
+                    }
+                }
+                p = p + 2
+            }
+        } else {
+            if k == 100 {
+                let al = genArgs(toks, p, ctx)
+                if bname == "ok" {
+                    // ok(x) -> build the enclosing function's Result with .ok=true
+                    code = "(" + ctx.retCtype + "){ .ok = true, .value = " + al.code + " }"
+                    typ = ""
+                } else {
+                if bname == "err" {
+                    code = "(" + ctx.retCtype + "){ .ok = false, .err = " + al.code + " }"
+                    typ = ""
+                } else {
+                if bname == "isOk" {
+                    code = "((" + al.code + ").ok)"
+                    typ = "Bool"
+                } else {
+                if bname == "isErr" {
+                    code = "(!(" + al.code + ").ok)"
+                    typ = "Bool"
+                } else {
+                if isFuncNameC(ctx.prog, bname) {
+                    code = "xc_" + bname + "(" + al.code + ")"
+                    typ = funcRetXType(ctx.prog, bname)
+                } else {
+                    if isExternNameC(ctx.prog, bname) {
+                        code = bname + "(" + al.code + ")"
+                        typ = externRetXType(ctx.prog, bname)
+                    } else {
+                        code = bname + "(" + al.code + ")"
+                        typ = ""
+                    }
+                }
+                }
+                }
+                }
+                }
+                p = al.pos
+            } else {
+                if k == 104 {
+                    let ie = genExpr(toks, p + 1, ctx)
+                    let p2 = ie.pos
+                    if gkind(toks, p2) == 105 { p2 = p2 + 1 }
+                    if startsWith2(typ, "ptr:") {
+                        // already a raw pointer (e.g. arr.data) — index directly
+                        code = code + "[" + ie.code + "]"
+                        typ = string_slice(typ, 4, string_len(typ))
+                    } else {
+                        if startsWith2(typ, "arr_") {
+                            code = code + ".data[" + ie.code + "]"
+                            typ = xnameFromArrSuffix(string_slice(typ, 4, string_len(typ)))
+                        } else {
+                            if endsWith2(typ, "[]") {
+                                code = code + ".data[" + ie.code + "]"
+                                typ = string_slice(typ, 0, string_len(typ) - 2)
+                            } else {
+                                code = code + ".data[" + ie.code + "]"
+                                typ = ""
+                            }
+                        }
+                    }
+                    p = p2
+                } else {
+                    if k == 128 {
+                        // ?? null-coalesce
+                        let r = genPostfix(toks, p + 1, ctx)
+                        code = "(" + code + ".has_value ? " + code + ".value : " + r.code + ")"
+                        p = r.pos
+                    } else {
+                        // NOTE: a lone '?' (kind 127) is left unconsumed here so the
+                        // statement layer can lower it as Result error-propagation.
+                        cont = false
+                    }
+                }
+            }
+        }
+    }
+    return ExprRes { code: code, pos: p, xtyp: typ }
+}
+
+// ── unary ─────────────────────────────────────────────────────────
+mapper genUnary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let k = gkind(toks, pos)
+    if k == 119 {
+        let r = genUnary(toks, pos + 1, ctx)
+        return ExprRes { code: "(-" + r.code + ")", pos: r.pos, xtyp: r.xtyp }
+    }
+    if k == 126 or k == 227 {
+        let r = genUnary(toks, pos + 1, ctx)
+        return ExprRes { code: "(!" + r.code + ")", pos: r.pos, xtyp: "Bool" }
+    }
+    if k == 231 { return genUnary(toks, pos + 1, ctx) }
+    if k == 233 { return genUnary(toks, pos + 1, ctx) }
+    if k == 251 { return genUnary(toks, pos + 1, ctx) }
+    if k == 123 or k == 124 {
+        let r = genUnary(toks, pos + 1, ctx)
+        return ExprRes { code: "(&" + r.code + ")", pos: r.pos, xtyp: r.xtyp }
+    }
+    return genPostfix(toks, pos, ctx)
+}
+
+// ── multiplicative ────────────────────────────────────────────────
+mapper genMul(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let left = genUnary(toks, pos, ctx)
+    let code = left.code
+    let typ = left.xtyp
+    let p = left.pos
+    let cont = true
+    while cont {
+        let k = gkind(toks, p)
+        if k == 120 or k == 121 or k == 122 {
+            let op = " * "
+            if k == 121 { op = " / " }
+            if k == 122 { op = " % " }
+            let right = genUnary(toks, p + 1, ctx)
+            code = "(" + code + op + right.code + ")"
+            typ = "Number"
+            p = right.pos
+        } else {
+            cont = false
+        }
+    }
+    return ExprRes { code: code, pos: p, xtyp: typ }
+}
+
+// ── additive (with string concat) ────────────────────────────────
+mapper genAdd(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let left = genMul(toks, pos, ctx)
+    let code = left.code
+    let typ = left.xtyp
+    let p = left.pos
+    let cont = true
+    while cont {
+        let k = gkind(toks, p)
+        if k == 118 {
+            let right = genMul(toks, p + 1, ctx)
+            if typ == "String" or right.xtyp == "String" {
+                code = "xc_string_concat(" + toStrC(code, typ) + ", " + toStrC(right.code, right.xtyp) + ")"
+                typ = "String"
+            } else {
+                code = "(" + code + " + " + right.code + ")"
+            }
+            p = right.pos
+        } else {
+            if k == 119 {
+                let right = genMul(toks, p + 1, ctx)
+                code = "(" + code + " - " + right.code + ")"
+                typ = "Number"
+                p = right.pos
+            } else {
+                cont = false
+            }
+        }
+    }
+    return ExprRes { code: code, pos: p, xtyp: typ }
+}
+
+// ── comparison ────────────────────────────────────────────────────
+mapper genCmp(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let left = genAdd(toks, pos, ctx)
+    let code = left.code
+    let typ = left.xtyp
+    let p = left.pos
+    let cont = true
+    while cont {
+        let k = gkind(toks, p)
+        if k == 112 or k == 113 {
+            let right = genAdd(toks, p + 1, ctx)
+            if typ == "String" or right.xtyp == "String" {
+                let eq = "xc_string_eq(" + code + ", " + right.code + ")"
+                if k == 112 { code = eq } else { code = "(!" + eq + ")" }
+            } else {
+                let op = " == "
+                if k == 113 { op = " != " }
+                code = "(" + code + op + right.code + ")"
+            }
+            typ = "Bool"
+            p = right.pos
+        } else {
+            if k == 114 or k == 115 or k == 116 or k == 117 {
+                let op = " < "
+                if k == 115 { op = " > " }
+                if k == 116 { op = " <= " }
+                if k == 117 { op = " >= " }
+                let right = genAdd(toks, p + 1, ctx)
+                code = "(" + code + op + right.code + ")"
+                typ = "Bool"
+                p = right.pos
+            } else {
+                if k == 252 {
+                    let right = genAdd(toks, p + 1, ctx)
+                    code = "xc_string_matches(" + code + ", " + right.code + ".data)"
+                    typ = "Bool"
+                    p = right.pos
+                } else {
+                    if k == 228 {
+                        let right = genAdd(toks, p + 1, ctx)
+                        code = "(1)"
+                        typ = "Bool"
+                        p = right.pos
+                    } else {
+                        cont = false
+                    }
+                }
+            }
+        }
+    }
+    return ExprRes { code: code, pos: p, xtyp: typ }
+}
+
+// ── logical and / or ──────────────────────────────────────────────
+mapper genAnd(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let left = genCmp(toks, pos, ctx)
+    let code = left.code
+    let typ = left.xtyp
+    let p = left.pos
+    let cont = true
+    while cont {
+        if gkind(toks, p) == 225 {
+            let right = genCmp(toks, p + 1, ctx)
+            code = "(" + code + " && " + right.code + ")"
+            typ = "Bool"
+            p = right.pos
+        } else {
+            cont = false
+        }
+    }
+    return ExprRes { code: code, pos: p, xtyp: typ }
+}
+
+mapper genExpr(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let left = genAnd(toks, pos, ctx)
+    let code = left.code
+    let typ = left.xtyp
+    let p = left.pos
+    let cont = true
+    while cont {
+        if gkind(toks, p) == 226 {
+            let right = genAnd(toks, p + 1, ctx)
+            code = "(" + code + " || " + right.code + ")"
+            typ = "Bool"
+            p = right.pos
+        } else {
+            cont = false
+        }
+    }
+    return ExprRes { code: code, pos: p, xtyp: typ }
+}
+
+// ── statements ────────────────────────────────────────────────────
+mapper genStmts(toks: Token[], start: Integer, stop: Integer, ctx: GCtx) -> String {
+    let out = ""
+    let p = start
+    let curCtx = ctx
+    while p < stop and gkind(toks, p) != 0 {
+        let sr = genStmt(toks, p, curCtx)
+        out = out + sr.code
+        curCtx = sr.ctx
+        if sr.pos > p {
+            p = sr.pos
+        } else {
+            p = p + 1
+        }
+    }
+    return out
+}
+
+mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
+    let p = pos + 1
+    if gkind(toks, p) == 220 {
+        let nm = gtext(toks, p + 1)
+        let p2 = p + 2
+        if gkind(toks, p2) == 111 { p2 = p2 + 1 }
+        let e = genExpr(toks, p2, ctx)
+        let pe = e.pos
+        let close = matchBrace(toks, pe)
+        let bctx = addSym(ctx, nm, "")
+        let body = "        __auto_type " + nm + " = (" + e.code + ").value;\n" + genStmts(toks, pe + 1, close, bctx)
+        let code = "    if ((" + e.code + ").has_value) {\n" + body + "    }\n"
+        return StmtRes { code: code, ctx: ctx, pos: close + 1 }
+    }
+    let c = genExpr(toks, p, ctx)
+    let pc = c.pos
+    let close = matchBrace(toks, pc)
+    let body = genStmts(toks, pc + 1, close, ctx)
+    let code = "    if (" + c.code + ") {\n" + body + "    }"
+    let np = close + 1
+    if gkind(toks, np) == 223 {
+        if gkind(toks, np + 1) == 222 {
+            let inner = genIf(toks, np + 1, ctx)
+            code = code + " else " + inner.code
+            np = inner.pos
+        } else {
+            let eclose = matchBrace(toks, np + 1)
+            let ebody = genStmts(toks, np + 2, eclose, ctx)
+            code = code + " else {\n" + ebody + "    }\n"
+            np = eclose + 1
+        }
+    } else {
+        code = code + "\n"
+    }
+    return StmtRes { code: code, ctx: ctx, pos: np }
+}
+
+mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
+    let k = gkind(toks, pos)
+    if k == 220 {
+        let name = gtext(toks, pos + 1)
+        let p = pos + 2
+        let declCtype = ""
+        if gkind(toks, p) == 108 {
+            declCtype = typeCtypeOf(toks, p + 1)
+            while gkind(toks, p) != 111 and gkind(toks, p) != 0 { p = p + 1 }
+        }
+        if gkind(toks, p) == 111 { p = p + 1 }
+        let e = genExpr(toks, p, ctx)
+        let cdecl = "__auto_type"
+        if string_len(declCtype) > 0 { cdecl = declCtype }
+        // `let x = expr?` — Result error-propagation: bail out with the Err,
+        // otherwise bind x to the unwrapped Ok value.
+        if gkind(toks, e.pos) == 127 {
+            let tmp = "_r" + int_to_string(pos)
+            let line = "    __auto_type " + tmp + " = " + e.code + ";\n"
+                     + "    if (!" + tmp + ".ok) return (" + ctx.retCtype + "){ .ok = false, .err = " + tmp + ".err };\n"
+                     + "    " + cdecl + " " + name + " = " + tmp + ".value;\n"
+            return StmtRes { code: line, ctx: addSym(ctx, name, ""), pos: e.pos + 1 }
+        }
+        let line = "    " + cdecl + " " + name + " = " + e.code + ";\n"
+        return StmtRes { code: line, ctx: addSym(ctx, name, e.xtyp), pos: e.pos }
+    }
+    if k == 221 {
+        let nk = gkind(toks, pos + 1)
+        if nk == 0 or nk == 103 {
+            return StmtRes { code: "    return;\n", ctx: ctx, pos: pos + 1 }
+        }
+        let e = genExpr(toks, pos + 1, ctx)
+        let rc = e.code
+        if rc == "{0}" {
+            rc = "(" + ctx.retCtype + "){0}"
+        }
+        return StmtRes { code: "    return " + rc + ";\n", ctx: ctx, pos: e.pos }
+    }
+    if k == 222 {
+        return genIf(toks, pos, ctx)
+    }
+    if k == 247 {
+        let c = genExpr(toks, pos + 1, ctx)
+        let close = matchBrace(toks, c.pos)
+        let body = genStmts(toks, c.pos + 1, close, ctx)
+        return StmtRes { code: "    while (" + c.code + ") {\n" + body + "    }\n", ctx: ctx, pos: close + 1 }
+    }
+    if k == 248 {
+        let close = matchBrace(toks, pos + 1)
+        let body = genStmts(toks, pos + 2, close, ctx)
+        return StmtRes { code: "    for(;;) {\n" + body + "    }\n", ctx: ctx, pos: close + 1 }
+    }
+    if k == 249 { return StmtRes { code: "    break;\n", ctx: ctx, pos: pos + 1 } }
+    if k == 250 { return StmtRes { code: "    continue;\n", ctx: ctx, pos: pos + 1 } }
+    if k == 246 {
+        let varName = gtext(toks, pos + 1)
+        let p = pos + 2
+        if gkind(toks, p) == 229 { p = p + 1 }
+        let it = genExpr(toks, p, ctx)
+        let close = matchBrace(toks, it.pos)
+        let idv = "_i" + int_to_string(pos)
+        let itv = "_it" + int_to_string(pos)
+        let bctx = addSym(ctx, varName, "")
+        let body = genStmts(toks, it.pos + 1, close, bctx)
+        let code = "    { __auto_type " + itv + " = " + it.code + ";\n"
+                 + "      for (xc_size_t " + idv + " = 0; " + idv + " < " + itv + ".len; " + idv + " = " + idv + " + 1) {\n"
+                 + "        __auto_type " + varName + " = " + itv + ".data[" + idv + "];\n"
+                 + body + "      } }\n"
+        return StmtRes { code: code, ctx: ctx, pos: close + 1 }
+    }
+    if k == 211 {
+        let close = matchBrace(toks, pos + 2)
+        let body = genStmts(toks, pos + 3, close, ctx)
+        return StmtRes { code: "    {\n" + body + "    }\n", ctx: ctx, pos: close + 1 }
+    }
+    if k == 234 {
+        let close = matchBrace(toks, pos + 1)
+        let body = genStmts(toks, pos + 2, close, ctx)
+        return StmtRes { code: "    {\n" + body + "    }\n", ctx: ctx, pos: close + 1 }
+    }
+    if k == 224 {
+        return genMatch(toks, pos, ctx)
+    }
+    let e = genExpr(toks, pos, ctx)
+    let p = e.pos
+    let ak = gkind(toks, p)
+    if ak == 111 or ak == 130 or ak == 131 or ak == 132 or ak == 133 {
+        let op = " = "
+        if ak == 130 { op = " += " }
+        if ak == 131 { op = " -= " }
+        if ak == 132 { op = " *= " }
+        if ak == 133 { op = " /= " }
+        let rhs = genExpr(toks, p + 1, ctx)
+        return StmtRes { code: "    " + e.code + op + rhs.code + ";\n", ctx: ctx, pos: rhs.pos }
+    }
+    // bare `expr?` statement — propagate Err, discard the Ok value
+    if ak == 127 {
+        let tmp = "_r" + int_to_string(pos)
+        let line = "    __auto_type " + tmp + " = " + e.code + ";\n"
+                 + "    if (!" + tmp + ".ok) return (" + ctx.retCtype + "){ .ok = false, .err = " + tmp + ".err };\n"
+        return StmtRes { code: line, ctx: ctx, pos: p + 1 }
+    }
+    return StmtRes { code: "    " + e.code + ";\n", ctx: ctx, pos: p }
+}
+
+// match <expr> { pattern -> body, ... } lowered to an if/else chain.
+// Patterns: literals (int/float/string/bool), `_` wildcard, or an identifier
+// (binds the subject as a catch-all).
+mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
+    let e = genExpr(toks, pos + 1, ctx)
+    let p = e.pos
+    let subj = "_m" + int_to_string(pos)
+    let out = "    __auto_type " + subj + " = " + e.code + ";\n"
+    if gkind(toks, p) == 102 { p = p + 1 }   // {
+    let first = true
+    let cont = true
+    while cont and gkind(toks, p) != 103 and gkind(toks, p) != 0 {
+        let pt = tokenArrGet(toks, p)
+        let isWild = false
+        let cond = ""
+        let bindName = ""
+        if pt.kind == 2 {
+            cond = subj + " == " + pt.text + "LL"
+            p = p + 1
+        } else {
+        if pt.kind == 3 {
+            cond = subj + " == " + pt.text
+            p = p + 1
+        } else {
+        if pt.kind == 4 {
+            cond = "xc_string_eq(" + subj + ", xc_string_from_cstr(\"" + pt.text + "\"))"
+            p = p + 1
+        } else {
+        if pt.kind == 236 {
+            cond = subj
+            p = p + 1
+        } else {
+        if pt.kind == 237 {
+            cond = "(!" + subj + ")"
+            p = p + 1
+        } else {
+            isWild = true
+            if pt.kind == 1 {
+                if pt.text == "_" { bindName = "" } else { bindName = pt.text }
+            }
+            p = p + 1
+        } } } } }
+        if gkind(toks, p) == 109 { p = p + 1 }   // ->
+        let bctx = ctx
+        if string_len(bindName) > 0 { bctx = addSym(ctx, bindName, "") }
+        let bindLine = ""
+        if string_len(bindName) > 0 {
+            bindLine = "        __auto_type " + bindName + " = " + subj + ";\n"
+        }
+        let bodyCode = ""
+        if gkind(toks, p) == 102 {
+            let close = matchBrace(toks, p)
+            bodyCode = genStmts(toks, p + 1, close, bctx)
+            p = close + 1
+        } else {
+            let be = genExpr(toks, p, bctx)
+            bodyCode = "        " + be.code + ";\n"
+            p = be.pos
+        }
+        if gkind(toks, p) == 106 { p = p + 1 }   // ,
+        if isWild {
+            if first {
+                out = out + "    {\n" + bindLine + bodyCode + "    }\n"
+            } else {
+                out = out + "    else {\n" + bindLine + bodyCode + "    }\n"
+            }
+            cont = false
+        } else {
+            if first {
+                out = out + "    if (" + cond + ") {\n" + bodyCode + "    }\n"
+            } else {
+                out = out + "    else if (" + cond + ") {\n" + bodyCode + "    }\n"
+            }
+        }
+        first = false
+    }
+    if gkind(toks, p) == 103 { p = p + 1 }   // }
+    return StmtRes { code: out, ctx: ctx, pos: p }
+}
+
+// ── Code generator ────────────────────────────────────────────────
+
+mapper mangle(name: String) -> String {
+    return name   // in X, names are already valid C identifiers (no dots in this context)
+}
+
+mapper indent(s: String) -> String {
+    return "    " + s
+}
+
+// Refined-type aliases (typedef base) — must precede array typedefs.
+mapper genRefinedTypedefs(prog: Program) -> String {
+    let out = "/* === Refined type aliases === */\n"
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if not ts.isCompound {
+            out = out + "typedef " + ts.baseCtype + " xc_" + ts.name + "_t;\n"
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Full compound struct bodies (named structs, matching forward declarations).
+mapper genCompoundBodies(prog: Program) -> String {
+    let out = "/* === Compound struct bodies === */\n"
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.isCompound {
+            out = out + "struct xc_" + ts.name + "_s {\n"
+            let fi = 0
+            let fn2 = stringArrLen(ts.fields)
+            while fi < fn2 {
+                let field = stringArrGet(ts.fields, fi)
+                let colonPos = findChar(field, 58)
+                let fname = string_slice(field, 0, colonPos)
+                let fctype = string_slice(field, colonPos + 1, string_len(field))
+                out = out + "    " + fctype + " " + fname + ";\n"
+                fi = fi + 1
+            }
+            out = out + "};\n"
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+extern "C" {
+    mapper findChar(s: String, c: Integer) -> Integer
+    producer compile_c(cpath: String, binpath: String) -> Integer
+}
+
+mapper genForwardDecls(prog: Program) -> String {
+    let out = "/* === Forward declarations === */\n"
+    // Compound types (so array typedefs can use xc_T_t* before the full body)
+    let t = 0
+    let tn = typeSpecLen(prog.types)
+    while t < tn {
+        let ts = typeSpecGet(prog.types, t)
+        if ts.isCompound {
+            out = out + "typedef struct xc_" + ts.name + "_s xc_" + ts.name + "_t;\n"
+        }
+        t = t + 1
+    }
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        out = out + "typedef struct xc_" + cs.name + "_s xc_" + cs.name + "_t;\n"
+        i = i + 1
+    }
+    let j = 0
+    let m = ifaceSpecLen(prog.ifaces)
+    while j < m {
+        let is2 = ifaceSpecGet(prog.ifaces, j)
+        out = out + "typedef struct xc_" + is2.name + "_vtable_s xc_" + is2.name + "_vtable_t;\n"
+        out = out + "typedef struct xc_" + is2.name + "_s xc_" + is2.name + "_t;\n"
+        j = j + 1
+    }
+    return out + "\n"
+}
+
+mapper genIfaceDecls(prog: Program) -> String {
+    let out = "/* === Interfaces === */\n"
+    let i = 0
+    let n = ifaceSpecLen(prog.ifaces)
+    while i < n {
+        let is2 = ifaceSpecGet(prog.ifaces, i)
+        out = out + "struct xc_" + is2.name + "_vtable_s {\n"
+        let mi = 0
+        let mn = methodSpecLen(is2.methList)
+        while mi < mn {
+            let ms = methodSpecGet(is2.methList, mi)
+            let pstr = ms.params
+            if string_len(pstr) > 0 { pstr = ", " + pstr }
+            out = out + "    " + ms.retCtype + " (*" + ms.name + ")(void* self" + pstr + ");\n"
+            mi = mi + 1
+        }
+        out = out + "};\n"
+        out = out + "struct xc_" + is2.name + "_s { void* self; const xc_" + is2.name + "_vtable_t* vtable; };\n\n"
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+mapper genClassStructs(prog: Program) -> String {
+    let out = "/* === Class structs === */\n"
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        out = out + "struct xc_" + cs.name + "_s {\n"
+        let di = 0
+        let dn = depSpecLen(cs.depList)
+        while di < dn {
+            let dep = depSpecGet(cs.depList, di)
+            out = out + "    " + dep.ctype + " " + dep.name + ";\n"
+            di = di + 1
+        }
+        out = out + "};\n\n"
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Find the concrete class bound to an interface in a module
+mapper findBinding(prog: Program, moduleName: String, ifaceName: String) -> String {
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        if mod.name == moduleName {
+            let j = 0
+            let m = bindSpecLen(mod.bindings)
+            while j < m {
+                let b = bindSpecGet(mod.bindings, j)
+                if b.ifaceName == ifaceName {
+                    return b.concreteName
+                }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+mapper findScope(prog: Program, moduleName: String, ifaceName: String) -> String {
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        if mod.name == moduleName {
+            let j = 0
+            let m = bindSpecLen(mod.bindings)
+            while j < m {
+                let b = bindSpecGet(mod.bindings, j)
+                if b.ifaceName == ifaceName {
+                    return b.scopeKind
+                }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    return "transient"
+}
+
+// Find a class spec by name
+mapper findClass(prog: Program, name: String) -> ClassSpec {
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        if cs.name == name {
+            return cs
+        }
+        i = i + 1
+    }
+    return ClassSpec { name: "", implNames: [], depList: [], methList: [] }
+}
+
+predicate isInterface(prog: Program, name: String) {
+    let i = 0
+    let n = ifaceSpecLen(prog.ifaces)
+    while i < n {
+        let is2 = ifaceSpecGet(prog.ifaces, i)
+        if is2.name == name { return true }
+        i = i + 1
+    }
+    return false
+}
+
+// Return type (X name) of interface method, or "" if not found.
+// `predicate` methods return Bool.
+mapper ifaceMethodRet(prog: Program, iface: String, method: String) -> String {
+    let i = 0
+    let n = ifaceSpecLen(prog.ifaces)
+    while i < n {
+        let is2 = ifaceSpecGet(prog.ifaces, i)
+        if is2.name == iface {
+            let mi = 0
+            let mn = methodSpecLen(is2.methList)
+            while mi < mn {
+                let ms = methodSpecGet(is2.methList, mi)
+                if ms.name == method {
+                    if ms.kind == "predicate" { return "Bool" }
+                    return resolveX(prog, ctypeToXName(ms.retCtype))
+                }
+                mi = mi + 1
+            }
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+// ── Automatic dependency resolution ───────────────────────────────
+predicate classImplements(cs: ClassSpec, iface: String) {
+    let i = 0
+    let n = stringArrLen(cs.implNames)
+    while i < n {
+        if stringArrGet(cs.implNames, i) == iface { return true }
+        i = i + 1
+    }
+    return false
+}
+
+// All classes implementing interface I, in declaration order.
+mapper implementorsOf(prog: Program, iface: String) -> String[] {
+    let out: String[] = []
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        if classImplements(cs, iface) { out = appendString(out, cs.name) }
+        i = i + 1
+    }
+    return out
+}
+
+// Concrete class explicitly bound to I in any module, or "".
+mapper bindFor(prog: Program, iface: String) -> String {
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    let found = ""
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        let j = 0
+        let m = bindSpecLen(mod.bindings)
+        while j < m {
+            let b = bindSpecGet(mod.bindings, j)
+            if b.ifaceName == iface { found = b.concreteName }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return found
+}
+
+mapper bindScopeFor(prog: Program, iface: String) -> String {
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    let found = ""
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        let j = 0
+        let m = bindSpecLen(mod.bindings)
+        while j < m {
+            let b = bindSpecGet(mod.bindings, j)
+            if b.ifaceName == iface { found = b.scopeKind }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return found
+}
+
+// The single chosen implementor of I: explicit bind wins; else the sole (or
+// first) implementor; else "" when nothing implements I.
+mapper chosenImpl(prog: Program, iface: String) -> String {
+    let b = bindFor(prog, iface)
+    if string_len(b) > 0 { return b }
+    let impls = implementorsOf(prog, iface)
+    if stringArrLen(impls) > 0 { return stringArrGet(impls, 0) }
+    return ""
+}
+
+predicate isResolvable(prog: Program, iface: String) {
+    if string_len(bindFor(prog, iface)) > 0 { return true }
+    if stringArrLen(implementorsOf(prog, iface)) > 0 { return true }
+    return false
+}
+
+// For `I or J`: bind wins; else the sole implementor other than J; else J.
+mapper orChoose(prog: Program, iface: String, alt: String) -> String {
+    let b = bindFor(prog, iface)
+    if string_len(b) > 0 { return b }
+    let impls = implementorsOf(prog, iface)
+    let pick = ""
+    let count = 0
+    let i = 0
+    let n = stringArrLen(impls)
+    while i < n {
+        let c = stringArrGet(impls, i)
+        if c != alt {
+            pick = c
+            count = count + 1
+        }
+        i = i + 1
+    }
+    if count == 1 { return pick }
+    return alt
+}
+
+mapper genVtablesAndCasters(prog: Program) -> String {
+    let out = "/* === Method forward decls and vtables === */\n"
+    // Forward-declare all _impl functions
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn {
+            let ms = methodSpecGet(cs.methList, mi)
+            if ms.kind != "creator" {
+                let pstr = ms.params
+                if string_len(pstr) > 0 { pstr = ", " + pstr }
+                out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "_impl(void* self_ptr" + pstr + ");\n"
+            }
+            mi = mi + 1
+        }
+        i = i + 1
+    }
+    out = out + "\n"
+
+    // Vtable instances + casters
+    let ci = 0
+    let cn2 = classSpecLen(prog.classes)
+    while ci < cn2 {
+        let cs = classSpecGet(prog.classes, ci)
+        let ii = 0
+        let iN = stringArrLen(cs.implNames)
+        while ii < iN {
+            let ifname = stringArrGet(cs.implNames, ii)
+            // Find interface methods
+            let ifSpec = IfaceSpec { name: "", extendsNames: [], methList: [] }
+            let fi = 0
+            let fn2 = ifaceSpecLen(prog.ifaces)
+            while fi < fn2 {
+                let cand = ifaceSpecGet(prog.ifaces, fi)
+                if cand.name == ifname { ifSpec = cand }
+                fi = fi + 1
+            }
+            out = out + "static const xc_" + ifname + "_vtable_t xc_" + cs.name + "_" + ifname + "_vtable = {\n"
+            let mi = 0
+            let mn = methodSpecLen(ifSpec.methList)
+            while mi < mn {
+                let ms = methodSpecGet(ifSpec.methList, mi)
+                out = out + "    ." + ms.name + " = (void*)xc_" + cs.name + "_" + ms.name + "_impl,\n"
+                mi = mi + 1
+            }
+            out = out + "};\n"
+            out = out + "static inline xc_" + ifname + "_t xc_" + cs.name + "_as_" + ifname + "(xc_" + cs.name + "_t* self) {\n"
+            out = out + "    return (xc_" + ifname + "_t){ .self = self, .vtable = &xc_" + cs.name + "_" + ifname + "_vtable };\n"
+            out = out + "}\n\n"
+            ii = ii + 1
+        }
+        ci = ci + 1
+    }
+    return out + "\n"
+}
+
+// Generate the body of a function/method by converting body tokens to C
+mapper genBody2(toks: Token[], ctx: GCtx) -> String {
+    return genStmts(toks, 0, tokenArrLen(toks), ctx)
+}
+
+predicate strArrContains(arr: String[], s: String) {
+    let i = 0
+    let n = stringArrLen(arr)
+    while i < n {
+        if stringArrGet(arr, i) == s { return true }
+        i = i + 1
+    }
+    return false
+}
+
+mapper countFuncs(prog: Program, name: String) -> Integer {
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    let c = 0
+    while i < n {
+        if funcSpecGet(prog.functions, i).name == name { c = c + 1 }
+        i = i + 1
+    }
+    return c
+}
+
+// "xc_T_t a, xc_U_t b" -> "a, b"   (argument list for forwarding a call)
+mapper paramArgList(cparams: String) -> String {
+    let n = string_len(cparams)
+    if n == 0 { return "" }
+    let out = ""
+    let start = 0
+    let i = 0
+    let first = true
+    let cont = true
+    while cont {
+        let atEnd = i == n
+        let c = 0
+        if not atEnd { c = string_char_at(cparams, i) }
+        if atEnd or c == 44 {
+            let seg = string_slice(cparams, start, i)
+            if not first { out = out + ", " }
+            out = out + lastWord(seg)
+            first = false
+            start = i + 1
+        }
+        if atEnd { cont = false }
+        i = i + 1
+    }
+    return out
+}
+
+// Emit local declarations + auto-wiring for a function's dependency block.
+mapper funcDepPrologue(prog: Program, dlist: DepSpec[]) -> String {
+    let out = ""
+    let i = 0
+    let n = depSpecLen(dlist)
+    while i < n {
+        let dep = depSpecGet(dlist, i)
+        out = out + "    " + dep.ctype + " " + dep.name + ";\n"
+        out = out + wireDep(prog, dep, dep.name)
+        i = i + 1
+    }
+    return out
+}
+
+// Add a function's deps to the context as locals (bare-name access).
+mapper seedFuncDeps(ctx: GCtx, dlist: DepSpec[]) -> GCtx {
+    let result = ctx
+    let i = 0
+    let n = depSpecLen(dlist)
+    while i < n {
+        let dep = depSpecGet(dlist, i)
+        result = addSym(result, dep.name, dep.ifaceName)
+        i = i + 1
+    }
+    return result
+}
+
+mapper emitOneFunc(prog: Program, fs: FuncSpec) -> String {
+    let out = "static " + fs.retCtype + " xc_" + fs.name + "(" + fs.params + ") {\n"
+    out = out + funcDepPrologue(prog, fs.fnDeps)
+    let ctx = seedFuncDeps(withRet(seedParams(mkGCtx(prog), fs.params), fs.retCtype), fs.fnDeps)
+    out = out + genBody2(fs.bodyTokens, ctx)
+    return out + "}\n\n"
+}
+
+// Emit a `where`-guarded overload set: each overload as xc_<name>__ovlK plus a
+// dispatcher xc_<name> that picks the first overload whose guard holds.
+mapper emitOverloadSet(prog: Program, name: String) -> String {
+    let out = ""
+    let dispatcher = ""
+    let defaultCall = ""
+    let haveDefault = false
+    let firstParams = ""
+    let firstRet = ""
+    let argList = ""
+    let firstSet = false
+    let k = 0
+    let idx = 0
+    let n = funcSpecLen(prog.functions)
+    while idx < n {
+        let fs = funcSpecGet(prog.functions, idx)
+        if fs.name == name {
+            if not firstSet {
+                firstParams = fs.params
+                firstRet = fs.retCtype
+                argList = paramArgList(fs.params)
+                firstSet = true
+            }
+            let implName = name + "__ovl" + int_to_string(k)
+            out = out + "static " + fs.retCtype + " xc_" + implName + "(" + fs.params + ") {\n"
+            let bctx = withRet(seedParams(mkGCtx(prog), fs.params), fs.retCtype)
+            out = out + genBody2(fs.bodyTokens, bctx)
+            out = out + "}\n\n"
+            let call = "xc_" + implName + "(" + argList + ")"
+            if fs.hasWhere {
+                let gctx = withRet(seedParams(mkGCtx(prog), fs.params), fs.retCtype)
+                let g = genExpr(fs.whereTokens, 0, gctx)
+                if firstRet == "void" {
+                    dispatcher = dispatcher + "    if (" + g.code + ") { " + call + "; return; }\n"
+                } else {
+                    dispatcher = dispatcher + "    if (" + g.code + ") return " + call + ";\n"
+                }
+            } else {
+                haveDefault = true
+                if firstRet == "void" {
+                    defaultCall = "    " + call + ";\n"
+                } else {
+                    defaultCall = "    return " + call + ";\n"
+                }
+            }
+            k = k + 1
+        }
+        idx = idx + 1
+    }
+    out = out + "static " + firstRet + " xc_" + name + "(" + firstParams + ") {\n"
+    out = out + dispatcher
+    if haveDefault {
+        out = out + defaultCall
+    } else {
+        out = out + "    XC_PANIC(\"no matching overload for " + name + "\");\n"
+        if firstRet != "void" {
+            out = out + "    return (" + firstRet + "){0};\n"
+        }
+    }
+    out = out + "}\n\n"
+    return out
+}
+
+mapper genFreeFunctions(prog: Program) -> String {
+    let out = "/* === Free functions === */\n"
+    let done: String[] = []
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n {
+        let fs = funcSpecGet(prog.functions, i)
+        if not strArrContains(done, fs.name) {
+            done = appendString(done, fs.name)
+            let cnt = countFuncs(prog, fs.name)
+            if cnt == 1 and not fs.hasWhere {
+                out = out + emitOneFunc(prog, fs)
+            } else {
+                out = out + emitOverloadSet(prog, fs.name)
+            }
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Seed a class's deps as dep-symbols (accessed via self->)
+mapper seedDeps(ctx: GCtx, cs: ClassSpec) -> GCtx {
+    let result = ctx
+    let di = 0
+    let dn = depSpecLen(cs.depList)
+    while di < dn {
+        let dep = depSpecGet(cs.depList, di)
+        result = addDep(result, dep.name, dep.ifaceName)
+        di = di + 1
+    }
+    return result
+}
+
+mapper genClassMethods(prog: Program) -> String {
+    let out = "/* === Class method implementations === */\n"
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn {
+            let ms = methodSpecGet(cs.methList, mi)
+            if ms.kind == "creator" {
+                out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "(" + ms.params + ") {\n"
+                let ctx = withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype)
+                out = out + genBody2(ms.bodyTokens, ctx)
+                out = out + "}\n\n"
+            } else {
+                let pstr = ms.params
+                if string_len(pstr) > 0 { pstr = ", " + pstr }
+                out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "_impl(void* self_ptr" + pstr + ") {\n"
+                out = out + "    xc_" + cs.name + "_t* self = (xc_" + cs.name + "_t*)self_ptr;\n"
+                let ctx = withRet(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.retCtype)
+                out = out + genBody2(ms.bodyTokens, ctx)
+                out = out + "}\n\n"
+            }
+            mi = mi + 1
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Emit C statements that wire one dependency into `target` (e.g. "o->logger").
+mapper wireDep(prog: Program, dep: DepSpec, target: String) -> String {
+    let j = dep.ifaceName
+    let form = dep.form
+
+    if form == "list" {
+        let impls = implementorsOf(prog, j)
+        let nimp = stringArrLen(impls)
+        let out = "    { xc_arr_" + j + "_t _a; _a.len = " + int_to_string(nimp) + "; _a.cap = " + int_to_string(nimp) + ";\n"
+        if nimp == 0 {
+            out = out + "      _a.data = (xc_" + j + "_t*)0;\n"
+        } else {
+            out = out + "      _a.data = (xc_" + j + "_t*)malloc(" + int_to_string(nimp) + " * sizeof(xc_" + j + "_t));\n"
+            let k = 0
+            while k < nimp {
+                let impl = stringArrGet(impls, k)
+                out = out + "      _a.data[" + int_to_string(k) + "] = xc_" + impl + "_as_" + j + "(xc_new_" + impl + "());\n"
+                k = k + 1
+            }
+        }
+        return out + "      " + target + " = _a; }\n"
+    }
+
+    if form == "where" {
+        let impls = implementorsOf(prog, j)
+        let nimp = stringArrLen(impls)
+        let gctx = addSym(mkGCtx(prog), dep.name, j)
+        let cond = genExpr(dep.whereTokens, 0, gctx)
+        let out = "    { bool _ok = false;\n"
+        let k = 0
+        while k < nimp {
+            let impl = stringArrGet(impls, k)
+            out = out + "      if (!_ok) { xc_" + j + "_t " + dep.name + " = xc_" + impl + "_as_" + j + "(xc_new_" + impl + "());\n"
+            out = out + "        if (" + cond.code + ") { " + target + " = " + dep.name + "; _ok = true; } }\n"
+            k = k + 1
+        }
+        if nimp > 0 {
+            let first = stringArrGet(impls, 0)
+            out = out + "      if (!_ok) { " + target + " = xc_" + first + "_as_" + j + "(xc_new_" + first + "()); }\n"
+        }
+        return out + "    }\n"
+    }
+
+    if form == "or" {
+        let chosen = orChoose(prog, j, dep.orAlt)
+        if string_len(chosen) == 0 { return "    /* dep " + dep.name + ": unresolved */\n" }
+        return "    " + target + " = xc_" + chosen + "_as_" + j + "(xc_new_" + chosen + "());\n"
+    }
+
+    if form == "opt" {
+        if isResolvable(prog, j) {
+            return "    " + target + ".has_value = true; " + target + ".value = xc_resolve_" + j + "();\n"
+        }
+        return "    /* optional dep " + dep.name + ": none */\n"
+    }
+
+    // single
+    if isInterface(prog, j) {
+        if isResolvable(prog, j) {
+            return "    " + target + " = xc_resolve_" + j + "();\n"
+        }
+        return "    /* dep " + dep.name + ": no implementor of " + j + " */\n"
+    }
+    return "    /* dep " + dep.name + ": non-interface */\n"
+}
+
+// Forward declarations so constructors/resolvers can mutually recurse.
+// Refined-type constraint checkers: xc_check_<T>(value) aborts on violation.
+mapper genCheckFns(prog: Program) -> String {
+    let out = "/* === Refined-type constraint checks === */\n"
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if not ts.isCompound {
+            if ts.hasWhere {
+                let base = ts.baseCtype
+                let ctx = addSym(mkGCtx(prog), "value", ctypeToXName(base))
+                let cond = genExpr(ts.whereTokens, 0, ctx)
+                out = out + "static " + base + " xc_check_" + ts.name + "(" + base + " value) {\n"
+                out = out + "    XC_CONSTRAINT_CHECK(" + cond.code + ", \"" + ts.name + "\");\n"
+                out = out + "    return value;\n}\n"
+            }
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+mapper genCtorResolverFwd(prog: Program) -> String {
+    let out = "/* === DI forward declarations === */\n"
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        out = out + "static xc_" + cs.name + "_t* xc_new_" + cs.name + "(void);\n"
+        i = i + 1
+    }
+    let j = 0
+    let m = ifaceSpecLen(prog.ifaces)
+    while j < m {
+        let is2 = ifaceSpecGet(prog.ifaces, j)
+        out = out + "static xc_" + is2.name + "_t xc_resolve_" + is2.name + "(void);\n"
+        j = j + 1
+    }
+    return out + "\n"
+}
+
+// Per-class heap constructor that auto-wires its dependencies.
+mapper genConstructors(prog: Program) -> String {
+    let out = "/* === DI constructors === */\n"
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        let cn = cs.name
+        out = out + "static xc_" + cn + "_t* xc_new_" + cn + "(void) {\n"
+        out = out + "    xc_" + cn + "_t* o = (xc_" + cn + "_t*)malloc(sizeof(xc_" + cn + "_t));\n"
+        out = out + "    if (!o) abort();\n"
+        out = out + "    memset(o, 0, sizeof(xc_" + cn + "_t));\n"
+        let di = 0
+        let dn = depSpecLen(cs.depList)
+        while di < dn {
+            let dep = depSpecGet(cs.depList, di)
+            out = out + wireDep(prog, dep, "o->" + dep.name)
+            di = di + 1
+        }
+        out = out + "    return o;\n}\n\n"
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Per-interface resolver: bind override or sole implementor; singleton or fresh.
+mapper genResolvers(prog: Program) -> String {
+    let out = "/* === DI resolvers === */\n"
+    let i = 0
+    let n = ifaceSpecLen(prog.ifaces)
+    while i < n {
+        let is2 = ifaceSpecGet(prog.ifaces, i)
+        let ifn = is2.name
+        out = out + "static xc_" + ifn + "_t xc_resolve_" + ifn + "(void) {\n"
+        let chosen = chosenImpl(prog, ifn)
+        if string_len(chosen) == 0 {
+            out = out + "    xc_" + ifn + "_t _z; memset(&_z, 0, sizeof(_z)); return _z;\n"
+        } else {
+            if bindScopeFor(prog, ifn) == "singleton" {
+                out = out + "    return xc_" + chosen + "_as_" + ifn + "(&xc_singleton_" + chosen + ");\n"
+            } else {
+                out = out + "    return xc_" + chosen + "_as_" + ifn + "(xc_new_" + chosen + "());\n"
+            }
+        }
+        out = out + "}\n\n"
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+mapper genSingletons(prog: Program) -> String {
+    let out = "/* === Singleton storage === */\n"
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        let j = 0
+        let m = bindSpecLen(mod.bindings)
+        while j < m {
+            let b = bindSpecGet(mod.bindings, j)
+            if b.scopeKind == "singleton" {
+                out = out + "static xc_" + b.concreteName + "_t xc_singleton_" + b.concreteName + ";\n"
+                out = out + "static bool xc_singleton_" + b.concreteName + "_initialized = false;\n"
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+mapper genSingletonInit(prog: Program) -> String {
+    let out = "/* === Singleton init === */\n"
+    out = out + "static void xc_init_singletons(void) {\n"
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        let j = 0
+        let m = bindSpecLen(mod.bindings)
+        while j < m {
+            let b = bindSpecGet(mod.bindings, j)
+            if b.scopeKind == "singleton" {
+                let cn = b.concreteName
+                // xc_new_ wires deps; singletons capture stable &storage addresses,
+                // so initialisation order is irrelevant.
+                out = out + "    if (!xc_singleton_" + cn + "_initialized) {\n"
+                out = out + "        xc_singleton_" + cn + "_initialized = true;\n"
+                out = out + "        xc_singleton_" + cn + " = *xc_new_" + cn + "();\n"
+                out = out + "    }\n"
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    out = out + "}\n\n"
+    return out
+}
+
+mapper genFactories(prog: Program) -> String {
+    let out = "/* === DI factory functions === */\n"
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        let j = 0
+        let m = bindSpecLen(mod.bindings)
+        while j < m {
+            let b = bindSpecGet(mod.bindings, j)
+            let ifn = b.ifaceName
+            let cn = b.concreteName
+            let mname = mod.name
+            let retType = ""
+            if isInterface(prog, ifn) {
+                retType = "xc_" + ifn + "_t"
+            } else {
+                retType = "xc_" + cn + "_t*"
+            }
+            out = out + "static " + retType + " xc_" + mname + "_resolve_" + ifn + "(void) {\n"
+            if b.scopeKind == "singleton" {
+                if isInterface(prog, ifn) {
+                    out = out + "    return xc_" + cn + "_as_" + ifn + "(&xc_singleton_" + cn + ");\n"
+                } else {
+                    out = out + "    return &xc_singleton_" + cn + ";\n"
+                }
+            } else {
+                // Transient: heap-allocate and wire deps
+                out = out + "    xc_" + cn + "_t* _obj = (xc_" + cn + "_t*)malloc(sizeof(xc_" + cn + "_t));\n"
+                out = out + "    if (!_obj) abort();\n"
+                out = out + "    memset(_obj, 0, sizeof(xc_" + cn + "_t));\n"
+                // Wire deps
+                let cls = findClass(prog, cn)
+                let di = 0
+                let dn = depSpecLen(cls.depList)
+                while di < dn {
+                    let dep = depSpecGet(cls.depList, di)
+                    let depConc = findBinding(prog, mname, dep.ifaceName)
+                    let depScope = findScope(prog, mname, dep.ifaceName)
+                    if string_len(depConc) > 0 {
+                        if isInterface(prog, dep.ifaceName) {
+                            if depScope == "singleton" {
+                                out = out + "    _obj->" + dep.name + " = xc_" + depConc + "_as_" + dep.ifaceName + "(&xc_singleton_" + depConc + ");\n"
+                            } else {
+                                out = out + "    xc_" + depConc + "_t* _dep_" + dep.name + " = (xc_" + depConc + "_t*)malloc(sizeof(xc_" + depConc + "_t));\n"
+                                out = out + "    memset(_dep_" + dep.name + ", 0, sizeof(xc_" + depConc + "_t));\n"
+                                out = out + "    _obj->" + dep.name + " = xc_" + depConc + "_as_" + dep.ifaceName + "(_dep_" + dep.name + ");\n"
+                            }
+                        }
+                    }
+                    di = di + 1
+                }
+                if isInterface(prog, ifn) {
+                    out = out + "    return xc_" + cn + "_as_" + ifn + "(_obj);\n"
+                } else {
+                    out = out + "    return _obj;\n"
+                }
+            }
+            out = out + "}\n\n"
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Return the last whitespace-separated word of a string (e.g. param name)
+mapper lastWord(s: String) -> String {
+    let n = string_len(s)
+    let lastSp = 0 - 1
+    let i = 0
+    while i < n {
+        if string_char_at(s, i) == 32 { lastSp = i }
+        i = i + 1
+    }
+    return string_slice(s, lastSp + 1, n)
+}
+
+mapper genEntry(prog: Program) -> String {
+    let es = prog.entrySpec
+    let out = "/* === Entry point === */\n"
+    out = out + "int main(int argc, char** argv) {\n"
+    out = out + "    xc_init_singletons();\n"
+    out = out + "    xc_arr_string_t xc_args;\n"
+    out = out + "    xc_args.len = (xc_size_t)argc;\n"
+    out = out + "    xc_args.cap = (xc_size_t)argc;\n"
+    out = out + "    xc_args.data = (xc_string_t*)malloc(argc * sizeof(xc_string_t));\n"
+    out = out + "    for (int i = 0; i < argc; i++) xc_args.data[i] = xc_string_from_cstr(argv[i]);\n"
+    let ctx = mkGCtx(prog)
+    if string_len(es.params) > 0 {
+        let pname = lastWord(es.params)
+        out = out + "    xc_arr_string_t " + pname + " = xc_args;\n"
+        ctx = addSym(ctx, pname, "arr_string")
+    }
+    out = out + genBody2(es.bodyTokens, ctx)
+    out = out + "    return 0;\n"
+    out = out + "}\n"
+    return out
+}
+
+// Array typedefs for user types — use xc_T_t* (pointer), so only the
+// forward declaration of T is required. Emit BEFORE compound bodies.
+mapper genArrTypedefs(prog: Program) -> String {
+    let out = "/* === User array typedefs === */\n"
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        out = out + "typedef struct { xc_" + ts.name + "_t* data; xc_size_t len; xc_size_t cap; } xc_arr_" + ts.name + "_t;\n"
+        i = i + 1
+    }
+    // Arrays of interface fat pointers (for list deps `I[]`)
+    let j = 0
+    let m = ifaceSpecLen(prog.ifaces)
+    while j < m {
+        let is2 = ifaceSpecGet(prog.ifaces, j)
+        out = out + "typedef struct { xc_" + is2.name + "_t* data; xc_size_t len; xc_size_t cap; } xc_arr_" + is2.name + "_t;\n"
+        j = j + 1
+    }
+    return out + "\n"
+}
+
+// Optional typedefs embed xc_T_t by value, so they require the full type
+// definition. Emit AFTER compound bodies / refined aliases.
+mapper genOptTypedefs(prog: Program) -> String {
+    let out = "/* === User optional typedefs === */\n"
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        out = out + "typedef struct { bool has_value; xc_" + ts.name + "_t value; } xc_opt_" + ts.name + "_t;\n"
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Result<T> typedefs: { bool ok; T value; xc_string_t err; }
+// Emitted for primitives and every user type, so `T!` is always available.
+mapper genResTypedefs(prog: Program) -> String {
+    let out = "/* === Result typedefs (T!) === */\n"
+    out = out + "typedef struct { bool ok; xc_number_t value;  xc_string_t err; } xc_res_number_t;\n"
+    out = out + "typedef struct { bool ok; xc_integer_t value; xc_string_t err; } xc_res_integer_t;\n"
+    out = out + "typedef struct { bool ok; xc_bool_t value;    xc_string_t err; } xc_res_bool_t;\n"
+    out = out + "typedef struct { bool ok; xc_string_t value;  xc_string_t err; } xc_res_string_t;\n"
+    out = out + "typedef struct { bool ok; xc_char_t value;    xc_string_t err; } xc_res_char_t;\n"
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        out = out + "typedef struct { bool ok; xc_" + ts.name + "_t value; xc_string_t err; } xc_res_" + ts.name + "_t;\n"
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// extern "C" declarations (bare names — these resolve to C helpers/runtime)
+mapper genExternDecls(prog: Program) -> String {
+    let out = "/* === Extern C declarations === */\n"
+    let i = 0
+    let n = funcSpecLen(prog.externs)
+    while i < n {
+        let fs = funcSpecGet(prog.externs, i)
+        out = out + "extern " + fs.retCtype + " " + fs.name + "(" + fs.params + ");\n"
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Forward declarations for all free functions and creators.
+mapper genFuncForwardDecls(prog: Program) -> String {
+    let out = "/* === Function forward declarations === */\n"
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n {
+        let fs = funcSpecGet(prog.functions, i)
+        out = out + "static " + fs.retCtype + " xc_" + fs.name + "(" + fs.params + ");\n"
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+mapper genHeader() -> String {
+    return "/* Generated by xc-bootstrap — X compiler written in X */\n#include \"runtime.h\"\n\n"
+}
+
+mapper genAll(prog: Program) -> String {
+    return genHeader()
+         + genForwardDecls(prog)
+         + genRefinedTypedefs(prog)
+         + genArrTypedefs(prog)
+         + genCompoundBodies(prog)
+         + genOptTypedefs(prog)
+         + genResTypedefs(prog)
+         + genExternDecls(prog)
+         + genIfaceDecls(prog)
+         + genClassStructs(prog)
+         + genVtablesAndCasters(prog)
+         + genCheckFns(prog)
+         + genSingletons(prog)
+         + genCtorResolverFwd(prog)
+         + genConstructors(prog)
+         + genResolvers(prog)
+         + genSingletonInit(prog)
+         + genFuncForwardDecls(prog)
+         + genFreeFunctions(prog)
+         + genClassMethods(prog)
+         + genEntry(prog)
+}
+

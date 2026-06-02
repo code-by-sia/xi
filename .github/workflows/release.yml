@@ -1,0 +1,103 @@
+name: Release
+
+# Build and publish the X toolchain (compiler `xc` + REPL `x`) for several
+# targets. Pushing a version tag (e.g. v0.1.0) creates a GitHub Release with a
+# tarball per platform. Manual runs (workflow_dispatch) just upload artifacts.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest,    target: linux-x86_64 }
+          - { runner: ubuntu-24.04-arm, target: linux-arm64 }
+          - { runner: macos-13,         target: macos-x86_64 }
+          - { runner: macos-14,         target: macos-arm64 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build toolchain (bootstrap from source)
+        run: ./compiler/bootstrap.sh
+
+      - name: Verify self-hosting fixpoint
+        run: ./compiler/selfhost.sh
+
+      - name: Package
+        id: package
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          DIST="x-${VERSION}-${{ matrix.target }}"
+          mkdir -p "$DIST/bin" "$DIST/libexec"
+
+          # native binaries
+          cp compiler/xc "$DIST/libexec/xc"
+          cp bin/x       "$DIST/libexec/x"
+
+          # the compiler shells out to cc, so it needs the runtime + stdlib
+          cp -R runtime "$DIST/runtime"
+          cp -R std     "$DIST/std"
+
+          # wrappers that locate the bundle and set the env vars
+          cat > "$DIST/bin/xc" <<'SH'
+          #!/bin/sh
+          HERE="$(cd "$(dirname "$0")/.." && pwd)"
+          export XC_RUNTIME="${XC_RUNTIME:-$HERE/runtime}"
+          export XC_STD="${XC_STD:-$HERE}"
+          exec "$HERE/libexec/xc" "$@"
+          SH
+          cat > "$DIST/bin/x" <<'SH'
+          #!/bin/sh
+          HERE="$(cd "$(dirname "$0")/.." && pwd)"
+          export XC_RUNTIME="${XC_RUNTIME:-$HERE/runtime}"
+          export XC_STD="${XC_STD:-$HERE}"
+          export XC="${XC:-$HERE/bin/xc}"
+          exec "$HERE/libexec/x" "$@"
+          SH
+          chmod +x "$DIST/bin/xc" "$DIST/bin/x"
+
+          cat > "$DIST/README.txt" <<EOF
+          X toolchain ${VERSION} (${{ matrix.target }})
+
+          Contents:
+            bin/xc   - the X compiler (wrapper; sets XC_RUNTIME and XC_STD)
+            bin/x    - the X REPL / run tool
+            runtime/ - C runtime (xc invokes cc with this)
+            std/     - standard library (import "std/...")
+
+          Install: put bin/ on your PATH, e.g.
+            export PATH="\$PWD/$DIST/bin:\$PATH"
+            xc myprog.x        # -> build/myprog
+            x                  # interactive REPL
+
+          Requires a C compiler (cc / clang / gcc) on PATH.
+          EOF
+
+          tar -czf "$DIST.tar.gz" "$DIST"
+          echo "artifact=$DIST.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ steps.package.outputs.artifact }}
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.artifact }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
