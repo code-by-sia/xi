@@ -1,0 +1,12 @@
+# GitHub Linguist hints.
+
+# X isn't a Linguist-recognised language yet, so GitHub can't highlight it
+# natively. As an approximation, render .x blobs using a syntactically-close
+# language (TypeScript shares type/interface/class/let/import/export/namespace).
+# NOTE: this also makes GitHub count .x files as TypeScript in the language bar.
+# Delete this line if you'd rather .x render unhighlighted than be mislabeled.
+*.x linguist-language=TypeScript
+
+# Generated/seed artifacts: keep them out of language stats and collapsed in diffs.
+compiler/xc.stage0.c          linguist-generated=true
+editors/tree-sitter-x/src/**  linguist-generated=true
