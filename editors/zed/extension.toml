@@ -11,5 +11,5 @@ repository = "https://github.com/code-by-sia/x"
 # whenever the grammar changes (and re-install the extension).
 [grammars.x]
 repository = "https://github.com/code-by-sia/x"
-commit = "0000000000000000000000000000000000000000"  # <- set to `git rev-parse HEAD`
+commit = "d869c646bd25c832d8aecaad4464880eb492cb38"  # <- set to `git rev-parse HEAD`
 path = "editors/tree-sitter-x"
