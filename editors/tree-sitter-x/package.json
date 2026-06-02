@@ -2,7 +2,7 @@
   "name": "tree-sitter-x",
   "version": "0.0.0",
   "description": "Tree-sitter grammar for the X programming language",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "generate": "tree-sitter generate",
     "parse": "tree-sitter parse",

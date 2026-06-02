@@ -295,3 +295,14 @@ The repository is bootstrappable from source with only a C compiler:
 rebuilds itself from `compiler/xc.x`. `selfhost.sh` proves the fixpoint
 (gen0/gen1/gen2 emit byte-identical C). The C runtime is intrinsic — the X
 equivalent of libc/libcore — not compiler logic.
+
+## License
+
+X is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) and
+[NOTICE](NOTICE). The same license Kotlin uses: you may use, modify, and
+redistribute it (with attribution and the included patent grant).
+
+It is provided **"AS IS", without warranties of any kind, and with no
+obligation of support** (Apache-2.0 §7 Disclaimer of Warranty and §8 Limitation
+of Liability). It's an experimental personal project — issues/PRs are welcome,
+but no support, maintenance, or fitness for any purpose is guaranteed.
