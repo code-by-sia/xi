@@ -55,16 +55,20 @@
   "type" "interface" "class" "implements" "extends" "deps" "when" "otherwise"
   "bind" "as" "module" "scope" "creator" "entry" "let" "return" "if" "else"
   "match" "async" "await" "own" "dup" "unsafe" "extern" "export" "import"
-  "namespace" "for" "while" "loop" "break" "continue" "spawn" "where"
+  "namespace" "for" "while" "loop" "spawn" "where"
   "singleton" "transient" "scoped" "move"
 ] @keyword
+
+; `break` / `continue` are single-keyword statements, captured as nodes
+(break_stmt) @keyword
+(continue_stmt) @keyword
 
 [ "and" "or" "not" "is" "in" "matches" ] @keyword.operator
 
 ; ── operators / punctuation ───────────────────────────────────────
 [
-  "+" "-" "*" "/" "%" "==" "!=" "<" ">" "<=" ">=" "=" "->" "=>"
-  "&" "&mut" "|" "!" "?" "??" "?." "+=" "-=" "*=" "/=" "%="
+  "+" "-" "*" "/" "%" "==" "!=" "<" ">" "<=" ">=" "=" "->"
+  "&" "&mut" "!" "?" "??" "?." "+=" "-=" "*=" "/=" "%="
 ] @operator
 
 [ "(" ")" "{" "}" "[" "]" ] @punctuation.bracket
