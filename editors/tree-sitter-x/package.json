@@ -1,6 +1,6 @@
 {
   "name": "tree-sitter-x",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Tree-sitter grammar for the X programming language",
   "license": "MIT",
   "scripts": {
