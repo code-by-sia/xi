@@ -262,7 +262,6 @@ compiler/
 ├── xc              Native compiler binary (produced by bootstrap.sh)
 ├── fetch-seed.sh   Download the released xc binary that seeds the bootstrap
 ├── bootstrap.sh    Build the compiler (+ ./bin/x): seed compiles it, then self-rebuild
-├── build.sh        Compile an X program with the X compiler
 └── selfhost.sh     Self-hosting fixpoint verification
 runtime/
 ├── runtime.h       C runtime header (primitive types, string/array helpers)

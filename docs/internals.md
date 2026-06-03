@@ -87,7 +87,7 @@ compiler/
   repl.x        the REPL / run tool (compiled to ./x)
   xc_helpers.c  C primitives (extern "C")
   fetch-seed.sh download the released seed compiler
-  bootstrap.sh build.sh selfhost.sh
+  bootstrap.sh selfhost.sh
 runtime/
   runtime.h runtime.c   the C runtime
 examples/
