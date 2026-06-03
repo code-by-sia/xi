@@ -7,6 +7,8 @@ repo_name: code-by-sia/x
 # Markdown without any tooling. The site uses the Material theme.
 theme:
   name: material
+  logo: assets/logo-white.svg
+  favicon: assets/logo.svg
   features:
     - navigation.instant
     - navigation.tracking

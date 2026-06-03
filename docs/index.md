@@ -1,5 +1,10 @@
 # The X Programming Language
 
+<p align="center">
+  <img alt="X logo" src="assets/logo.svg#only-light" width="160" height="160">
+  <img alt="X logo" src="assets/logo-white.svg#only-dark" width="160" height="160">
+</p>
+
 X is a statically-typed, ahead-of-time compiled language that elevates patterns
 usually left to frameworks — **dependency injection**, **function intent**,
 **refined types** — into first-class language features. It compiles to native

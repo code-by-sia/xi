@@ -1,4 +1,11 @@
-# The X Programming Language
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-white.svg">
+    <img alt="X programming language logo" src="docs/assets/logo.svg" width="140" height="140">
+  </picture>
+</p>
+
+<h1 align="center">The X Programming Language</h1>
 
 X is a **statically-typed, ahead-of-time compiled** language with **first-class
 dependency injection**, **seven function kinds**, and **refined types** that
