@@ -38,6 +38,34 @@ type Team   = { lead: Person, members: Person[] }
 
 `T?` is an optional, `T[]` an array, `T!` a [result](error-handling.md).
 
+## Type aliases
+
+A `type` can alias another type — handy for readable *plural* names for arrays:
+
+```x
+type Person = { name: String, age: Number }
+type People = Person[]          // plural alias for an array
+type Name   = String            // plain alias
+
+mapper headcount(p: People) -> Integer { return p.len }
+type Team = { lead: Person, members: People }
+```
+
+## `empty` — zero values
+
+`empty T` evaluates to the zero value of `T`: a struct with all fields zeroed,
+an empty array, `0`/`false`, an empty string.
+
+```x
+let nobody = empty Person       // { name: "", age: 0 }
+let blank  = empty People       // an empty array (len 0)
+let zeroed = empty Team         // nested: members is an empty array too
+```
+
+It is a concrete blank value, distinct from an optional's `none`. Note it
+**bypasses refined-type checks** (a zero may not satisfy a constraint), so treat
+it as a deliberate blank/null-object, not a validated value.
+
 ## Function kinds
 
 Intent is part of the syntax. Each kind documents purity and effect:

@@ -80,6 +80,9 @@ export XC="$PWD/compiler/xc"
 ./bin/x                              # interactive REPL
 ```
 
+Runs on **Linux** (x86_64/arm64) and **macOS** (arm64/x86_64). On **Windows**,
+use **WSL2** and follow the Linux steps (no native Windows build yet).
+
 ## Dependency injection & IoC
 
 DI is built into the language. A class declares what it needs in a `deps { }`

@@ -6,6 +6,16 @@
 - `curl` and a POSIX shell.
 - Network access to download the bootstrap seed (or an existing `xc` via `XC_SEED`).
 
+Supported platforms: **Linux** (x86_64, arm64) and **macOS** (arm64, x86_64).
+
+## Windows
+
+There is no native Windows build yet — the runtime uses POSIX APIs (sockets,
+directories, processes). On Windows, use **WSL2**: install a Linux distribution,
+then follow the Linux instructions unchanged (download the `linux-x86_64`
+release or build from source inside WSL). A native Windows port is tracked as
+future work.
+
 ## Build the compiler from source
 
 The compiler is self-hosting. `bootstrap.sh` downloads the released `xc` binary

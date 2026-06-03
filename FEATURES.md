@@ -12,6 +12,8 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Compound types (`type Person = { name: Name, age: Age }`) | ✓ |
 | Optional types (`T?`) and `if let` unwrapping | ✓ |
 | Array types (`T[]`) | ✓ |
+| Type aliases incl. plural/array (`type People = Person[]`, `type Name = String`) | ✓ |
+| `empty T` — the zero value of any type (struct all-zero, array empty) | ✓ |
 | `Bytes` — raw binary buffer primitive (distinct from `String`) | ✓ |
 | Result type `T!` with `ok`/`err` and `?` propagation | ✓ |
 | Interfaces with vtable dispatch | ✓ |

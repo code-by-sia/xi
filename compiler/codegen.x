@@ -515,6 +515,25 @@ mapper genTypeLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
 mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let k = gkind(toks, pos)
     let txt = gtext(toks, pos)
+    // `empty T` — the zero value of T (struct all-zero, array empty, ...).
+    // Contextual: only when `empty` starts a primary AND is followed by a type
+    // (so `bytes.empty()` and any var/field named `empty` still work).
+    if k == 1 and txt == "empty" {
+        let nk = gkind(toks, pos + 1)
+        if nk == 1 or string_len(primCtypeK(nk)) > 0 {
+            let ctype = typeCtypeOf(toks, pos + 1)
+            let tp = pos + 2                     // after the base type token
+            let cont = true
+            while cont {
+                let pk = gkind(toks, tp)
+                if pk == 127 { tp = tp + 1 }                                   // ?
+                else { if pk == 126 { tp = tp + 1 }                            // !
+                else { if pk == 104 and gkind(toks, tp + 1) == 105 { tp = tp + 2 }  // []
+                else { cont = false } } }
+            }
+            return ExprRes { code: "(" + ctype + "){0}", pos: tp, xtyp: gtext(toks, pos + 1) }
+        }
+    }
     if k == 2 { return ExprRes { code: txt + "LL", pos: pos + 1, xtyp: "Integer" } }
     if k == 3 { return ExprRes { code: txt, pos: pos + 1, xtyp: "Number" } }
     if k == 4 { return ExprRes { code: "xc_string_from_cstr(\"" + txt + "\")", pos: pos + 1, xtyp: "String" } }
@@ -1223,13 +1242,37 @@ mapper indent(s: String) -> String {
 }
 
 // Refined-type aliases (typedef base) — must precede array typedefs.
+// An alias whose target is an array/optional type (e.g. `type People = Person[]`).
+// These reference xc_arr_*/xc_opt_* and so must be emitted AFTER those typedefs
+// (see genAliasTypedefs); they are skipped by the array/opt/result/refined passes.
+predicate isCompositeAlias(ts: TypeSpec) {
+    if ts.isCompound { return false }
+    return startsWith2(ts.baseCtype, "xc_arr_")
+}
+
 mapper genRefinedTypedefs(prog: Program) -> String {
     let out = "/* === Refined type aliases === */\n"
     let i = 0
     let n = typeSpecLen(prog.types)
     while i < n {
         let ts = typeSpecGet(prog.types, i)
-        if not ts.isCompound {
+        if not ts.isCompound and not isCompositeAlias(ts) {
+            out = out + "typedef " + ts.baseCtype + " xc_" + ts.name + "_t;\n"
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Aliases to array/optional types, emitted after genArrTypedefs/genOptTypedefs
+// so the target xc_arr_*/xc_opt_* typedefs already exist.
+mapper genAliasTypedefs(prog: Program) -> String {
+    let out = "/* === Array/optional type aliases === */\n"
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if isCompositeAlias(ts) {
             out = out + "typedef " + ts.baseCtype + " xc_" + ts.name + "_t;\n"
         }
         i = i + 1
@@ -2126,7 +2169,9 @@ mapper genArrTypedefs(prog: Program) -> String {
     let n = typeSpecLen(prog.types)
     while i < n {
         let ts = typeSpecGet(prog.types, i)
-        out = out + "typedef struct { xc_" + ts.name + "_t* data; xc_size_t len; xc_size_t cap; } xc_arr_" + ts.name + "_t;\n"
+        if not isCompositeAlias(ts) {
+            out = out + "typedef struct { xc_" + ts.name + "_t* data; xc_size_t len; xc_size_t cap; } xc_arr_" + ts.name + "_t;\n"
+        }
         i = i + 1
     }
     // Arrays of interface fat pointers (for list deps `I[]`)
@@ -2148,7 +2193,9 @@ mapper genOptTypedefs(prog: Program) -> String {
     let n = typeSpecLen(prog.types)
     while i < n {
         let ts = typeSpecGet(prog.types, i)
-        out = out + "typedef struct { bool has_value; xc_" + ts.name + "_t value; } xc_opt_" + ts.name + "_t;\n"
+        if not isCompositeAlias(ts) {
+            out = out + "typedef struct { bool has_value; xc_" + ts.name + "_t value; } xc_opt_" + ts.name + "_t;\n"
+        }
         i = i + 1
     }
     return out + "\n"
@@ -2167,7 +2214,9 @@ mapper genResTypedefs(prog: Program) -> String {
     let n = typeSpecLen(prog.types)
     while i < n {
         let ts = typeSpecGet(prog.types, i)
-        out = out + "typedef struct { bool ok; xc_" + ts.name + "_t value; xc_string_t err; } xc_res_" + ts.name + "_t;\n"
+        if not isCompositeAlias(ts) {
+            out = out + "typedef struct { bool ok; xc_" + ts.name + "_t value; xc_string_t err; } xc_res_" + ts.name + "_t;\n"
+        }
         i = i + 1
     }
     return out + "\n"
@@ -2222,6 +2271,7 @@ mapper genAll(prog: Program) -> String {
          + genForwardDecls(prog)
          + genRefinedTypedefs(prog)
          + genArrTypedefs(prog)
+         + genAliasTypedefs(prog)
          + genCompoundBodies(prog)
          + genOptTypedefs(prog)
          + genResTypedefs(prog)
