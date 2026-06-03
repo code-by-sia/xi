@@ -40,7 +40,8 @@ module App {}                             // resolution is automatic
   and a `Bytes` type for binary data.
 - **Multi-file projects** with `import` and `namespace`.
 - **A growing standard library** — math, text, bytes, fs, path, **net (TCP
-  sockets)**, process, time — see [`docs/stdlib.md`](docs/stdlib.md).
+  sockets)**, **http (HTTP/1.1 client)**, process, time — see
+  [`docs/stdlib.md`](docs/stdlib.md).
 - **Native, dependency-light output**: X → C99 → a native binary via your `cc`.
 
 Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:

@@ -143,6 +143,30 @@ helpers). Listen on port `0` for an OS-assigned port, then read it with `port`.
 | `close` | `consumer (Conn)` |
 | `closeListener` | `consumer (Listener)` |
 
+### `http` — `std/http.x`
+
+A minimal HTTP/1.1 client over `net` (plain `http://` only — no TLS). A
+`Response` is `{ status: Integer, headers: String, body: String }`, where
+`headers` is the raw CRLF-separated header block; look one up with `header`.
+
+| Function | Signature |
+|----------|-----------|
+| `get` | `(String) -> Response!` |
+| `post` | `(String, String, String) -> Response!` (url, body, contentType) |
+| `request` | `(String, String, String, String) -> Response!` (method, url, body, contentType) |
+| `header` | `(Response, String) -> String` (case-insensitive; `""` if absent) |
+| `parseUrl` | `(String) -> Url!` (`{host, port, path}`; rejects `https://`) |
+| `parseResponse` | `(String) -> Response!` |
+
+```x
+import "std/http.x"
+let r = http.get("http://example.com/")
+if isOk(r) {
+    system.stdout.writeln("status " + r.value.status)
+    system.stdout.writeln(r.value.body)
+}
+```
+
 ### `proc` — `std/process.x`
 
 | Function | Signature |

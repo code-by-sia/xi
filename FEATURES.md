@@ -66,6 +66,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `fs` | read/write text & **bytes**, exists/isDir/isFile, size/mtime, remove/rename/copy, mkdir/mkdirAll, cwd, listDir |
 | `path` | join/dirname/basename/ext/stripExt (pure) |
 | `net` | **TCP sockets, client + server** (dial/listen/accept/send/recv/close) |
+| `http` | **HTTP/1.1 client** over `net` (get/post/request, header lookup, URL parse; http:// only) |
 | `process` | env vars, run shell command, exit |
 | `time` | monotonic nanos, sleep |
 
