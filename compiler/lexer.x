@@ -220,6 +220,8 @@ mapper kwKind(word: String) -> Integer {
     if word == "input"       { return 253 }
     if word == "none"        { return 254 }
     if word == "namespace"   { return 255 }
+    if word == "decision"    { return 256 }
+    if word == "hit"         { return 257 }
     if word == "Number"      { return 260 }
     if word == "Integer"     { return 261 }
     if word == "Bool"        { return 262 }

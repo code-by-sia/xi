@@ -12,6 +12,7 @@ nav:
   - Language guide: language-guide.md
   - Multi-file projects: multi-file.md
   - Error handling: error-handling.md
+  - Decision tables (DxT): decisions.md
   - Standard library: stdlib.md
   - How it works (self-hosting): internals.md
 markdown_extensions:

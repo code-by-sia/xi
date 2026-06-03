@@ -302,6 +302,7 @@ mapper parseFuncKind(ps: PState) -> KindResult {
     if t.kind == 216 { return KindResult { kind: "consumer",  ps: advance(ps), ok: true } }
     if t.kind == 217 { return KindResult { kind: "producer",  ps: advance(ps), ok: true } }
     if t.kind == 218 { return KindResult { kind: "reducer",   ps: advance(ps), ok: true } }
+    if t.kind == 256 { return KindResult { kind: "decision",  ps: advance(ps), ok: true } }
     return KindResult { kind: "", ps: ps, ok: false }
 }
 
@@ -385,6 +386,112 @@ mapper parseBody(ps: PState) -> BodyResult {
     return BodyResult { bodyTokens: toks, ps: ps2 }
 }
 
+creator mkTok(kind: Integer, text: String, line: Integer) -> Token {
+    return Token { kind: kind, text: text, line: line }
+}
+
+// Decision tables (DxT). Body grammar:
+//     { [hit first] (when <expr> => <expr>)* else => <expr> }
+// Desugars to ordinary body tokens — an if/return chain — so codegen is reused:
+//     if <cond> { return <res> } ...  return <elseRes>
+// Conditions and results are full expressions (may call predicates / use deps).
+mapper parseDecisionBody(ps: PState) -> BodyResult {
+    let out: Token[] = []
+    let ps2 = ps
+    if peek(ps2).kind != 102 { return BodyResult { bodyTokens: out, ps: ps2 } }  // {
+    ps2 = advance(ps2)
+
+    // optional `hit <policy>` (default: first; only first supported for now)
+    if peek(ps2).kind == 257 {
+        ps2 = advance(ps2)
+        let pol = peek(ps2)
+        if pol.text != "first" {
+            diag_error(pol.line, "decision: only 'hit first' is supported (got '" + pol.text + "')")
+        }
+        ps2 = advance(ps2)
+    }
+
+    let hasElse = false
+    let running = true
+    while running {
+        let t = peek(ps2)
+        if t.kind == 103 or t.kind == 0 {
+            running = false
+        } else {
+            if t.kind == 206 {                      // when <cond> => <res>
+                if hasElse { diag_error(t.line, "decision: a 'when' after 'else' can never match") }
+                ps2 = advance(ps2)
+                // condition: collect until top-level `=>`
+                let cond: Token[] = []
+                let d = 0
+                while running {
+                    let c = peek(ps2)
+                    if c.kind == 0 { diag_error(t.line, "decision: unterminated 'when' (missing =>)") running = false }
+                    if d == 0 and c.kind == 110 { ps2 = advance(ps2) running = false } // => consumed
+                    else {
+                        if c.kind == 100 or c.kind == 104 { d = d + 1 }
+                        if c.kind == 101 or c.kind == 105 { d = d - 1 }
+                        cond = appendToken(cond, c)
+                        ps2 = advance(ps2)
+                    }
+                }
+                running = true
+                // result: collect until top-level when / else / otherwise / }
+                let res = collectArmResult(ps2)
+                ps2 = res.ps
+                out = appendToken(out, mkTok(222, "if", t.line))
+                out = concatTokens(out, cond)
+                out = appendToken(out, mkTok(102, "{", t.line))
+                out = appendToken(out, mkTok(221, "return", t.line))
+                out = concatTokens(out, res.bodyTokens)
+                out = appendToken(out, mkTok(103, "}", t.line))
+            } else {
+                if t.kind == 223 or t.kind == 207 {  // else / otherwise => <res>
+                    ps2 = advance(ps2)
+                    if peek(ps2).kind == 110 { ps2 = advance(ps2) }  // =>
+                    let res = collectArmResult(ps2)
+                    ps2 = res.ps
+                    out = appendToken(out, mkTok(221, "return", t.line))
+                    out = concatTokens(out, res.bodyTokens)
+                    hasElse = true
+                } else {
+                    diag_error(t.line, "decision: expected 'when' or 'else', got '" + t.text + "'")
+                    ps2 = advance(ps2)
+                }
+            }
+        }
+    }
+    if peek(ps2).kind == 103 { ps2 = advance(ps2) }  // }
+    if !hasElse { diag_error(peek(ps2).line, "decision requires an 'else' arm (the default outcome)") }
+    return BodyResult { bodyTokens: out, ps: ps2 }
+}
+
+// Collect a decision arm's result expression: tokens up to a top-level
+// `when` / `else` / `otherwise` / `}` (not consumed).
+mapper collectArmResult(ps: PState) -> BodyResult {
+    let res: Token[] = []
+    let ps2 = ps
+    let d = 0
+    let going = true
+    while going {
+        let c = peek(ps2)
+        if c.kind == 0 { going = false }
+        else {
+            if d == 0 and (c.kind == 206 or c.kind == 223 or c.kind == 207) { going = false }
+            else {
+                if d == 0 and c.kind == 103 { going = false }      // closing } of the table
+                else {
+                    if c.kind == 100 or c.kind == 104 or c.kind == 102 { d = d + 1 }
+                    if c.kind == 101 or c.kind == 105 or c.kind == 103 { d = d - 1 }
+                    res = appendToken(res, c)
+                    ps2 = advance(ps2)
+                }
+            }
+        }
+    }
+    return BodyResult { bodyTokens: res, ps: ps2 }
+}
+
 // Parse one function/method signature + body → FuncSpec
 type FuncResult = { spec: FuncSpec, ps: PState }
 
@@ -442,8 +549,12 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         }
     }
 
-    // body { ... }
+    // body { ... }  (decisions desugar their when/else arms to an if/return chain)
     let br = parseBody(ps2)
+    if kindStr == "decision" {
+        let dbr = parseDecisionBody(ps2)
+        br = dbr
+    }
     ps2 = br.ps
 
     let spec = FuncSpec {
@@ -567,6 +678,7 @@ predicate isDeclStart(tok: Token) {
     if k == 216 { return true }  // consumer
     if k == 217 { return true }  // producer
     if k == 218 { return true }  // reducer
+    if k == 256 { return true }  // decision
     if k == 230 { return true }  // async
     if k == 235 { return true }  // extern
     if k == 245 { return true }  // export
@@ -952,6 +1064,7 @@ predicate parseFuncKindCheck(ps: PState) {
     if k == 216 { return true }
     if k == 217 { return true }
     if k == 218 { return true }
+    if k == 256 { return true }   // decision
     return false
 }
 

@@ -32,6 +32,10 @@ module App {}                             // resolution is automatic
 - **Seven function kinds** name a function's role and intent —
   `mapper`, `projector`, `predicate`, `consumer`, `producer`, `reducer`,
   `creator` — and the compiler enforces purity for the pure ones.
+- **Decision tables** (`decision` kind) express business rules as
+  `when <cond> => <result>` arms — and, being a function kind, they're
+  DI-injectable and can call predicates. See
+  [decision tables](#decision-tables-dxt).
 - **Refined types** carry constraints (`type Age = Number where value >= 0`)
   that are **checked at construction**.
 - **Result-based error handling** (`T!`, `ok`/`err`, `?` propagation) — no
@@ -127,6 +131,42 @@ module App {}   // empty: resolution is automatic. Add `bind`s here only to stee
 
 Runnable as [`examples/di_auto.x`](examples/di_auto.x). `singleton` / `transient`
 scopes are selected with `bind I -> Impl as singleton`.
+
+## Decision tables (DxT)
+
+The `decision` function kind expresses rules as `when <condition> => <result>`
+arms with a final `else`. Conditions are ordinary expressions, so they can call
+predicates and use injected dependencies; `hit first` returns the first match.
+
+```x
+decision creditTier(score: Number, income: Number) -> String {
+    hit first
+    when score >= 750                      => "gold"
+    when score >= 650 and income >= 50000  => "gold"
+    when score >= 650                      => "silver"
+    else                                   => "bronze"
+}
+```
+
+Because it's a function kind, a `decision` can implement an interface method —
+making the whole policy DI-injectable:
+
+```x
+interface Pricing { decision quote(score: Number, base: Number) -> Number }
+class StdPricing implements Pricing {
+    deps { risk: RiskModel }
+    decision quote(score: Number, base: Number) -> Number {
+        hit first
+        when risk.risky(score) => base * 2      // condition uses an injected dep
+        when score >= 700      => base * 0.9
+        else                   => base
+    }
+}
+```
+
+A decision desugars to an `if/return` chain (zero runtime overhead). See
+[`docs/decisions.md`](docs/decisions.md) and
+[`examples/decision_demo.x`](examples/decision_demo.x).
 
 ## A tour of the rest
 

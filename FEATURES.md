@@ -23,6 +23,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Feature | Status |
 |---------|--------|
 | Seven function kinds (`mapper`, `projector`, `predicate`, `consumer`, `producer`, `reducer`, `creator`) | ✓ |
+| Decision tables — `decision` kind (`when <cond> => <result>`, `hit first`) | ✓ (MVP) |
 | Purity enforcement (pure kinds cannot mutate or be `async`) | ✓ (reference checks) |
 | `where`-guarded overloading (runtime overload selection by guard) | ✓ |
 | `match` (literal / string / bool / bound-ident / `_` patterns) | ✓ |
