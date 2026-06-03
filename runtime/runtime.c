@@ -10,6 +10,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 static xc_string_t xc_str_copy(const char* p, xc_size_t n);  /* defined below */
 
@@ -317,6 +321,69 @@ xc_arr_string_t xstd_list_dir(xc_string_t path) {
     }
     closedir(d);
     return out;
+}
+
+/* ─── Networking (TCP, blocking) ─────────────────────────────────────────── */
+
+xc_integer_t xstd_tcp_connect(xc_string_t host, xc_integer_t port) {
+    char* h = xc_string_to_cstr(host);
+    char portstr[16]; snprintf(portstr, sizeof(portstr), "%ld", (long)port);
+    struct addrinfo hints, *res, *rp;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_STREAM;
+    int gai = getaddrinfo(h, portstr, &hints, &res);
+    free(h);
+    if (gai != 0) return -1;
+    int fd = -1;
+    for (rp = res; rp; rp = rp->ai_next) {
+        fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (fd < 0) continue;
+        if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
+        close(fd); fd = -1;
+    }
+    freeaddrinfo(res);
+    return (xc_integer_t)fd;
+}
+
+xc_integer_t xstd_tcp_listen(xc_integer_t port, xc_integer_t backlog) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    int yes = 1; setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    struct sockaddr_in addr; memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons((unsigned short)port);
+    if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) { close(fd); return -1; }
+    if (listen(fd, (int)backlog) != 0) { close(fd); return -1; }
+    return (xc_integer_t)fd;
+}
+
+xc_integer_t xstd_tcp_accept(xc_integer_t fd) {
+    return (xc_integer_t)accept((int)fd, NULL, NULL);
+}
+
+/* The local port a socket is bound to (useful after listening on port 0). */
+xc_integer_t xstd_sock_port(xc_integer_t fd) {
+    struct sockaddr_in addr; socklen_t len = sizeof(addr);
+    if (getsockname((int)fd, (struct sockaddr*)&addr, &len) != 0) return -1;
+    return (xc_integer_t)ntohs(addr.sin_port);
+}
+
+xc_integer_t xstd_sock_send(xc_integer_t fd, xc_bytes_t data) {
+    return (xc_integer_t)send((int)fd, data.data, data.len, 0);
+}
+
+xc_bytes_t xstd_sock_recv(xc_integer_t fd, xc_integer_t max) {
+    if (max <= 0) return bytes_empty();
+    unsigned char* buf = (unsigned char*)malloc((size_t)max);
+    if (!buf) abort();
+    ssize_t n = recv((int)fd, buf, (size_t)max, 0);
+    if (n <= 0) { free(buf); return bytes_empty(); }
+    return (xc_bytes_t){ .data = buf, .len = (xc_size_t)n };
+}
+
+xc_bool_t xstd_sock_close(xc_integer_t fd) {
+    return close((int)fd) == 0;
 }
 
 /* ─── REPL / tooling helpers ─────────────────────────────────────────────── */

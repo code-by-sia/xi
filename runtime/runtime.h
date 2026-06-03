@@ -336,6 +336,14 @@ xc_bool_t    xstd_mkdir(xc_string_t path);
 xc_bool_t    xstd_mkdir_all(xc_string_t path);
 xc_string_t  xstd_cwd(void);
 xc_arr_string_t xstd_list_dir(xc_string_t path);
+/* networking (TCP, blocking) */
+xc_integer_t xstd_tcp_connect(xc_string_t host, xc_integer_t port);
+xc_integer_t xstd_tcp_listen(xc_integer_t port, xc_integer_t backlog);
+xc_integer_t xstd_tcp_accept(xc_integer_t fd);
+xc_integer_t xstd_sock_port(xc_integer_t fd);
+xc_integer_t xstd_sock_send(xc_integer_t fd, xc_bytes_t data);
+xc_bytes_t   xstd_sock_recv(xc_integer_t fd, xc_integer_t max);
+xc_bool_t    xstd_sock_close(xc_integer_t fd);
 void         xstd_exit(xc_integer_t);
 xc_integer_t xstd_now_nanos(void);
 void         xstd_sleep_ms(xc_integer_t);

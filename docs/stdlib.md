@@ -126,6 +126,23 @@ Pure-X path string helpers (no I/O).
 | `ext` | `(String) -> String` (incl. dot, `""` if none) |
 | `stripExt` | `(String) -> String` |
 
+### `net` — `std/net.x`
+
+Blocking TCP sockets, client and server. `Conn` and `Listener` wrap a socket
+file descriptor. Data is sent/received as `Bytes` (with `*Text` convenience
+helpers). Listen on port `0` for an OS-assigned port, then read it with `port`.
+
+| Function | Signature |
+|----------|-----------|
+| `dial` | `(String, Integer) -> Conn!` (host, port) |
+| `listen` | `(Integer) -> Listener!` |
+| `accept` | `(Listener) -> Conn!` (blocks) |
+| `port` | `(Listener) -> Integer` |
+| `send` / `recv` | `(Conn, Bytes) -> Integer` / `(Conn, Integer) -> Bytes` |
+| `sendText` / `recvText` | `(Conn, String) -> Integer` / `(Conn, Integer) -> String` |
+| `close` | `consumer (Conn)` |
+| `closeListener` | `consumer (Listener)` |
+
 ### `proc` — `std/process.x`
 
 | Function | Signature |
