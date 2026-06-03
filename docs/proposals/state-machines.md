@@ -13,9 +13,11 @@ Two layers:
    newState`. The atom computes the next value and swaps its pointer, dropping
    the old one. (This is the Redux store / Clojure atom model.)
 2. **`machine`** — a state machine: named states, an initial (and optional
-   terminal) state, and **arrows** that both name a transition and declare which
-   source states it's legal from. An illegal transition **signals an interrupt**,
-   so the caller can `recover` (stay put) or `skip`.
+   terminal) state, optional machine-wide **`data`** (context), and **arrows**
+   that name a transition, declare its legal source states, optionally **guard**
+   it with `where`, and **`update`** the data. A move that's illegal (wrong
+   source state, or guard false) **signals an interrupt**, so the caller can
+   `recover` (stay put) or `skip`.
 
 These reuse what X already has: a `transition` is the **`reducer`** intent
 `(state, input) → state`; immutability is X's value semantics; illegal moves use
@@ -68,42 +70,73 @@ a shared singleton store — future.)
 
 ## Layer 2 — `machine` (state machine)
 
+A machine has named **states**, an optional **data** context (machine-wide
+extended state), and **transitions** with optional payloads, **`where` guards**,
+and **`update`** clauses. The plain form (no data/guards/updates) is just an enum
+FSM:
+
 ```x
 machine Door {
-    states   Closed, Open, Locked
-    initial  Closed
-    terminal -                       // none here (could list terminal states)
+    states  Closed, Open, Locked
+    initial Closed
+    open  : Closed       -> Open
+    close : Open         -> Closed
+    lock  : Closed, Open -> Locked
+}
+```
 
-    open    : Closed        -> Open
-    close   : Open          -> Closed
-    lock    : Closed, Open  -> Locked     // multiple legal sources
-    unlock  : Locked        -> Closed
+The full form carries data, guards transitions, and updates the data:
+
+```x
+machine Lock {
+    states  Locked, Open
+    initial Locked
+    data { code: String = "1234", attempts: Integer = 0 }   // optional context
+
+    unlock(attempt: String) : Locked -> Open
+        where attempt == data.code                          // guard gates the move
+        update { attempts: 0 }                              // produce the next context
+
+    fail(attempt: String) : Locked -> Locked
+        where attempt != data.code
+        update { attempts: data.attempts + 1 }
+
+    lock : Open -> Locked
 }
 ```
 
 ```x
-let d = Door.start()      // immutable machine value at Closed
-let d2 = d.open()         // Closed -> Open  (legal)
-let d3 = d2.lock()        // Open -> Locked
-let d4 = d3.open()        // illegal from Locked -> signals IllegalTransition
-system.stdout.writeln(d3.state + " terminal? " + d3.isTerminal())
+let l = Lock.start()          // Locked, code="1234", attempts=0
+l = l.fail("0000")            // guard holds -> stays Locked, attempts=1
+l = l.unlock("0000")          // guard fails -> illegal -> signals IllegalTransition
+l = l.unlock("1234")          // -> Open, attempts reset to 0
+system.stdout.writeln(l.state + " / attempts=" + l.data.attempts)
 ```
 
 ### Semantics
 
 - **`states`** lists the named states (a small enum). **`initial`** and optional
   **`terminal`** name states in that set.
-- Each **`name : from (, from)* -> to`** declares a transition *and* its legal
-  source states.
-- A machine value is **immutable**: `d.open()` returns the advanced machine (so
-  `d = d.open()`), mirroring X's value semantics. To get Redux-style mutation,
-  hold a machine in an `atom`.
-- **Generated API**: the state enum, `Door.start()`, one method per transition
-  (`open`, `close`, …), `.state`, `.isTerminal()`, and `.can(open)`.
+- **`data { f: T = init, ... }`** (optional) declares the machine-wide context
+  with initial values. A machine value is then `{ state, data }`; without `data`
+  it is just the state.
+- A transition is **`name(params) : from (, from)* -> to`** with two optional
+  clauses:
+  - **`where <guard>`** — a boolean over the payload params and `data`. The move
+    is legal only if the from-state matches **and** the guard holds.
+  - **`update { field: expr, ... }`** — produces the next context; only the listed
+    fields change (the rest carry over). `expr` may reference `data` (the old
+    context) and the payload. (`update` is a reducer over the context.)
+- A machine value is **immutable**: `l.unlock(x)` returns the advanced machine
+  (`l = l.unlock(x)`), mirroring X's value semantics. To get Redux-style
+  mutation, hold a machine in an `atom`.
+- **Generated API**: the state enum, `Door.start()`, one method per transition,
+  `.state`, `.data` (if any), `.isTerminal()`, and `.can(unlock, payload?)`.
 
 ### Illegal transitions → an interrupt
 
-The machine auto-declares an interrupt and signals it on an illegal move:
+A move is **illegal** when the current state isn't an allowed source **or** the
+`where` guard is false. The machine auto-declares an interrupt and signals it:
 
 ```x
 interrupt IllegalTransition { from: String, to: String }
@@ -136,16 +169,20 @@ This is exactly the [interrupt](../interrupts.md) model.
 - `atom`: emit the holder global + a dispatch function per transition; `.current`
   reads the global. The `transition` bodies are ordinary reducer bodies.
 - `machine`: needs a **minimal enum** for the state set (X has no sum types yet —
-  this is the one prerequisite). Generate the enum, a value carrying the current
-  state, guarded transition functions (check the source state; on mismatch emit a
-  `signal IllegalTransition {...} recover {...}`), and the queries.
+  this is the one prerequisite). Generate the enum and a value `{ state, data }`
+  (data omitted when there's no `data` block). Each transition lowers to a guarded
+  reducer: check the source state and evaluate `where`; on failure
+  `signal IllegalTransition {...} recover {...}`; otherwise compute the next state
+  and apply `update` to the context (carrying unlisted fields over). Also emit the
+  queries (`state`, `data`, `isTerminal`, `can`).
 - The `atom` (state = struct) needs no new type machinery and can land first; the
   `machine` follows once the enum exists.
 
 ## Out of scope / future
 
-- **States that carry data** (e.g. `Running { startedAt }`) — needs real
-  sum/algebraic types.
+- **Per-state data** — distinct fields per state (e.g. `Running { startedAt }`).
+  The `data` block here is **machine-wide context** shared by all states;
+  per-state data needs real sum/algebraic types.
 - **Mutable machine instances** vs the immutable-value model above; multiple
   instances vs a singleton.
 - **History / time-travel**, entry/exit actions, and `async` transitions.
@@ -155,8 +192,12 @@ This is exactly the [interrupt](../interrupts.md) model.
 
 - The active-state primitive is **`atom`**; transitions use a dedicated
   **`transition`** keyword.
-- Machine states are **data-less named states** (a minimal enum) for the first
-  version.
-- Illegal transitions **signal an interrupt** (`recover` = stay, `skip` =
-  abandon).
-- `atom` can ship before `machine` (which needs the enum first).
+- Machine states are **named states** (a minimal enum); a machine may also carry
+  optional **machine-wide `data`** (context) declared inline `data { f: T = init }`.
+- Transitions take explicit payload **params**, an optional **`where`** guard, and
+  an optional **`update { field: expr }`** clause (partial; unlisted fields carry
+  over).
+- A move is illegal if the source state mismatches **or** the guard fails →
+  **signal an interrupt** (`recover` = stay, `skip` = abandon).
+- `atom` can ship before `machine` (which needs the enum first). Per-state data
+  (vs machine-wide context) waits for sum types.
