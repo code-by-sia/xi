@@ -162,76 +162,76 @@ creator mkLexState() -> LexState {
     return LexState { pos: 0, line: 1, col: 1 }
 }
 
-// Map a keyword string to its integer kind
-mapper kwKind(word: String) -> Integer {
-    if word == "type"        { return 200 }
-    if word == "interface"   { return 201 }
-    if word == "class"       { return 202 }
-    if word == "implements"  { return 203 }
-    if word == "extends"     { return 204 }
-    if word == "deps"        { return 205 }
-    if word == "when"        { return 206 }
-    if word == "otherwise"   { return 207 }
-    if word == "bind"        { return 208 }
-    if word == "as"          { return 209 }
-    if word == "module"      { return 210 }
-    if word == "scope"       { return 211 }
-    if word == "creator"     { return 212 }
-    if word == "mapper"      { return 213 }
-    if word == "projector"   { return 214 }
-    if word == "predicate"   { return 215 }
-    if word == "consumer"    { return 216 }
-    if word == "producer"    { return 217 }
-    if word == "reducer"     { return 218 }
-    if word == "entry"       { return 219 }
-    if word == "let"         { return 220 }
-    if word == "return"      { return 221 }
-    if word == "if"          { return 222 }
-    if word == "else"        { return 223 }
-    if word == "match"       { return 224 }
-    if word == "and"         { return 225 }
-    if word == "or"          { return 226 }
-    if word == "not"         { return 227 }
-    if word == "is"          { return 228 }
-    if word == "in"          { return 229 }
-    if word == "async"       { return 230 }
-    if word == "await"       { return 231 }
-    if word == "own"         { return 232 }
-    if word == "dup"         { return 233 }
-    if word == "unsafe"      { return 234 }
-    if word == "extern"      { return 235 }
-    if word == "true"        { return 236 }
-    if word == "false"       { return 237 }
-    if word == "self"        { return 238 }
-    if word == "singleton"   { return 239 }
-    if word == "transient"   { return 240 }
-    if word == "scoped"      { return 241 }
-    if word == "where"       { return 242 }
-    if word == "value"       { return 243 }
-    if word == "import"      { return 244 }
-    if word == "export"      { return 245 }
-    if word == "for"         { return 246 }
-    if word == "while"       { return 247 }
-    if word == "loop"        { return 248 }
-    if word == "break"       { return 249 }
-    if word == "continue"    { return 250 }
-    if word == "spawn"       { return 251 }
-    if word == "matches"     { return 252 }
-    if word == "input"       { return 253 }
-    if word == "none"        { return 254 }
-    if word == "namespace"   { return 255 }
-    if word == "decision"    { return 256 }
-    if word == "hit"         { return 257 }
-    if word == "Number"      { return 260 }
-    if word == "Integer"     { return 261 }
-    if word == "Bool"        { return 262 }
-    if word == "String"      { return 263 }
-    if word == "Char"        { return 264 }
-    if word == "Void"        { return 265 }
-    if word == "Size"        { return 266 }
-    if word == "cstring"     { return 267 }
-    if word == "Bytes"       { return 268 }
-    return 1  // IDENT
+// Map a keyword string to its integer kind (a decision table; default = IDENT).
+decision kwKind(word: String) -> Integer {
+    when word == "type"        => 200
+    when word == "interface"   => 201
+    when word == "class"       => 202
+    when word == "implements"  => 203
+    when word == "extends"     => 204
+    when word == "deps"        => 205
+    when word == "when"        => 206
+    when word == "otherwise"   => 207
+    when word == "bind"        => 208
+    when word == "as"          => 209
+    when word == "module"      => 210
+    when word == "scope"       => 211
+    when word == "creator"     => 212
+    when word == "mapper"      => 213
+    when word == "projector"   => 214
+    when word == "predicate"   => 215
+    when word == "consumer"    => 216
+    when word == "producer"    => 217
+    when word == "reducer"     => 218
+    when word == "entry"       => 219
+    when word == "let"         => 220
+    when word == "return"      => 221
+    when word == "if"          => 222
+    when word == "else"        => 223
+    when word == "match"       => 224
+    when word == "and"         => 225
+    when word == "or"          => 226
+    when word == "not"         => 227
+    when word == "is"          => 228
+    when word == "in"          => 229
+    when word == "async"       => 230
+    when word == "await"       => 231
+    when word == "own"         => 232
+    when word == "dup"         => 233
+    when word == "unsafe"      => 234
+    when word == "extern"      => 235
+    when word == "true"        => 236
+    when word == "false"       => 237
+    when word == "self"        => 238
+    when word == "singleton"   => 239
+    when word == "transient"   => 240
+    when word == "scoped"      => 241
+    when word == "where"       => 242
+    when word == "value"       => 243
+    when word == "import"      => 244
+    when word == "export"      => 245
+    when word == "for"         => 246
+    when word == "while"       => 247
+    when word == "loop"        => 248
+    when word == "break"       => 249
+    when word == "continue"    => 250
+    when word == "spawn"       => 251
+    when word == "matches"     => 252
+    when word == "input"       => 253
+    when word == "none"        => 254
+    when word == "namespace"   => 255
+    when word == "decision"    => 256
+    when word == "hit"         => 257
+    when word == "Number"      => 260
+    when word == "Integer"     => 261
+    when word == "Bool"        => 262
+    when word == "String"      => 263
+    when word == "Char"        => 264
+    when word == "Void"        => 265
+    when word == "Size"        => 266
+    when word == "cstring"     => 267
+    when word == "Bytes"       => 268
+    else                       => 1     // IDENT
 }
 
 // ── Tokeniser ────────────────────────────────────────────────────

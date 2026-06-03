@@ -51,17 +51,17 @@ mapper match_tok(ps: PState, kind: Integer) -> MatchResult {
 
 type TypeResult = { ctype: String, ps: PState }
 
-mapper primKindToCtype(kind: Integer) -> String {
-    if kind == 260 { return "xc_number_t" }
-    if kind == 261 { return "xc_integer_t" }
-    if kind == 262 { return "xc_bool_t" }
-    if kind == 263 { return "xc_string_t" }
-    if kind == 264 { return "xc_char_t" }
-    if kind == 265 { return "void" }
-    if kind == 266 { return "xc_size_t" }
-    if kind == 267 { return "const char*" }
-    if kind == 268 { return "xc_bytes_t" }
-    return ""
+decision primKindToCtype(kind: Integer) -> String {
+    when kind == 260 => "xc_number_t"
+    when kind == 261 => "xc_integer_t"
+    when kind == 262 => "xc_bool_t"
+    when kind == 263 => "xc_string_t"
+    when kind == 264 => "xc_char_t"
+    when kind == 265 => "void"
+    when kind == 266 => "xc_size_t"
+    when kind == 267 => "const char*"
+    when kind == 268 => "xc_bytes_t"
+    else             => ""
 }
 
 mapper identToCtype(name: String) -> String {
@@ -294,24 +294,23 @@ extern "C" {
 // Parse a function kind keyword and return the kind string
 type KindResult = { kind: String, ps: PState, ok: Bool }
 
-mapper parseFuncKind(ps: PState) -> KindResult {
-    let t = peek(ps)
-    if t.kind == 213 { return KindResult { kind: "mapper",    ps: advance(ps), ok: true } }
-    if t.kind == 214 { return KindResult { kind: "projector", ps: advance(ps), ok: true } }
-    if t.kind == 215 { return KindResult { kind: "predicate", ps: advance(ps), ok: true } }
-    if t.kind == 216 { return KindResult { kind: "consumer",  ps: advance(ps), ok: true } }
-    if t.kind == 217 { return KindResult { kind: "producer",  ps: advance(ps), ok: true } }
-    if t.kind == 218 { return KindResult { kind: "reducer",   ps: advance(ps), ok: true } }
-    if t.kind == 256 { return KindResult { kind: "decision",  ps: advance(ps), ok: true } }
-    return KindResult { kind: "", ps: ps, ok: false }
+decision parseFuncKind(ps: PState) -> KindResult {
+    when peek(ps).kind == 213 => KindResult { kind: "mapper",    ps: advance(ps), ok: true }
+    when peek(ps).kind == 214 => KindResult { kind: "projector", ps: advance(ps), ok: true }
+    when peek(ps).kind == 215 => KindResult { kind: "predicate", ps: advance(ps), ok: true }
+    when peek(ps).kind == 216 => KindResult { kind: "consumer",  ps: advance(ps), ok: true }
+    when peek(ps).kind == 217 => KindResult { kind: "producer",  ps: advance(ps), ok: true }
+    when peek(ps).kind == 218 => KindResult { kind: "reducer",   ps: advance(ps), ok: true }
+    when peek(ps).kind == 256 => KindResult { kind: "decision",  ps: advance(ps), ok: true }
+    else                      => KindResult { kind: "", ps: ps, ok: false }
 }
 
 // Compute C return type from function kind and declared return type
-mapper retCtypeFor(kind: String, declaredRet: String) -> String {
-    if kind == "predicate" { return "xc_bool_t" }
-    if kind == "consumer"  { return "void" }
-    if string_len(declaredRet) > 0 { return declaredRet }
-    return "void"
+decision retCtypeFor(kind: String, declaredRet: String) -> String {
+    when kind == "predicate"          => "xc_bool_t"
+    when kind == "consumer"           => "void"
+    when string_len(declaredRet) > 0  => declaredRet
+    else                              => "void"
 }
 
 // Parse a parameter list (tokens between parens, not including parens)
@@ -664,25 +663,24 @@ mapper parseTypeDecl(ps: PState) -> TypeResult2 {
     return TypeResult2 { spec: spec, ps: ps2 }
 }
 
-predicate isDeclStart(tok: Token) {
-    let k = tok.kind
-    if k == 200 { return true }  // type
-    if k == 201 { return true }  // interface
-    if k == 202 { return true }  // class
-    if k == 210 { return true }  // module
-    if k == 219 { return true }  // entry
-    if k == 212 { return true }  // creator
-    if k == 213 { return true }  // mapper
-    if k == 214 { return true }  // projector
-    if k == 215 { return true }  // predicate
-    if k == 216 { return true }  // consumer
-    if k == 217 { return true }  // producer
-    if k == 218 { return true }  // reducer
-    if k == 256 { return true }  // decision
-    if k == 230 { return true }  // async
-    if k == 235 { return true }  // extern
-    if k == 245 { return true }  // export
-    return false
+decision isDeclStart(tok: Token) -> Bool {
+    when tok.kind == 200 => true   // type
+    when tok.kind == 201 => true   // interface
+    when tok.kind == 202 => true   // class
+    when tok.kind == 210 => true   // module
+    when tok.kind == 219 => true   // entry
+    when tok.kind == 212 => true   // creator
+    when tok.kind == 213 => true   // mapper
+    when tok.kind == 214 => true   // projector
+    when tok.kind == 215 => true   // predicate
+    when tok.kind == 216 => true   // consumer
+    when tok.kind == 217 => true   // producer
+    when tok.kind == 218 => true   // reducer
+    when tok.kind == 256 => true   // decision
+    when tok.kind == 230 => true   // async
+    when tok.kind == 235 => true   // extern
+    when tok.kind == 245 => true   // export
+    else                 => false
 }
 
 // Parse `interface Name (extends A, B)? { methods... }`
@@ -1056,15 +1054,14 @@ creator parseProgram(tokens: Token[]) -> Program {
     }
 }
 
-predicate parseFuncKindCheck(ps: PState) {
-    let k = peek(ps).kind
-    if k == 213 { return true }
-    if k == 214 { return true }
-    if k == 215 { return true }
-    if k == 216 { return true }
-    if k == 217 { return true }
-    if k == 218 { return true }
-    if k == 256 { return true }   // decision
-    return false
+decision parseFuncKindCheck(ps: PState) -> Bool {
+    when peek(ps).kind == 213 => true
+    when peek(ps).kind == 214 => true
+    when peek(ps).kind == 215 => true
+    when peek(ps).kind == 216 => true
+    when peek(ps).kind == 217 => true
+    when peek(ps).kind == 218 => true
+    when peek(ps).kind == 256 => true   // decision
+    else                      => false
 }
 
