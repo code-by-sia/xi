@@ -7,6 +7,23 @@
 #ifndef XC_RUNTIME_H
 #define XC_RUNTIME_H
 
+/*
+ * Expose POSIX/Darwin APIs (clock_gettime, CLOCK_MONOTONIC, struct timespec,
+ * nanosleep, strdup, ...) even under -std=c99. On glibc these are hidden unless
+ * a feature-test macro is set; macOS needs _DARWIN_C_SOURCE for the same.
+ * These MUST be defined before any system header is included — and runtime.h is
+ * the first include in every generated C file as well as runtime.c.
+ */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+#ifndef _DARWIN_C_SOURCE
+#define _DARWIN_C_SOURCE 1
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE 1
+#endif
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>

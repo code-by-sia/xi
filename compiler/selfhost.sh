@@ -20,7 +20,7 @@ W=/tmp/xc_selfhost; rm -rf "$W"; mkdir -p "$W"
 cp compiler/*.x "$W"/
 
 echo "==> [gen0] cc builds xc from compiler/xc.stage0.c (no pre-existing X binary)"
-cc -std=c99 -O2 -w -I runtime compiler/xc.stage0.c runtime/runtime.c -o "$W/xc_gen0" -lm
+cc -std=c99 -O2 -w -Wno-implicit-int -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompatible-pointer-types -I runtime compiler/xc.stage0.c runtime/runtime.c -o "$W/xc_gen0" -lm
 
 echo "==> gen0 compiles xc.x -> gen1"
 ( cd "$W" && XC_HELPERS="$HELP" XC_RUNTIME="$ROOT/runtime" XC_OUT=. ./xc_gen0 xc.x >/dev/null )

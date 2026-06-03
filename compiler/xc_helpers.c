@@ -19,18 +19,34 @@
  * X arrays have VALUE semantics: a fat pointer { data, len, cap } is copied
  * by value, so many independent copies may share one `data` buffer.  Growing
  * in place (realloc) would free a buffer still referenced by other copies
- * (use-after-free).  So append is functional: allocate a fresh buffer of
- * len+1, copy, and return a new fat pointer.  The old buffer is left intact.
+ * (use-after-free).
+ *
+ * Append uses amortised capacity doubling so that accumulating N elements costs
+ * O(N) memory and time, not O(N^2).  Two cases:
+ *   - len < cap : the buffer has spare room we allocated for this purpose, so
+ *     write in place and bump len.  Array *literals* always emit cap == len
+ *     (no spare), so they fall to the grow branch and are never mutated — the
+ *     in-place path only ever fires on an accumulator we ourselves grew.
+ *   - len == cap: allocate a fresh, larger buffer, copy, and return a new fat
+ *     pointer.  The old buffer is left intact (no free), preserving the value
+ *     semantics of any other copies that still reference it.
  */
 #define DEFINE_TYPED_ARR(ElemType, ArrType, BaseName)                         \
                                                                               \
 ArrType BaseName(ArrType arr, ElemType elem) {                                \
-    xc_size_t nl = arr.len + 1;                                               \
-    ElemType* nd = (ElemType*)malloc(nl * sizeof(ElemType));                  \
+    if (arr.len < arr.cap) {                                                  \
+        arr.data[arr.len] = elem;                                             \
+        arr.len += 1;                                                         \
+        return arr;                                                           \
+    }                                                                         \
+    xc_size_t need = arr.len + 1;                                             \
+    xc_size_t ncap = arr.cap ? arr.cap * 2 : 4;                               \
+    if (ncap < need) ncap = need;                                             \
+    ElemType* nd = (ElemType*)malloc(ncap * sizeof(ElemType));                \
     if (!nd) { fputs("xc: out of memory\n", stderr); abort(); }              \
     if (arr.len) memcpy(nd, arr.data, arr.len * sizeof(ElemType));            \
     nd[arr.len] = elem;                                                       \
-    ArrType out; out.data = nd; out.len = nl; out.cap = nl;                   \
+    ArrType out; out.data = nd; out.len = need; out.cap = ncap;               \
     return out;                                                               \
 }                                                                             \
                                                                               \
@@ -62,12 +78,15 @@ DEFINE_TYPED_ARR(xc_FuncSpec_t,    xc_arr_FuncSpec_t,    appendFuncSpec)
 /* ─── Token array ────────────────────────────────────────────────────────── */
 
 xc_arr_Token_t appendTokenC(xc_arr_Token_t arr, xc_Token_t tok) {
-    xc_size_t nl = arr.len + 1;
-    xc_Token_t* nd = (xc_Token_t*)malloc(nl * sizeof(xc_Token_t));
+    if (arr.len < arr.cap) { arr.data[arr.len] = tok; arr.len += 1; return arr; }
+    xc_size_t need = arr.len + 1;
+    xc_size_t ncap = arr.cap ? arr.cap * 2 : 4;
+    if (ncap < need) ncap = need;
+    xc_Token_t* nd = (xc_Token_t*)malloc(ncap * sizeof(xc_Token_t));
     if (!nd) abort();
     if (arr.len) memcpy(nd, arr.data, arr.len * sizeof(xc_Token_t));
     nd[arr.len] = tok;
-    xc_arr_Token_t out; out.data = nd; out.len = nl; out.cap = nl;
+    xc_arr_Token_t out; out.data = nd; out.len = need; out.cap = ncap;
     return out;
 }
 xc_integer_t tokenArrLen(xc_arr_Token_t arr) { return (xc_integer_t)arr.len; }
@@ -80,12 +99,15 @@ xc_Token_t tokenArrGet(xc_arr_Token_t arr, xc_integer_t i) {
 /* ─── String array ───────────────────────────────────────────────────────── */
 
 xc_arr_string_t appendString(xc_arr_string_t arr, xc_string_t s) {
-    xc_size_t nl = arr.len + 1;
-    xc_string_t* nd = (xc_string_t*)malloc(nl * sizeof(xc_string_t));
+    if (arr.len < arr.cap) { arr.data[arr.len] = s; arr.len += 1; return arr; }
+    xc_size_t need = arr.len + 1;
+    xc_size_t ncap = arr.cap ? arr.cap * 2 : 4;
+    if (ncap < need) ncap = need;
+    xc_string_t* nd = (xc_string_t*)malloc(ncap * sizeof(xc_string_t));
     if (!nd) abort();
     if (arr.len) memcpy(nd, arr.data, arr.len * sizeof(xc_string_t));
     nd[arr.len] = s;
-    xc_arr_string_t out; out.data = nd; out.len = nl; out.cap = nl;
+    xc_arr_string_t out; out.data = nd; out.len = need; out.cap = ncap;
     return out;
 }
 xc_integer_t stringArrLen(xc_arr_string_t arr) { return (xc_integer_t)arr.len; }
@@ -166,11 +188,15 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
     if (helpers && helpers[0]) append_file(cp, helpers);
 
     /* cc -std=c99 -O2 -I<dir> <cpath> <dir>/runtime.c -o <binpath> -lm */
-    size_t need = strlen(cp) + strlen(bp) + 3 * strlen(dir) + 128;
+    size_t need = strlen(cp) + strlen(bp) + 3 * strlen(dir) + 256;
     char* cmd = (char*)malloc(need);
     if (!cmd) { free(cp); free(bp); return 1; }
+    /* -w plus explicit -Wno-* because GCC 14 (Ubuntu 24.04) promotes these to
+       hard errors that -w no longer silences; macOS clang only warns. */
     snprintf(cmd, need,
-             "cc -std=c99 -O2 -w -I%s %s %s/runtime.c -o %s -lm",
+             "cc -std=c99 -O2 -w -Wno-implicit-int -Wno-implicit-function-declaration "
+             "-Wno-int-conversion -Wno-incompatible-pointer-types "
+             "-I%s %s %s/runtime.c -o %s -lm",
              dir, cp, dir, bp);
 
     int rc = system(cmd);

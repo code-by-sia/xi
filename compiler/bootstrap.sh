@@ -19,7 +19,7 @@ HELP="$ROOT/compiler/xc_helpers.c"
 mkdir -p "$XC_OUT"
 
 echo "==> [stage0] Building xc from compiler/xc.stage0.c with cc ..."
-cc -std=c99 -O2 -w -I runtime compiler/xc.stage0.c runtime/runtime.c -o compiler/xc -lm
+cc -std=c99 -O2 -w -Wno-implicit-int -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompatible-pointer-types -I runtime compiler/xc.stage0.c runtime/runtime.c -o compiler/xc -lm
 echo "    built compiler/xc"
 
 echo "==> [stage1] Rebuilding xc from compiler/xc.x using the stage0 compiler ..."
