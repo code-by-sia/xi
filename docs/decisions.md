@@ -91,6 +91,13 @@ module App {}
 - An `else` arm is required (`decision requires an 'else' arm`).
 - A `when` after `else` is rejected (it can never match).
 
+## Beyond the when-form
+
+The form above is single-input/single-output with `hit first` — close to a
+guarded `match`. A proposed **tabular form** adds multiple input columns,
+multiple outputs, and hit policies (`unique`, `collect`) to make decisions more
+than `match`. See [the decision-tables proposal](proposals/decision-tables.md).
+
 ## Limitations (current)
 
 - Only `hit first` is implemented. `unique` (exactly one arm may match) and

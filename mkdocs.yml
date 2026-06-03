@@ -45,6 +45,7 @@ nav:
   - Standard library: stdlib.md
   - How it works (self-hosting): internals.md
   - Proposals (draft):
+    - Decision tables — tabular form: proposals/decision-tables.md
     - Interrupts: proposals/interrupt.md
 markdown_extensions:
   - admonition
