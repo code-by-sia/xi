@@ -1,10 +1,37 @@
 site_name: The X Programming Language
 site_description: A self-hosting, statically-typed, natively-compiled language with first-class DI.
 docs_dir: docs
-# Optional MkDocs site config (BSD-2-Clause). The pages in docs/ also read fine
-# as plain Markdown without any tooling.
+repo_url: https://github.com/code-by-sia/x
+repo_name: code-by-sia/x
+# Optional MkDocs site config. The pages in docs/ also read fine as plain
+# Markdown without any tooling. The site uses the Material theme.
 theme:
-  name: readthedocs
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - navigation.sections
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
 nav:
   - Home: index.md
   - Getting started: getting-started.md
@@ -17,7 +44,13 @@ nav:
   - How it works (self-hosting): internals.md
 markdown_extensions:
   - admonition
-  - fenced_code
   - tables
   - toc:
       permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true

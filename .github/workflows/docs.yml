@@ -32,8 +32,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - name: Install MkDocs
-        run: pip install --quiet mkdocs
+      - name: Install MkDocs Material
+        run: pip install --quiet mkdocs-material
       - name: Build site
         run: mkdocs build --strict --site-dir _site
       - uses: actions/upload-pages-artifact@v3
