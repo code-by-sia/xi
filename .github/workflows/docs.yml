@@ -25,6 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true   # turn on Pages (Source: GitHub Actions) if not already
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
