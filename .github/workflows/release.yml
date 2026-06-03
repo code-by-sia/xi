@@ -24,9 +24,8 @@ jobs:
       fail-fast: false
       matrix:
         # Each target bootstraps by downloading the PREVIOUS release binary for
-        # the same OS/arch (there is no checked-in C seed), so a target can only
-        # be built once a release asset for it exists. macos-x86_64 has no seed
-        # and is therefore not built here.
+        # the same OS/arch (there is no checked-in C seed). macos-x86_64 has no
+        # seed and is produced by the separate cross-compile job below instead.
         include:
           - { runner: ubuntu-latest,    target: linux-x86_64 }
           - { runner: ubuntu-24.04-arm, target: linux-arm64 }
@@ -52,53 +51,11 @@ jobs:
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME:-dev}"
           DIST="x-${VERSION}-${{ matrix.target }}"
-          mkdir -p "$DIST/bin" "$DIST/libexec"
-
-          # native binaries
+          mkdir -p "$DIST/libexec"
           cp compiler/xc "$DIST/libexec/xc"
           cp bin/x       "$DIST/libexec/x"
-
-          # the compiler shells out to cc, so it needs the runtime + stdlib
-          cp -R runtime "$DIST/runtime"
-          cp -R std     "$DIST/std"
-
-          # wrappers that locate the bundle and set the env vars
-          cat > "$DIST/bin/xc" <<'SH'
-          #!/bin/sh
-          HERE="$(cd "$(dirname "$0")/.." && pwd)"
-          export XC_RUNTIME="${XC_RUNTIME:-$HERE/runtime}"
-          export XC_STD="${XC_STD:-$HERE}"
-          exec "$HERE/libexec/xc" "$@"
-          SH
-          cat > "$DIST/bin/x" <<'SH'
-          #!/bin/sh
-          HERE="$(cd "$(dirname "$0")/.." && pwd)"
-          export XC_RUNTIME="${XC_RUNTIME:-$HERE/runtime}"
-          export XC_STD="${XC_STD:-$HERE}"
-          export XC="${XC:-$HERE/bin/xc}"
-          exec "$HERE/libexec/x" "$@"
-          SH
-          chmod +x "$DIST/bin/xc" "$DIST/bin/x"
-
-          cat > "$DIST/README.txt" <<EOF
-          X toolchain ${VERSION} (${{ matrix.target }})
-
-          Contents:
-            bin/xc   - the X compiler (wrapper; sets XC_RUNTIME and XC_STD)
-            bin/x    - the X REPL / run tool
-            runtime/ - C runtime (xc invokes cc with this)
-            std/     - standard library (import "std/...")
-
-          Install: put bin/ on your PATH, e.g.
-            export PATH="\$PWD/$DIST/bin:\$PATH"
-            xc myprog.x        # -> build/myprog
-            x                  # interactive REPL
-
-          Requires a C compiler (cc / clang / gcc) on PATH.
-          EOF
-
-          tar -czf "$DIST.tar.gz" "$DIST"
-          echo "artifact=$DIST.tar.gz" >> "$GITHUB_OUTPUT"
+          art="$(scripts/package.sh "$DIST" "${{ matrix.target }}" "$VERSION")"
+          echo "artifact=$art" >> "$GITHUB_OUTPUT"
 
       - name: Smoke-test packaged bundle
         run: |
@@ -128,6 +85,60 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
+          path: ${{ steps.package.outputs.artifact }}
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.artifact }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+  # Intel macOS has no seed binary to bootstrap from, so we build the arm64
+  # compiler normally, then cross-compile its generated C for x86_64. The
+  # generated C is platform-independent, so this produces a genuine Intel build.
+  macos-x86_64:
+    name: macos-x86_64 (cross)
+    runs-on: macos-14
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bootstrap arm64 (emits the compiler's generated C)
+        run: ./compiler/bootstrap.sh
+
+      - name: Cross-compile x86_64 binaries
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          DIST="x-${VERSION}-macos-x86_64"
+          mkdir -p "$DIST/libexec"
+          clang -arch x86_64 -mmacosx-version-min=11.0 -std=c99 -O2 -w \
+            -Wno-implicit-int -Wno-implicit-function-declaration \
+            -Wno-int-conversion -Wno-incompatible-pointer-types -I runtime \
+            build/xc.gen.c runtime/runtime.c -o "$DIST/libexec/xc" -lm
+          clang -arch x86_64 -mmacosx-version-min=11.0 -std=c99 -O2 -w \
+            -Wno-implicit-int -Wno-implicit-function-declaration \
+            -Wno-int-conversion -Wno-incompatible-pointer-types -I runtime \
+            build/repl.gen.c runtime/runtime.c -o "$DIST/libexec/x" -lm
+          file "$DIST/libexec/xc" "$DIST/libexec/x"
+          file "$DIST/libexec/xc" | grep -q "x86_64" \
+            || { echo "::error::cross build did not produce an x86_64 binary"; exit 1; }
+
+      - name: Package
+        id: package
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          art="$(scripts/package.sh "x-${VERSION}-macos-x86_64" macos-x86_64 "$VERSION")"
+          echo "artifact=$art" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x86_64
           path: ${{ steps.package.outputs.artifact }}
 
       - name: Attach to release
