@@ -22,6 +22,7 @@ extern "C" {
     mapper int_to_string(n: Integer) -> String
     producer file_read_all(path: String) -> String
     producer file_write(path: String, content: String) -> Bool
+    consumer diag_error(line: Integer, msg: String)
 }
 
 // ── Token kind constants ─────────────────────────────────────────
@@ -449,7 +450,8 @@ mapper lexOne(src: String, pos: Integer, line: Integer, prevKind: Integer) -> Le
     if ch == 63  { return LexStep { tok: Token { kind: 127, text: "?", line: ln }, pos: p + 1, line: ln } }
     if ch == 59  { return LexStep { tok: Token { kind: 134, text: ";", line: ln }, pos: p + 1, line: ln } }
 
-    // Unknown character — skip it
+    // Unknown character — report and stop (diag_error exits)
+    diag_error(ln, "unexpected character (code " + ch + ")")
     return LexStep { tok: Token { kind: 0, text: "", line: ln }, pos: p + 1, line: ln }
 }
 

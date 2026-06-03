@@ -13,6 +13,8 @@ extern "C" {
     predicate xstd_file_exists(path: String) -> Bool
     mapper    get_env(name: String, dflt: String) -> String
     mapper    run_command(cmd: String) -> Integer
+    consumer  diag_set_file(path: String)
+    consumer  diag_error(line: Integer, msg: String)
 }
 
 // LoadResult carries the merged tokens, the visited-paths set (dedup), and a
@@ -182,6 +184,7 @@ creator loadModule(path: String, visited: String[]) -> LoadResult {
     }
     let vis = appendString(visited, path)
     let src = file_read_all(path)
+    diag_set_file(path)              // lexer errors report this file
     let toks = tokenise(src)
     let dir = dirOf(path)
 
@@ -314,6 +317,7 @@ async entry main(args: String[]) -> Integer {
     let tokens = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
 
     system.stdout.writeln("xc: parsing ...")
+    diag_set_file(srcPath)           // parse errors report the main source
     let prog = parseProgram(tokens)
 
     system.stdout.writeln("xc: generating C ...")

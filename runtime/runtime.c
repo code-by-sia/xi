@@ -164,6 +164,22 @@ xc_string_t file_read_all(xc_string_t path) {
     return (xc_string_t){ .data = buf, .len = (xc_size_t)size };
 }
 
+/* ─── Diagnostics ────────────────────────────────────────────────────────── */
+
+static char xc_diag_file[4096] = "<input>";
+
+void diag_set_file(xc_string_t path) {
+    size_t n = path.len < sizeof(xc_diag_file) - 1 ? path.len : sizeof(xc_diag_file) - 1;
+    if (n) memcpy(xc_diag_file, path.data, n);
+    xc_diag_file[n] = '\0';
+}
+
+void diag_error(xc_integer_t line, xc_string_t msg) {
+    fprintf(stderr, "xc: %s:%lld: error: %.*s\n",
+            xc_diag_file, (long long)line, (int)msg.len, msg.data);
+    exit(1);
+}
+
 xc_bool_t file_write(xc_string_t path, xc_string_t content) {
     char* cpath = xc_string_to_cstr(path);
     FILE* fp = fopen(cpath, "w");

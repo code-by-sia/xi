@@ -228,6 +228,11 @@ static inline xc_string_t number_to_str(xc_number_t  n) { return xc_number_to_st
 
 /* File I/O */
 xc_string_t file_read_all(xc_string_t path);
+
+/* Diagnostics: set the current source file, then report an error at a line and
+   exit(1) with `xc: <file>:<line>: error: <msg>`. */
+void diag_set_file(xc_string_t path);
+void diag_error(xc_integer_t line, xc_string_t msg);
 /* REPL / tooling */
 xc_string_t  read_line(void);
 xc_bool_t    stdin_eof(void);

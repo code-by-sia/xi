@@ -324,7 +324,8 @@ mapper parseParams(ps: PState) -> ParamResult {
         // param: name : typeExpr
         let nameTok = peek(ps2)
         if nameTok.kind != 1 {
-            // Skip unexpected token
+            // A parameter must start with a name (diag_error exits)
+            diag_error(nameTok.line, "expected parameter name, got '" + nameTok.text + "'")
             ps2 = advance(ps2)
         } else {
             ps2 = advance(ps2)  // consume name
