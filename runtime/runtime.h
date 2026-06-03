@@ -138,6 +138,12 @@ static inline xc_string_t bytes_to_string(xc_bytes_t b) {
     return (xc_string_t){ .data = buf, .len = b.len };
 }
 
+/* Bytes is a runtime primitive, so its Result/optional/array shapes live here
+   (the compiler emits these only for the built-in scalars and user types). */
+typedef struct { bool ok; xc_bytes_t value; xc_string_t err; } xc_res_bytes_t;
+typedef struct { bool has_value; xc_bytes_t value; }           xc_opt_bytes_t;
+typedef struct { xc_bytes_t* data; xc_size_t len; xc_size_t cap; } xc_arr_bytes_t;
+
 /* Number → string */
 static inline xc_string_t xc_number_to_string(xc_number_t n) {
     char buf[64];
@@ -317,6 +323,19 @@ xc_string_t  xstd_join(xc_arr_string_t parts, xc_string_t sep);
 xc_bool_t    xstd_num_ok(xc_string_t);  xc_number_t  xstd_to_number(xc_string_t);
 xc_bool_t    xstd_int_ok(xc_string_t);  xc_integer_t xstd_to_integer(xc_string_t);
 xc_bool_t    xstd_file_exists(xc_string_t);
+/* filesystem */
+xc_bytes_t   xstd_read_bytes(xc_string_t path);
+xc_bool_t    xstd_write_bytes(xc_string_t path, xc_bytes_t b);
+xc_bool_t    xstd_is_dir(xc_string_t path);
+xc_bool_t    xstd_is_file(xc_string_t path);
+xc_integer_t xstd_file_size(xc_string_t path);
+xc_integer_t xstd_mtime(xc_string_t path);
+xc_bool_t    xstd_remove(xc_string_t path);
+xc_bool_t    xstd_rename(xc_string_t from, xc_string_t to);
+xc_bool_t    xstd_mkdir(xc_string_t path);
+xc_bool_t    xstd_mkdir_all(xc_string_t path);
+xc_string_t  xstd_cwd(void);
+xc_arr_string_t xstd_list_dir(xc_string_t path);
 void         xstd_exit(xc_integer_t);
 xc_integer_t xstd_now_nanos(void);
 void         xstd_sleep_ms(xc_integer_t);

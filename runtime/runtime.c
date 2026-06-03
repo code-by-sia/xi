@@ -6,6 +6,12 @@
 #include "runtime.h"
 #include <ctype.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <dirent.h>
+
+static xc_string_t xc_str_copy(const char* p, xc_size_t n);  /* defined below */
 
 /* ─── Simple regex matching ──────────────────────────────────────────────── */
 
@@ -199,6 +205,118 @@ xc_bool_t file_writeln(xc_string_t path, xc_string_t line) {
     fputc('\n', fp);
     fclose(fp);
     return true;
+}
+
+/* ─── Filesystem ─────────────────────────────────────────────────────────── */
+
+xc_bytes_t xstd_read_bytes(xc_string_t path) {
+    char* cpath = xc_string_to_cstr(path);
+    FILE* fp = fopen(cpath, "rb");
+    free(cpath);
+    if (!fp) return bytes_empty();
+    if (fseek(fp, 0, SEEK_END) != 0) { fclose(fp); return bytes_empty(); }
+    long size = ftell(fp);
+    if (size < 0) { fclose(fp); return bytes_empty(); }
+    rewind(fp);
+    unsigned char* buf = (unsigned char*)malloc((size_t)size ? (size_t)size : 1);
+    if (!buf) abort();
+    (void)fread(buf, 1, (size_t)size, fp);
+    fclose(fp);
+    return (xc_bytes_t){ .data = buf, .len = (xc_size_t)size };
+}
+
+xc_bool_t xstd_write_bytes(xc_string_t path, xc_bytes_t b) {
+    char* cpath = xc_string_to_cstr(path);
+    FILE* fp = fopen(cpath, "wb");
+    free(cpath);
+    if (!fp) return false;
+    if (b.len) fwrite(b.data, 1, b.len, fp);
+    fclose(fp);
+    return true;
+}
+
+xc_bool_t xstd_is_dir(xc_string_t path) {
+    char* p = xc_string_to_cstr(path); struct stat st; int r = stat(p, &st); free(p);
+    return r == 0 && S_ISDIR(st.st_mode);
+}
+
+xc_bool_t xstd_is_file(xc_string_t path) {
+    char* p = xc_string_to_cstr(path); struct stat st; int r = stat(p, &st); free(p);
+    return r == 0 && S_ISREG(st.st_mode);
+}
+
+xc_integer_t xstd_file_size(xc_string_t path) {
+    char* p = xc_string_to_cstr(path); struct stat st; int r = stat(p, &st); free(p);
+    return r == 0 ? (xc_integer_t)st.st_size : -1;
+}
+
+xc_integer_t xstd_mtime(xc_string_t path) {
+    char* p = xc_string_to_cstr(path); struct stat st; int r = stat(p, &st); free(p);
+    return r == 0 ? (xc_integer_t)st.st_mtime : -1;
+}
+
+xc_bool_t xstd_remove(xc_string_t path) {
+    char* p = xc_string_to_cstr(path);
+    int r = remove(p);            /* removes files and empty dirs */
+    free(p);
+    return r == 0;
+}
+
+xc_bool_t xstd_rename(xc_string_t from, xc_string_t to) {
+    char* a = xc_string_to_cstr(from); char* b = xc_string_to_cstr(to);
+    int r = rename(a, b);
+    free(a); free(b);
+    return r == 0;
+}
+
+xc_bool_t xstd_mkdir(xc_string_t path) {
+    char* p = xc_string_to_cstr(path);
+    int r = mkdir(p, 0777);
+    free(p);
+    return r == 0;
+}
+
+xc_bool_t xstd_mkdir_all(xc_string_t path) {
+    char* p = xc_string_to_cstr(path);
+    int ok = 1;
+    for (char* s = p + 1; *s; s++) {
+        if (*s == '/') {
+            *s = '\0';
+            if (mkdir(p, 0777) != 0 && errno != EEXIST) { ok = 0; break; }
+            *s = '/';
+        }
+    }
+    if (ok && mkdir(p, 0777) != 0 && errno != EEXIST) ok = 0;
+    free(p);
+    return ok != 0;
+}
+
+xc_string_t xstd_cwd(void) {
+    char buf[4096];
+    if (getcwd(buf, sizeof(buf))) return xc_str_copy(buf, strlen(buf));
+    return xc_str_copy("", 0);
+}
+
+/* Directory entries (excluding "." and ".."), as String[]. Empty if not a dir. */
+xc_arr_string_t xstd_list_dir(xc_string_t path) {
+    xc_arr_string_t out = { NULL, 0, 0 };
+    char* p = xc_string_to_cstr(path);
+    DIR* d = opendir(p);
+    free(p);
+    if (!d) return out;
+    struct dirent* e;
+    while ((e = readdir(d)) != NULL) {
+        if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) continue;
+        if (out.len == out.cap) {
+            xc_size_t nc = out.cap ? out.cap * 2 : 8;
+            out.data = (xc_string_t*)realloc(out.data, nc * sizeof(xc_string_t));
+            if (!out.data) abort();
+            out.cap = nc;
+        }
+        out.data[out.len++] = xc_str_copy(e->d_name, strlen(e->d_name));
+    }
+    closedir(d);
+    return out;
 }
 
 /* ─── REPL / tooling helpers ─────────────────────────────────────────────── */

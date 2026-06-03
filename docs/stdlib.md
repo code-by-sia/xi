@@ -101,10 +101,30 @@ if isOk(r) { system.stdout.writeln("got " + r.value) }
 
 | Function | Signature |
 |----------|-----------|
-| `exists` | `predicate (String)` |
+| `exists`, `isDir`, `isFile` | `predicate (String)` |
 | `readFile` | `(String) -> String!` (Err if missing) |
+| `readBytes` | `(String) -> Bytes!` (Err if missing) |
 | `writeFile` | `(String, String) -> Bool` |
+| `writeBytes` | `(String, Bytes) -> Bool` |
 | `appendLine` | `(String, String) -> Bool` |
+| `size` | `(String) -> Integer!` (bytes; Err if missing) |
+| `modifiedTime` | `(String) -> Integer!` (epoch seconds) |
+| `remove`, `mkdir`, `mkdirAll` | `(String) -> Bool` |
+| `rename`, `copy` | `(String, String) -> Bool` |
+| `cwd` | `() -> String` |
+| `listDir` | `(String) -> String[]` (names; empty if not a dir) |
+
+### `path` — `std/path.x`
+
+Pure-X path string helpers (no I/O).
+
+| Function | Signature |
+|----------|-----------|
+| `join` | `(String, String) -> String` |
+| `dirname` | `(String) -> String` (`"."` if none) |
+| `basename` | `(String) -> String` |
+| `ext` | `(String) -> String` (incl. dot, `""` if none) |
+| `stripExt` | `(String) -> String` |
 
 ### `proc` — `std/process.x`
 
