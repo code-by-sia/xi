@@ -14,6 +14,8 @@ extern "C" {
     mapper xstd_to_lower(s: String) -> String
     mapper xstd_repeat(s: String, n: Integer) -> String
     mapper xstd_replace(s: String, a: String, b: String) -> String
+    mapper xstd_split(s: String, sep: String) -> String[]
+    mapper xstd_join(parts: String[], sep: String) -> String
 }
 
 mapper length(s: String) -> Integer { return xstd_strlen(s) }
@@ -33,3 +35,5 @@ mapper replace(s: String, from: String, to: String) -> String {
     return xstd_replace(s, from, to)
 }
 predicate isEmpty(s: String) { return xstd_strlen(s) == 0 }
+mapper split(s: String, sep: String) -> String[] { return xstd_split(s, sep) }
+mapper join(parts: String[], sep: String) -> String { return xstd_join(parts, sep) }

@@ -404,6 +404,54 @@ xc_string_t xstd_replace(xc_string_t s, xc_string_t a, xc_string_t b) {
     return (xc_string_t){ .data = out, .len = oi };
 }
 
+/* Heap-copy a byte range into a fresh NUL-terminated xc_string_t. */
+static xc_string_t xc_str_copy(const char* p, xc_size_t n) {
+    char* buf = (char*)malloc(n + 1); if (!buf) abort();
+    if (n) memcpy(buf, p, n);
+    buf[n] = '\0';
+    return (xc_string_t){ .data = buf, .len = n };
+}
+
+xc_arr_string_t xstd_split(xc_string_t s, xc_string_t sep) {
+    xc_arr_string_t out = { NULL, 0, 0 };
+    if (sep.len == 0) {                 /* empty separator -> [s] */
+        out.data = (xc_string_t*)malloc(sizeof(xc_string_t)); if (!out.data) abort();
+        out.data[0] = xc_str_copy(s.data, s.len); out.len = 1; out.cap = 1;
+        return out;
+    }
+    xc_size_t count = 1;                /* pieces = occurrences + 1 */
+    for (xc_size_t i = 0; i + sep.len <= s.len; ) {
+        if (memcmp(s.data + i, sep.data, sep.len) == 0) { count++; i += sep.len; } else i++;
+    }
+    out.data = (xc_string_t*)malloc(count * sizeof(xc_string_t)); if (!out.data) abort();
+    out.cap = count;
+    xc_size_t start = 0, idx = 0;
+    for (xc_size_t i = 0; i + sep.len <= s.len; ) {
+        if (memcmp(s.data + i, sep.data, sep.len) == 0) {
+            out.data[idx++] = xc_str_copy(s.data + start, i - start);
+            i += sep.len; start = i;
+        } else i++;
+    }
+    out.data[idx++] = xc_str_copy(s.data + start, s.len - start);
+    out.len = idx;
+    return out;
+}
+
+xc_string_t xstd_join(xc_arr_string_t parts, xc_string_t sep) {
+    if (parts.len == 0) return xc_str_copy("", 0);
+    xc_size_t total = 0;
+    for (xc_size_t i = 0; i < parts.len; i++) total += parts.data[i].len;
+    total += sep.len * (parts.len - 1);
+    char* buf = (char*)malloc(total + 1); if (!buf) abort();
+    xc_size_t oi = 0;
+    for (xc_size_t i = 0; i < parts.len; i++) {
+        if (i) { memcpy(buf + oi, sep.data, sep.len); oi += sep.len; }
+        memcpy(buf + oi, parts.data[i].data, parts.data[i].len); oi += parts.data[i].len;
+    }
+    buf[oi] = '\0';
+    return (xc_string_t){ .data = buf, .len = oi };
+}
+
 /* convert / parse */
 xc_bool_t xstd_num_ok(xc_string_t s) {
     char* buf = xc_string_to_cstr(s); char* e; errno = 0;

@@ -312,6 +312,8 @@ xc_string_t  xstd_to_upper(xc_string_t);
 xc_string_t  xstd_to_lower(xc_string_t);
 xc_string_t  xstd_repeat(xc_string_t, xc_integer_t);
 xc_string_t  xstd_replace(xc_string_t, xc_string_t, xc_string_t);
+xc_arr_string_t xstd_split(xc_string_t s, xc_string_t sep);
+xc_string_t  xstd_join(xc_arr_string_t parts, xc_string_t sep);
 xc_bool_t    xstd_num_ok(xc_string_t);  xc_number_t  xstd_to_number(xc_string_t);
 xc_bool_t    xstd_int_ok(xc_string_t);  xc_integer_t xstd_to_integer(xc_string_t);
 xc_bool_t    xstd_file_exists(xc_string_t);
