@@ -1,6 +1,6 @@
 {
   "name": "tree-sitter-x",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Tree-sitter grammar for the X programming language",
   "license": "Apache-2.0",
   "scripts": {
