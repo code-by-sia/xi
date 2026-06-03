@@ -61,14 +61,14 @@ performs this build and diffs the outputs.
 
 ## Compilation pipeline
 
-```
-source.x (+ imported files)
-  ↓ load     resolve imports, apply namespace prefixing      (driver.x)
-  ↓ lex      tokeniser                                        (lexer.x)
-  ↓ parse    recursive descent → Program                     (parser.x)
-  ↓ codegen  DI wiring, vtables, refined types, overloads,
-             results, match, …  → C99                         (codegen.x)
-  ↓ cc       C → native binary
+```mermaid
+flowchart LR
+    src["source.x<br/>(+ imports)"] --> load["load<br/>imports + namespaces<br/>(driver.x)"]
+    load --> lex["lex<br/>tokeniser<br/>(lexer.x)"]
+    lex --> parse["parse<br/>recursive descent → Program<br/>(parser.x)"]
+    parse --> codegen["codegen<br/>DI, vtables, refined types,<br/>overloads, results, match → C99<br/>(codegen.x)"]
+    codegen --> cc["cc<br/>C → native binary"]
+    cc --> bin([native binary])
 ```
 
 ## What runs at runtime

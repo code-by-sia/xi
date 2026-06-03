@@ -49,7 +49,16 @@ markdown_extensions:
       permalink: true
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences
+      # X has no Pygments lexer yet; approximate ```x blocks with TypeScript
+      # (shares type/interface/class/let/import/export/namespace), like GitHub.
+      extend_pygments_lang:
+        - name: x
+          lang: typescript
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.inlinehilite
   - pymdownx.details
   - pymdownx.tabbed:
