@@ -55,6 +55,23 @@ $ XC_STD=/path/to/x ./compiler/xc myapp.x
 | `replace` | `(String, String, String) -> String` (all occurrences) |
 | `isEmpty` | `predicate (String)` |
 
+### `bytes` — `std/bytes.x`
+
+`Bytes` is a primitive type: a raw byte buffer, distinct from `String`. Like
+`String` it is an immutable value (copies share the buffer; producers
+heap-allocate a fresh one). Used for binary I/O.
+
+| Function | Signature |
+|----------|-----------|
+| `length` | `(Bytes) -> Integer` |
+| `at` | `(Bytes, Integer) -> Integer` (byte `0..255`, `-1` out of range) |
+| `slice` | `(Bytes, Integer, Integer) -> Bytes` (`[from, to)`) |
+| `concat` | `(Bytes, Bytes) -> Bytes` |
+| `fromString` | `(String) -> Bytes` |
+| `toString` | `(Bytes) -> String` |
+| `empty` | `() -> Bytes` |
+| `isEmpty` | `predicate (Bytes)` |
+
 ### `convert` — `std/convert.x`
 
 | Function | Signature |

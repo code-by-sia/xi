@@ -228,6 +228,7 @@ mapper kwKind(word: String) -> Integer {
     if word == "Void"        { return 265 }
     if word == "Size"        { return 266 }
     if word == "cstring"     { return 267 }
+    if word == "Bytes"       { return 268 }
     return 1  // IDENT
 }
 

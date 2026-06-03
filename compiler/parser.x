@@ -60,6 +60,7 @@ mapper primKindToCtype(kind: Integer) -> String {
     if kind == 265 { return "void" }
     if kind == 266 { return "xc_size_t" }
     if kind == 267 { return "const char*" }
+    if kind == 268 { return "xc_bytes_t" }
     return ""
 }
 

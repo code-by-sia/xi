@@ -86,6 +86,58 @@ static inline xc_string_t xc_string_concat(xc_string_t a, xc_string_t b) {
     return (xc_string_t){ .data = buf, .len = len };
 }
 
+/* ─── Bytes type ─────────────────────────────────────────────────────────── */
+/* A buffer of raw bytes. Like xc_string_t it is a {data,len} fat pointer passed
+   by value; copies share the buffer and it is never mutated in place, so value
+   semantics hold. Functions that produce new bytes heap-allocate. */
+typedef struct {
+    const unsigned char* data;
+    xc_size_t            len;
+} xc_bytes_t;
+
+static inline xc_integer_t bytes_len(xc_bytes_t b) { return (xc_integer_t)b.len; }
+
+static inline xc_integer_t bytes_get(xc_bytes_t b, xc_integer_t i) {
+    if (i < 0 || (xc_size_t)i >= b.len) return -1;
+    return (xc_integer_t)b.data[(xc_size_t)i];
+}
+
+static inline xc_bytes_t bytes_empty(void) {
+    return (xc_bytes_t){ .data = NULL, .len = 0 };
+}
+
+static inline xc_bytes_t bytes_slice(xc_bytes_t b, xc_integer_t from, xc_integer_t to) {
+    if (from < 0) from = 0;
+    if ((xc_size_t)to > b.len) to = (xc_integer_t)b.len;
+    if (from >= to) return bytes_empty();
+    return (xc_bytes_t){ .data = b.data + from, .len = (xc_size_t)(to - from) };
+}
+
+static inline xc_bytes_t bytes_concat(xc_bytes_t a, xc_bytes_t b) {
+    xc_size_t len = a.len + b.len;
+    unsigned char* buf = (unsigned char*)malloc(len ? len : 1);
+    if (!buf) abort();
+    if (a.len) memcpy(buf, a.data, a.len);
+    if (b.len) memcpy(buf + a.len, b.data, b.len);
+    return (xc_bytes_t){ .data = buf, .len = len };
+}
+
+/* Copy a string's bytes into a fresh Bytes buffer (and vice versa). */
+static inline xc_bytes_t bytes_from_string(xc_string_t s) {
+    unsigned char* buf = (unsigned char*)malloc(s.len ? s.len : 1);
+    if (!buf) abort();
+    if (s.len) memcpy(buf, s.data, s.len);
+    return (xc_bytes_t){ .data = buf, .len = s.len };
+}
+
+static inline xc_string_t bytes_to_string(xc_bytes_t b) {
+    char* buf = (char*)malloc(b.len + 1);
+    if (!buf) abort();
+    if (b.len) memcpy(buf, b.data, b.len);
+    buf[b.len] = '\0';
+    return (xc_string_t){ .data = buf, .len = b.len };
+}
+
 /* Number → string */
 static inline xc_string_t xc_number_to_string(xc_number_t n) {
     char buf[64];
