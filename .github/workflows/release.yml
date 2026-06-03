@@ -12,9 +12,31 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Guard: the checked-in bootstrap seed must be exactly what the compiler emits
+  # for compiler/xc.x. bootstrap.sh refreshes xc.stage0.c in place, so any drift
+  # shows up as a diff. Codegen is platform-independent, so one runner suffices.
+  seed-check:
+    name: stage0 seed in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap (refreshes compiler/xc.stage0.c)
+        run: ./compiler/bootstrap.sh
+      - name: Verify committed seed matches generated seed
+        run: |
+          if ! git diff --exit-code -- compiler/xc.stage0.c; then
+            echo "::error::compiler/xc.stage0.c is out of sync with compiler/xc.x — run ./compiler/bootstrap.sh and commit the result"
+            exit 1
+          fi
+
   build:
     name: ${{ matrix.target }}
+    needs: seed-check
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -87,6 +109,30 @@ jobs:
 
           tar -czf "$DIST.tar.gz" "$DIST"
           echo "artifact=$DIST.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke-test packaged bundle
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          DIST="x-${VERSION}-${{ matrix.target }}"
+          tar -xzf "$DIST.tar.gz" -C "$RUNNER_TEMP"
+          BUNDLE="$RUNNER_TEMP/$DIST"
+
+          # compile-and-run via the wrapper (exercises XC_RUNTIME/XC_STD + cc)
+          cat > "$RUNNER_TEMP/smoke.x" <<'EOF'
+          async entry main(args: String[]) -> Integer {
+              system.stdout.writeln("smoke ok")
+              return 0
+          }
+          EOF
+          XC_OUT="$RUNNER_TEMP/out" "$BUNDLE/bin/xc" "$RUNNER_TEMP/smoke.x"
+          got="$("$RUNNER_TEMP/out/smoke")"
+          test "$got" = "smoke ok" || { echo "::error::bundle smoke test failed: '$got'"; exit 1; }
+
+          # REPL accepts input and evaluates
+          repl="$(printf 'system.stdout.writeln("repl ok")\n' | "$BUNDLE/bin/x")"
+          echo "$repl" | grep -q "repl ok" || { echo "::error::bundle REPL smoke test failed"; exit 1; }
+          echo "bundle smoke test passed"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
