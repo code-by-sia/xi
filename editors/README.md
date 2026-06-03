@@ -5,6 +5,8 @@
 - **`zed/`** — a Zed extension that wires the grammar + queries into Zed.
 - **`vim/`** — a Vim / Neovim plugin (syntax, filetype detection, indentation).
   See `vim/README.md`.
+- **`vscode/`** — a Visual Studio Code extension (TextMate highlighting,
+  snippets, keyword/stdlib completion). See `vscode/README.md`.
 
 The grammar parses every `.x` file in this repository — the examples, the
 standard library, and the compiler's own sources — with no errors.

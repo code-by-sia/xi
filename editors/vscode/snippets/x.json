@@ -1,0 +1,105 @@
+{
+  "entry main": {
+    "prefix": "entry",
+    "body": [
+      "async entry main(args: String[]) -> Integer {",
+      "\t$0",
+      "\treturn 0",
+      "}"
+    ],
+    "description": "Program entry point"
+  },
+  "mapper": {
+    "prefix": "mapper",
+    "body": ["mapper ${1:name}(${2:params}) -> ${3:Type} {", "\treturn $0", "}"],
+    "description": "A pure mapping function"
+  },
+  "predicate": {
+    "prefix": "predicate",
+    "body": ["predicate ${1:name}(${2:params}) {", "\treturn $0", "}"],
+    "description": "A boolean predicate"
+  },
+  "consumer": {
+    "prefix": "consumer",
+    "body": ["consumer ${1:name}(${2:params}) {", "\t$0", "}"],
+    "description": "A side-effecting consumer (returns void)"
+  },
+  "producer": {
+    "prefix": "producer",
+    "body": ["producer ${1:name}(${2:params}) -> ${3:Type} {", "\t$0", "}"],
+    "description": "A producer (may have effects)"
+  },
+  "decision table": {
+    "prefix": "decision",
+    "body": [
+      "decision ${1:name}(${2:params}) -> ${3:Type} {",
+      "\thit first",
+      "\twhen ${4:condition} => ${5:result}",
+      "\telse => ${0:default}",
+      "}"
+    ],
+    "description": "A decision table (DxT)"
+  },
+  "interface": {
+    "prefix": "interface",
+    "body": ["interface ${1:Name} {", "\t${2:mapper} ${3:method}(${4:params}) -> ${5:Type}", "}"],
+    "description": "An interface"
+  },
+  "class": {
+    "prefix": "class",
+    "body": [
+      "class ${1:Name} implements ${2:Interface} {",
+      "\tdeps {",
+      "\t\t${3:dep}: ${4:Service}",
+      "\t}",
+      "\t$0",
+      "}"
+    ],
+    "description": "A class with a deps block"
+  },
+  "module": {
+    "prefix": "module",
+    "body": ["module ${1:App} {", "\tbind ${2:Interface} -> ${3:Impl} as ${4:singleton}", "}"],
+    "description": "A DI module with binds"
+  },
+  "refined type": {
+    "prefix": "type",
+    "body": ["type ${1:Name} = ${2:Number} where value ${3:>= 0}"],
+    "description": "A refined type with a constraint"
+  },
+  "compound type": {
+    "prefix": "typerec",
+    "body": ["type ${1:Name} = { ${2:field}: ${3:Type} }"],
+    "description": "A compound (record) type"
+  },
+  "match": {
+    "prefix": "match",
+    "body": ["match ${1:subject} {", "\t${2:pattern} -> { $3 }", "\t_ -> { $0 }", "}"],
+    "description": "A match expression"
+  },
+  "if let": {
+    "prefix": "iflet",
+    "body": ["if let ${1:x} = ${2:optional} {", "\t$0", "}"],
+    "description": "Unwrap an optional"
+  },
+  "for": {
+    "prefix": "for",
+    "body": ["for ${1:item} in ${2:items} {", "\t$0", "}"],
+    "description": "Iterate over an array"
+  },
+  "result ok": {
+    "prefix": "ok",
+    "body": ["return ok($0)"],
+    "description": "Return a successful Result"
+  },
+  "result err": {
+    "prefix": "err",
+    "body": ["return err(\"$0\")"],
+    "description": "Return an error Result"
+  },
+  "import": {
+    "prefix": "import",
+    "body": ["import \"${1:std/io.x}\""],
+    "description": "Import another file"
+  }
+}

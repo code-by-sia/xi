@@ -1,0 +1,129 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "X",
+  "scopeName": "source.x",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#declarations" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#constants" },
+    { "include": "#operators" },
+    { "include": "#function-call" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.x",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.triple.x",
+          "begin": "\"\"\"",
+          "end": "\"\"\""
+        },
+        {
+          "name": "string.quoted.double.x",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.x", "match": "\\\\." }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.hex.x", "match": "\\b0x[0-9a-fA-F]+\\b" },
+        { "name": "constant.numeric.binary.x", "match": "\\b0b[01]+\\b" },
+        { "name": "constant.numeric.float.x", "match": "\\b[0-9]+\\.[0-9]+\\b" },
+        { "name": "constant.numeric.integer.x", "match": "\\b[0-9]+\\b" }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "comment": "Function kinds, optionally async, capturing the name",
+          "match": "\\b(async\\s+)?(mapper|projector|predicate|consumer|producer|reducer|creator|decision|entry)\\b\\s*(?:\\{[^}]*\\}\\s*)?([A-Za-z_][A-Za-z0-9_]*)?",
+          "captures": {
+            "1": { "name": "storage.modifier.x" },
+            "2": { "name": "storage.type.function.x" },
+            "3": { "name": "entity.name.function.x" }
+          }
+        },
+        {
+          "comment": "type / interface / class / module / namespace + name",
+          "match": "\\b(type|interface|class|module|namespace)\\b\\s*([A-Za-z_][A-Za-z0-9_.]*)?",
+          "captures": {
+            "1": { "name": "storage.type.x" },
+            "2": { "name": "entity.name.type.x" }
+          }
+        },
+        {
+          "name": "keyword.declaration.x",
+          "match": "\\b(implements|extends|deps|bind|as|import|export|extern|hit)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.x",
+          "match": "\\b(if|else|match|when|otherwise|for|while|loop|break|continue|return|scope|unsafe|spawn|await|async|where)\\b"
+        },
+        {
+          "name": "storage.modifier.x",
+          "match": "\\b(singleton|transient|scoped|own|dup|let)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.x",
+          "match": "\\b(Number|Integer|Bool|String|Char|Void|Size|cstring|Bytes)\\b"
+        },
+        {
+          "name": "entity.name.type.x",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.x",
+          "match": "\\b(true|false|none|self|value|input)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.word.x",
+          "match": "\\b(and|or|not|is|in|matches)\\b"
+        },
+        {
+          "name": "keyword.operator.x",
+          "match": "(=>|->|==|!=|<=|>=|\\?\\?|\\?\\.|\\+=|-=|\\*=|/=|[-+*/%<>=!?])"
+        }
+      ]
+    },
+    "function-call": {
+      "patterns": [
+        {
+          "comment": "Identifier immediately followed by ( is a call",
+          "match": "\\b([a-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "name": "entity.name.function.call.x"
+        }
+      ]
+    }
+  }
+}

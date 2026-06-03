@@ -1,0 +1,46 @@
+{
+  "name": "x-language",
+  "displayName": "X Programming Language",
+  "description": "Syntax highlighting, snippets, and completion for the X programming language.",
+  "version": "0.0.3",
+  "publisher": "code-by-sia",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/code-by-sia/x"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:x"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "x",
+        "aliases": ["X", "x"],
+        "extensions": [".x"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "x",
+        "scopeName": "source.x",
+        "path": "./syntaxes/x.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "x",
+        "path": "./snippets/x.json"
+      }
+    ]
+  }
+}
