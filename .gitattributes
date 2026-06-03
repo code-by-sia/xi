@@ -1,15 +1,3 @@
-# GitHub Linguist hints.
-
-# X isn't a Linguist-recognised language yet, so GitHub can't highlight it
-# natively. As an approximation, render .x blobs using a syntactically-close
-# language (TypeScript shares type/interface/class/let/import/export/namespace).
-# `linguist-detectable=false` keeps that highlighting but excludes .x from the
-# repository language statistics, so the project is NOT labelled "TypeScript".
 *.x linguist-language=TypeScript linguist-detectable=false
-
-# Generated artifacts: keep them out of language stats and collapsed in diffs.
 editors/tree-sitter-x/src/**  linguist-generated=true
-
-# Editor integration (grammar, queries, vim/zed config) is tooling, not the
-# project's own code — vendor it so it doesn't skew the language bar.
 editors/**  linguist-vendored=true
