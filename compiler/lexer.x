@@ -222,6 +222,13 @@ decision kwKind(word: String) -> Integer {
     when word == "namespace"   => 255
     when word == "decision"    => 256
     when word == "hit"         => 257
+    when word == "interrupt"   => 280
+    when word == "interrupts"  => 281
+    when word == "signal"      => 282
+    when word == "try"         => 283
+    when word == "catch"       => 284
+    when word == "recover"     => 285
+    when word == "skip"        => 286
     when word == "Number"      => 260
     when word == "Integer"     => 261
     when word == "Bool"        => 262

@@ -250,13 +250,14 @@ type FuncSpec = {
 
 // The whole program
 type Program = {
-    types:     TypeSpec[],
-    ifaces:    IfaceSpec[],
-    classes:   ClassSpec[],
-    modules:   ModuleSpec[],
-    functions: FuncSpec[],
-    externs:   FuncSpec[],   // extern "C" signatures (bodyTokens empty)
-    entrySpec: FuncSpec      // isCreator=false, kind="entry"
+    types:      TypeSpec[],
+    ifaces:     IfaceSpec[],
+    classes:    ClassSpec[],
+    modules:    ModuleSpec[],
+    functions:  FuncSpec[],
+    externs:    FuncSpec[],   // extern "C" signatures (bodyTokens empty)
+    entrySpec:  FuncSpec,     // isCreator=false, kind="entry"
+    interrupts: String[]      // names of declared `interrupt` types (for type ids)
 }
 
 // C helpers for building typed arrays used by Program
@@ -535,6 +536,14 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
 
     let retCtype = retCtypeFor(kindStr, rr.ctype)
 
+    // optional `interrupts T, ...` effect annotation (parsed; checking is future)
+    if peek(ps2).kind == 281 {
+        ps2 = advance(ps2)
+        while peek(ps2).kind != 102 and peek(ps2).kind != 242 and peek(ps2).kind != 0 {
+            ps2 = advance(ps2)
+        }
+    }
+
     // optional `where <guard>` before the body
     let hasWhere = false
     let whereTokens: Token[] = []
@@ -665,6 +674,7 @@ mapper parseTypeDecl(ps: PState) -> TypeResult2 {
 
 decision isDeclStart(tok: Token) -> Bool {
     when tok.kind == 200 => true   // type
+    when tok.kind == 280 => true   // interrupt
     when tok.kind == 201 => true   // interface
     when tok.kind == 202 => true   // class
     when tok.kind == 210 => true   // module
@@ -925,6 +935,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     let modules: ModuleSpec[] = []
     let functions: FuncSpec[] = []
     let externs: FuncSpec[] = []
+    let interrupts: String[] = []
     let entrySpec = FuncSpec {
         isCreator: false, isAsync: false,
         kind: "entry", name: "main",
@@ -972,10 +983,12 @@ creator parseProgram(tokens: Token[]) -> Program {
             }
             if peek(ps).kind == 103 { ps = advance(ps) } // }
         } else {
-            // type declaration
-            if t.kind == 200 {
+            // type / interrupt declaration (an interrupt is a compound type that
+            // also gets an integer id for runtime handler matching)
+            if t.kind == 200 or t.kind == 280 {
                 let r = parseTypeDecl(ps)
                 types = appendTypeSpec(types, r.spec)
+                if t.kind == 280 { interrupts = appendString(interrupts, r.spec.name) }
                 ps = r.ps
             } else {
                 // interface
@@ -1050,7 +1063,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     return Program {
         types: types, ifaces: ifaces, classes: classes,
         modules: modules, functions: functions, externs: externs,
-        entrySpec: entrySpec
+        entrySpec: entrySpec, interrupts: interrupts
     }
 }
 

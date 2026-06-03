@@ -190,6 +190,21 @@ void diag_error(xc_integer_t line, xc_string_t msg) {
     exit(1);
 }
 
+/* ─── Interrupts ─────────────────────────────────────────────────────────── */
+
+xc_handler_t* xc_handlers = NULL;
+
+xc_handler_t* xc_int_find(int type_id) {
+    xc_handler_t* h = xc_handlers;
+    while (h) { if (h->type_id == type_id) return h; h = h->prev; }
+    return NULL;
+}
+
+void xc_int_unhandled(const char* name) {
+    fprintf(stderr, "xc: unhandled interrupt: %s\n", name);
+    exit(1);
+}
+
 xc_bool_t file_write(xc_string_t path, xc_string_t content) {
     char* cpath = xc_string_to_cstr(path);
     FILE* fp = fopen(cpath, "w");

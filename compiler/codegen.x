@@ -15,7 +15,8 @@ type GCtx = {
     symTypes: String[],
     depNames: String[],
     depTypes: String[],
-    retCtype: String
+    retCtype: String,
+    fnTag:    String        // mangled name of the enclosing fn (for catch helpers)
 }
 
 type StmtRes = { code: String, ctx: GCtx, pos: Integer }
@@ -55,13 +56,20 @@ mapper matchBrace(toks: Token[], openIdx: Integer) -> Integer {
 
 // ── context helpers ───────────────────────────────────────────────
 creator mkGCtx(prog: Program) -> GCtx {
-    return GCtx { prog: prog, symNames: [], symTypes: [], depNames: [], depTypes: [], retCtype: "" }
+    return GCtx { prog: prog, symNames: [], symTypes: [], depNames: [], depTypes: [], retCtype: "", fnTag: "" }
 }
 
 mapper withRet(ctx: GCtx, ret: String) -> GCtx {
     return GCtx {
         prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
-        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ret
+        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ret, fnTag: ctx.fnTag
+    }
+}
+
+mapper withTag(ctx: GCtx, tag: String) -> GCtx {
+    return GCtx {
+        prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
+        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ctx.retCtype, fnTag: tag
     }
 }
 
@@ -72,7 +80,8 @@ mapper addSym(ctx: GCtx, name: String, typ: String) -> GCtx {
         symTypes: appendString(ctx.symTypes, typ),
         depNames: ctx.depNames,
         depTypes: ctx.depTypes,
-        retCtype: ctx.retCtype
+        retCtype: ctx.retCtype,
+        fnTag: ctx.fnTag
     }
 }
 
@@ -83,7 +92,8 @@ mapper addDep(ctx: GCtx, name: String, typ: String) -> GCtx {
         symTypes: ctx.symTypes,
         depNames: appendString(ctx.depNames, name),
         depTypes: appendString(ctx.depTypes, typ),
-        retCtype: ctx.retCtype
+        retCtype: ctx.retCtype,
+        fnTag: ctx.fnTag
     }
 }
 
@@ -1015,6 +1025,10 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     if k == 224 {
         return genMatch(toks, pos, ctx)
     }
+    if k == 282 { return genSignal(toks, pos, ctx) }   // signal T {..} recover {..}
+    if k == 283 { return genTry(toks, pos, ctx) }      // try {..} catch e: T {..}
+    if k == 286 { return StmtRes { code: "    return 0;\n", ctx: ctx, pos: pos + 1 } }  // skip
+    if k == 285 { return StmtRes { code: "    return 1;\n", ctx: ctx, pos: pos + 1 } }  // recover (resolution)
     let e = genExpr(toks, pos, ctx)
     let p = e.pos
     let ak = gkind(toks, p)
@@ -1115,6 +1129,87 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     }
     if gkind(toks, p) == 103 { p = p + 1 }   // }
     return StmtRes { code: out, ctx: ctx, pos: p }
+}
+
+// signal T { fields } recover { block }
+// Find the nearest handler for T (still on the stack), call it to get a
+// resolution; recover -> run the inline block and continue; skip -> longjmp.
+mapper genSignal(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
+    let typeName = gtext(toks, pos + 1)
+    let e = genExpr(toks, pos + 1, ctx)         // parses `T { ... }` (type literal)
+    let recOpen = e.pos + 1                      // after `recover`
+    let recClose = matchBrace(toks, recOpen)
+    let recBody = genStmts(toks, recOpen + 1, recClose, ctx)
+    let pl = "__pl" + int_to_string(pos)
+    let hh = "__hh" + int_to_string(pos)
+    let rr = "__res" + int_to_string(pos)
+    let code = "    {\n"
+             + "      xc_" + typeName + "_t " + pl + " = " + e.code + ";\n"
+             + "      xc_handler_t* " + hh + " = xc_int_find(XC_INT_" + typeName + ");\n"
+             + "      if (" + hh + " == ((void*)0)) xc_int_unhandled(\"" + typeName + "\");\n"
+             + "      int " + rr + " = " + hh + "->fn(&" + pl + ");\n"
+             + "      if (" + rr + ") {\n"
+             + recBody
+             + "      } else { longjmp(" + hh + "->unwind, 1); }\n"
+             + "    }\n"
+    return StmtRes { code: code, ctx: ctx, pos: recClose + 1 }
+}
+
+// try { body } catch e: T { ... }  — push a handler, setjmp the skip target,
+// run the body; the catch body is compiled separately (see hoistCatches).
+mapper genTry(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
+    let bodyOpen = pos + 1
+    let bodyClose = matchBrace(toks, bodyOpen)
+    let body = genStmts(toks, bodyOpen + 1, bodyClose, ctx)
+    let cp = bodyClose + 1                       // `catch`
+    let typeName = gtext(toks, cp + 3)           // catch e : T
+    let catchOpen = cp + 4
+    let catchClose = matchBrace(toks, catchOpen)
+    let hname = "xc_catch_" + ctx.fnTag + "_" + int_to_string(cp)
+    let hv = "__h" + int_to_string(pos)
+    let code = "    {\n"
+             + "      xc_handler_t " + hv + ";\n"
+             + "      " + hv + ".type_id = XC_INT_" + typeName + ";\n"
+             + "      " + hv + ".fn = " + hname + ";\n"
+             + "      " + hv + ".prev = xc_handlers; xc_handlers = &" + hv + ";\n"
+             + "      if (setjmp(" + hv + ".unwind) == 0) {\n"
+             + body
+             + "      }\n"
+             + "      xc_handlers = " + hv + ".prev;\n"
+             + "    }\n"
+    return StmtRes { code: code, ctx: ctx, pos: catchClose + 1 }
+}
+
+// Emit a `static int xc_catch_<tag>_<pos>(void* __pp)` for every `try`/`catch`
+// in `toks`. The body reads only the payload (bound to the catch var) + globals;
+// `skip`/`recover` lower to `return 0` / `return 1`.
+mapper hoistCatches(prog: Program, toks: Token[], tag: String) -> String {
+    let out = ""
+    let n = tokenArrLen(toks)
+    let i = 0
+    while i < n {
+        if gkind(toks, i) == 283 {              // try
+            let bodyClose = matchBrace(toks, i + 1)
+            let cp = bodyClose + 1               // catch
+            if gkind(toks, cp) == 284 {
+                let varName = gtext(toks, cp + 1)
+                let typeName = gtext(toks, cp + 3)
+                let catchOpen = cp + 4
+                let catchClose = matchBrace(toks, catchOpen)
+                let bctx = withTag(addSym(mkGCtx(prog), varName, ""), tag)
+                let cbody = genStmts(toks, catchOpen + 1, catchClose, bctx)
+                let hname = "xc_catch_" + tag + "_" + int_to_string(cp)
+                out = out + "static int " + hname + "(void* __pp) {\n"
+                    + "    xc_" + typeName + "_t " + varName + " = *(xc_" + typeName + "_t*)__pp;\n"
+                    + "    (void)" + varName + ";\n"
+                    + cbody
+                    + "    return 0;\n"
+                    + "}\n"
+            }
+        }
+        i = i + 1
+    }
+    return out
 }
 
 // ── Code generator ────────────────────────────────────────────────
@@ -1575,9 +1670,11 @@ mapper seedFuncDeps(ctx: GCtx, dlist: DepSpec[]) -> GCtx {
 }
 
 mapper emitOneFunc(prog: Program, fs: FuncSpec) -> String {
-    let out = "static " + fs.retCtype + " xc_" + fs.name + "(" + fs.params + ") {\n"
+    let tag = fs.name
+    let out = hoistCatches(prog, fs.bodyTokens, tag)
+    out = out + "static " + fs.retCtype + " xc_" + fs.name + "(" + fs.params + ") {\n"
     out = out + funcDepPrologue(prog, fs.fnDeps)
-    let ctx = seedFuncDeps(withRet(seedParams(mkGCtx(prog), fs.params), fs.retCtype), fs.fnDeps)
+    let ctx = withTag(seedFuncDeps(withRet(seedParams(mkGCtx(prog), fs.params), fs.retCtype), fs.fnDeps), tag)
     out = out + genBody2(fs.bodyTokens, ctx)
     return out + "}\n\n"
 }
@@ -1689,17 +1786,20 @@ mapper genClassMethods(prog: Program) -> String {
         let mn = methodSpecLen(cs.methList)
         while mi < mn {
             let ms = methodSpecGet(cs.methList, mi)
+            let tag = cs.name + "_" + ms.name
             if ms.kind == "creator" {
+                out = out + hoistCatches(prog, ms.bodyTokens, tag)
                 out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "(" + ms.params + ") {\n"
-                let ctx = withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype)
+                let ctx = withTag(withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype), tag)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
             } else {
                 let pstr = ms.params
                 if string_len(pstr) > 0 { pstr = ", " + pstr }
+                out = out + hoistCatches(prog, ms.bodyTokens, tag)
                 out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "_impl(void* self_ptr" + pstr + ") {\n"
                 out = out + "    xc_" + cs.name + "_t* self = (xc_" + cs.name + "_t*)self_ptr;\n"
-                let ctx = withRet(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.retCtype)
+                let ctx = withTag(withRet(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.retCtype), tag)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
             }
@@ -1997,7 +2097,8 @@ mapper lastWord(s: String) -> String {
 
 mapper genEntry(prog: Program) -> String {
     let es = prog.entrySpec
-    let out = "/* === Entry point === */\n"
+    let out = hoistCatches(prog, es.bodyTokens, "entry")
+    out = out + "/* === Entry point === */\n"
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
     out = out + "    xc_arr_string_t xc_args;\n"
@@ -2005,7 +2106,7 @@ mapper genEntry(prog: Program) -> String {
     out = out + "    xc_args.cap = (xc_size_t)argc;\n"
     out = out + "    xc_args.data = (xc_string_t*)malloc(argc * sizeof(xc_string_t));\n"
     out = out + "    for (int i = 0; i < argc; i++) xc_args.data[i] = xc_string_from_cstr(argv[i]);\n"
-    let ctx = mkGCtx(prog)
+    let ctx = withTag(mkGCtx(prog), "entry")
     if string_len(es.params) > 0 {
         let pname = lastWord(es.params)
         out = out + "    xc_arr_string_t " + pname + " = xc_args;\n"
@@ -2102,8 +2203,22 @@ mapper genHeader() -> String {
     return "/* Generated by xc-bootstrap — X compiler written in X */\n#include \"runtime.h\"\n\n"
 }
 
+// Assign each `interrupt` type an integer id used for runtime handler matching.
+mapper genInterruptDefs(prog: Program) -> String {
+    let n = stringArrLen(prog.interrupts)
+    if n == 0 { return "" }
+    let out = "/* === Interrupt type ids === */\n"
+    let i = 0
+    while i < n {
+        out = out + "#define XC_INT_" + stringArrGet(prog.interrupts, i) + " " + int_to_string(i) + "\n"
+        i = i + 1
+    }
+    return out + "\n"
+}
+
 mapper genAll(prog: Program) -> String {
     return genHeader()
+         + genInterruptDefs(prog)
          + genForwardDecls(prog)
          + genRefinedTypedefs(prog)
          + genArrTypedefs(prog)

@@ -33,6 +33,7 @@
 #include <math.h>
 #include <time.h>
 #include <ctype.h>
+#include <setjmp.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -291,6 +292,21 @@ xc_string_t file_read_all(xc_string_t path);
    exit(1) with `xc: <file>:<line>: error: <msg>`. */
 void diag_set_file(xc_string_t path);
 void diag_error(xc_integer_t line, xc_string_t msg);
+
+/* ─── Interrupts (resumable conditions) ──────────────────────────────────────
+   A dynamic stack of handlers. `try` pushes one and setjmp()s the skip target;
+   `signal` finds the nearest matching handler, calls it (stack intact) for a
+   resolution (1=recover, 0=skip), then continues or longjmp()s. */
+typedef int (*xc_int_fn)(void* payload);
+typedef struct xc_handler {
+    int                type_id;
+    xc_int_fn          fn;
+    jmp_buf            unwind;
+    struct xc_handler* prev;
+} xc_handler_t;
+extern xc_handler_t* xc_handlers;
+xc_handler_t* xc_int_find(int type_id);
+void          xc_int_unhandled(const char* name);
 /* REPL / tooling */
 xc_string_t  read_line(void);
 xc_bool_t    stdin_eof(void);

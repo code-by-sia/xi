@@ -1,8 +1,9 @@
-# Proposal: Interrupts (resumable conditions)
+# Interrupts (resumable conditions)
 
-> **Status: Draft — syntax agreed, not implemented.** This is a design document
-> for review. The syntax below was decided during design discussion; the
-> implementation is future work.
+> **Status: Implemented** — `skip` + `recover`, for top-level functions,
+> `entry`, and class methods. `retry`, value-producing signals, and *checking*
+> of the `interrupts T` annotation (it is currently parsed but not enforced)
+> remain future work (see Limitations). Runnable: `examples/interrupt_demo.x`.
 
 ## Summary
 
@@ -111,14 +112,16 @@ restriction below.
 unwinding** and returns a resolution, which the signal site then enacts. If no
 handler matches, the signal is **unhandled** (see checked signatures).
 
-### Checked signatures
+### The `interrupts` annotation
 
-- A function whose body can `signal T` (directly, or by calling a function that
-  `interrupts T` without handling it) **must** declare `interrupts T`.
-- Multiple: `interrupts A, B`.
-- `entry main` may not propagate interrupts; one that reaches `main` unhandled is
-  a **panic** (aborts with a diagnostic).
-- The compiler checks that each `catch` type can actually reach its `try`.
+- A function that may signal declares `interrupts T` (multiple: `interrupts A, B`).
+- An interrupt that reaches `main` with no matching handler is a **panic**
+  (`xc: unhandled interrupt: T`).
+
+> The annotation is currently **parsed but not enforced** — the compiler does not
+> yet verify that every `signal` site is declared, nor that callers handle or
+> re-declare. That effect-checking pass is future work; today `interrupts T` is
+> documentation that the runtime backs up with the unhandled-panic.
 
 ### Purity
 
