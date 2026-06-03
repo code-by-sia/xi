@@ -23,9 +23,11 @@ optional `mkdocs.yml` is included for rendering them as a site.
 ## Build & run
 
 ```sh
-# 1. Bootstrap from source with only a C compiler. Builds ./compiler/xc and ./bin/x
-#    (the REPL/run tool). stage0.c is the X compiler's own C output; cc turns it
-#    into a working xc, which then rebuilds itself from compiler/xc.x.
+# 1. Build the compiler. bootstrap.sh downloads the matching released `xc`
+#    binary (the seed), uses it to compile compiler/xc.x, then rebuilds that
+#    from source with itself. Produces ./compiler/xc and ./bin/x (REPL/run tool).
+#    Needs curl + a C compiler. Pin the seed with XC_BOOTSTRAP_VERSION=v0.0.0,
+#    or set XC_SEED=/path/to/xc to build offline from an existing compiler.
 ./compiler/bootstrap.sh
 
 # 2. Compile an X program to a native executable (xc invokes cc for you).
@@ -39,7 +41,7 @@ export XC="$PWD/compiler/xc"
 ./bin/x examples/greeting.x                # compile + run
 ./bin/x                                    # interactive REPL
 
-# 3. Verify self-hosting (3-stage byte-identical fixpoint):
+# 3. Verify self-hosting (successive self-compiles emit byte-identical C):
 ./compiler/selfhost.sh
 ```
 
@@ -257,11 +259,11 @@ compiler/
 ├── repl.x          The REPL / run tool (compiled to ./bin/x)
 ├── xc_helpers.c    C primitives xc.x declares via extern "C"
 │                   (growable typed arrays, file I/O, cc invocation)
-├── xc.stage0.c     Generated C of the compiler — bootstrap seed (cc-only build)
 ├── xc              Native compiler binary (produced by bootstrap.sh)
-├── bootstrap.sh    Build the compiler (+ ./bin/x) from source with only cc
+├── fetch-seed.sh   Download the released xc binary that seeds the bootstrap
+├── bootstrap.sh    Build the compiler (+ ./bin/x): seed compiles it, then self-rebuild
 ├── build.sh        Compile an X program with the X compiler
-└── selfhost.sh     3-stage self-hosting fixpoint verification
+└── selfhost.sh     Self-hosting fixpoint verification
 runtime/
 ├── runtime.h       C runtime header (primitive types, string/array helpers)
 └── runtime.c       C runtime (regex, string ops, file I/O, stdlib primitives)
@@ -289,12 +291,17 @@ stdlib, and the compiler itself) with no errors.
 
 ### Bootstrapping note
 
-The repository is bootstrappable from source with only a C compiler:
-`compiler/xc.stage0.c` is the X compiler's own emitted C, so
-`cc xc.stage0.c runtime/runtime.c -o xc` yields a working compiler, which then
-rebuilds itself from `compiler/xc.x`. `selfhost.sh` proves the fixpoint
-(gen0/gen1/gen2 emit byte-identical C). The C runtime is intrinsic — the X
+The compiler is self-hosting: written in X, it compiles its own source.
+`bootstrap.sh` seeds the build by downloading the released `xc` binary for your
+platform (`compiler/fetch-seed.sh`), compiles `compiler/xc.x` with it, then
+rebuilds the result from source with itself — so the shipped binary comes from
+current source, not the download. `selfhost.sh` proves the fixpoint (successive
+self-compiles emit byte-identical C). The C runtime is intrinsic — the X
 equivalent of libc/libcore — not compiler logic.
+
+Building thus needs a prior release binary for your OS/arch; set `XC_SEED` to an
+existing `xc` to build offline. (There is no checked-in C seed — an earlier
+revision shipped one as `compiler/xc.stage0.c`.)
 
 ## License
 

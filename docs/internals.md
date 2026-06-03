@@ -25,21 +25,22 @@ non-X code is:
 ## Bootstrapping from source
 
 Self-hosting has a chicken-and-egg problem: you need a compiler to build the
-compiler. X solves it the standard way — by shipping the compiler's own emitted
-C as a seed:
+compiler. X solves it by **seeding from a released binary** — the previously
+published `xc` for your platform:
 
 ```
-compiler/xc.stage0.c   (the X compiler's C output, checked in)
-        │  cc xc.stage0.c runtime.c -o xc
-        ▼
-       xc   (works immediately, no X compiler needed)
+released xc   (downloaded by compiler/fetch-seed.sh)
         │  xc compiler/xc.x          (X compiling X)
         ▼
-       xc   (rebuilt from source)
+       xc   (built from current source)
+        │  xc compiler/xc.x          (self-rebuild)
+        ▼
+       xc   (shipped compiler — from source, not the download)
 ```
 
-`./compiler/bootstrap.sh` runs exactly this, then refreshes `stage0.c` from the
-freshly self-built compiler.
+`./compiler/bootstrap.sh` runs exactly this. There is no checked-in C seed, so
+building requires a prior release for your OS/arch (or `XC_SEED=/path/to/xc` to
+build offline).
 
 ## The fixpoint test
 
@@ -47,13 +48,16 @@ A correct self-hosting compiler is a **fixpoint**: compiling its own source with
 generation *N* yields the same C as generation *N+1*.
 
 ```
-gen0 = xc built from stage0.c with cc
-gen1 = xc.x compiled by gen0
-gen2 = xc.x compiled by gen1
-assert  C(gen0 on xc.x) == C(gen1 on xc.x)     # byte-identical
+gen0 = the released seed compiler
+gen1 = xc.x compiled by gen0          (current source, seed codegen)
+gen2 = xc.x compiled by gen1          (current source, current codegen)
+gen3 = xc.x compiled by gen2
+assert  C(gen2 on xc.x) == C(gen3 on xc.x)     # byte-identical
 ```
 
-`./compiler/selfhost.sh` performs this three-stage build and diffs the outputs.
+Comparing gen2 and gen3 (both built from current source) makes the test correct
+even when the seed release predates the working tree. `./compiler/selfhost.sh`
+performs this build and diffs the outputs.
 
 ## Compilation pipeline
 
@@ -82,7 +86,7 @@ compiler/
   lexer.x parser.x codegen.x driver.x   the compiler, in X
   repl.x        the REPL / run tool (compiled to ./x)
   xc_helpers.c  C primitives (extern "C")
-  xc.stage0.c   generated C seed (cc-only bootstrap)
+  fetch-seed.sh download the released seed compiler
   bootstrap.sh build.sh selfhost.sh
 runtime/
   runtime.h runtime.c   the C runtime

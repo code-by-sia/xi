@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Bootstrap the X compiler FROM SOURCE using only a C compiler.
-#
-# `compiler/xc.stage0.c` is the X compiler's own C output for `compiler/xc.x`
-# (with the C helpers appended).  Compiling it with cc + the runtime yields a
-# working `xc` — no pre-existing X binary required.
-#
-# Then we use that compiler to rebuild itself from `compiler/xc.x`, proving the
-# toolchain is self-contained.
+# Build the X compiler. There is no checked-in C seed: we download the matching
+# released `xc` binary, use it to compile compiler/xc.x into a fresh `xc`, then
+# rebuild that from source with itself (self-host). The released seed only kicks
+# off the first compile — the shipped compiler/xc is built from current source.
 #
 #   ./compiler/bootstrap.sh
+#
+# Seed selection is controlled by compiler/fetch-seed.sh (XC_SEED /
+# XC_BOOTSTRAP_VERSION / XC_BOOTSTRAP_REPO). Requires curl, tar and a C compiler.
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -18,19 +17,19 @@ export XC_OUT="$ROOT/build"          # all build artifacts land here
 HELP="$ROOT/compiler/xc_helpers.c"
 mkdir -p "$XC_OUT"
 
-echo "==> [stage0] Building xc from compiler/xc.stage0.c with cc ..."
-cc -std=c99 -O2 -w -Wno-implicit-int -Wno-implicit-function-declaration -Wno-int-conversion -Wno-incompatible-pointer-types -I runtime compiler/xc.stage0.c runtime/runtime.c -o compiler/xc -lm
+echo "==> [seed] fetching a released compiler to bootstrap from ..."
+SEED="$("$ROOT/compiler/fetch-seed.sh")"
+echo "    seed: $SEED"
+
+echo "==> [stage1] seed compiler builds xc from compiler/xc.x ..."
+XC_HELPERS="$HELP" "$SEED" compiler/xc.x >/dev/null
+cp "$XC_OUT/xc" compiler/xc
 echo "    built compiler/xc"
 
-echo "==> [stage1] Rebuilding xc from compiler/xc.x using the stage0 compiler ..."
+echo "==> [stage2] xc rebuilds itself from compiler/xc.x ..."
 XC_HELPERS="$HELP" ./compiler/xc compiler/xc.x >/dev/null
 cp "$XC_OUT/xc" compiler/xc
-echo "    compiler/xc now built by itself"
-
-echo "==> Refreshing compiler/xc.stage0.c from the self-built compiler ..."
-XC_HELPERS="$HELP" ./compiler/xc compiler/xc.x >/dev/null
-cp "$XC_OUT/xc.gen.c" compiler/xc.stage0.c
-echo "    stage0 refreshed"
+echo "    compiler/xc is now built from source by itself"
 
 echo "==> Building the REPL / run tool 'x' from compiler/repl.x ..."
 ./compiler/xc compiler/repl.x >/dev/null
@@ -38,7 +37,7 @@ mkdir -p bin
 cp "$XC_OUT/repl" bin/x
 echo "    built ./bin/x"
 
-echo "Bootstrap complete. The compiler is built entirely from X + C."
+echo "Bootstrap complete. The compiler is built from current X source."
 echo "  ./compiler/xc <file.x>   compile to a native binary"
 echo "  ./bin/x                  start the REPL"
 echo "  ./bin/x <file.x>         compile and run a file"

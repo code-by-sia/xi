@@ -7,6 +7,5 @@
 # Delete this line if you'd rather .x render unhighlighted than be mislabeled.
 *.x linguist-language=TypeScript
 
-# Generated/seed artifacts: keep them out of language stats and collapsed in diffs.
-compiler/xc.stage0.c          linguist-generated=true
+# Generated artifacts: keep them out of language stats and collapsed in diffs.
 editors/tree-sitter-x/src/**  linguist-generated=true

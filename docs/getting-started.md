@@ -3,23 +3,27 @@
 ## Requirements
 
 - A C compiler (`cc` — clang or gcc).
-- A POSIX shell.
-
-That's it.
+- `curl` and a POSIX shell.
+- Network access to download the bootstrap seed (or an existing `xc` via `XC_SEED`).
 
 ## Build the compiler from source
 
-The compiler is self-hosting, so it ships a generated C seed
-(`compiler/xc.stage0.c`) that `cc` turns into a working compiler, which then
-rebuilds itself from `compiler/xc.x`:
+The compiler is self-hosting. `bootstrap.sh` downloads the released `xc` binary
+for your platform (the seed), compiles `compiler/xc.x` with it, then rebuilds the
+result from source with itself — so the compiler you get is built from the
+current source, not the download:
 
 ```console
 $ ./compiler/bootstrap.sh
-==> [stage0] Building xc from compiler/xc.stage0.c with cc ...
-==> [stage1] Rebuilding xc from compiler/xc.x using the stage0 compiler ...
+==> [seed] fetching a released compiler to bootstrap from ...
+==> [stage1] seed compiler builds xc from compiler/xc.x ...
+==> [stage2] xc rebuilds itself from compiler/xc.x ...
 ==> Building the REPL / run tool 'x' from compiler/repl.x ...
-Bootstrap complete. The compiler is built entirely from X + C.
+Bootstrap complete. The compiler is built from current X source.
 ```
+
+Pin the seed with `XC_BOOTSTRAP_VERSION=v0.0.0`, or build offline by pointing
+`XC_SEED` at an existing `xc` binary.
 
 This produces:
 

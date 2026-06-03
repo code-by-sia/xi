@@ -17,40 +17,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Guard: the checked-in bootstrap seed must be exactly what the compiler emits
-  # for compiler/xc.x. bootstrap.sh refreshes xc.stage0.c in place, so any drift
-  # shows up as a diff. Codegen is platform-independent, so one runner suffices.
-  seed-check:
-    name: stage0 seed in sync
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Bootstrap (refreshes compiler/xc.stage0.c)
-        run: ./compiler/bootstrap.sh
-      - name: Verify committed seed matches generated seed
-        run: |
-          if ! git diff --exit-code -- compiler/xc.stage0.c; then
-            echo "::error::compiler/xc.stage0.c is out of sync with compiler/xc.x — run ./compiler/bootstrap.sh and commit the result"
-            exit 1
-          fi
-
   build:
     name: ${{ matrix.target }}
-    needs: seed-check
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
+        # Each target bootstraps by downloading the PREVIOUS release binary for
+        # the same OS/arch (there is no checked-in C seed), so a target can only
+        # be built once a release asset for it exists. macos-x86_64 has no seed
+        # and is therefore not built here.
         include:
           - { runner: ubuntu-latest,    target: linux-x86_64 }
           - { runner: ubuntu-24.04-arm, target: linux-arm64 }
-          - { runner: macos-13,         target: macos-x86_64 }
           - { runner: macos-14,         target: macos-arm64 }
+
+    env:
+      # fetch-seed.sh uses this to avoid GitHub API rate limits when resolving
+      # the latest release to bootstrap from.
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build toolchain (bootstrap from source)
+      - name: Build toolchain (bootstrap from released seed)
         run: ./compiler/bootstrap.sh
 
       - name: Verify self-hosting fixpoint
