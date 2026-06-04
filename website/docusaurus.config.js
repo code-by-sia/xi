@@ -51,9 +51,6 @@ const config = {
         ],
       },
       footer: {
-        style: 'dark',
-        copyright:
-          'The X programming language — Apache-2.0. Built with Docusaurus.',
       },
       prism: {
         theme: themes.oneLight,
