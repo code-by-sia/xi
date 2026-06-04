@@ -46,6 +46,8 @@ module App {}                             // resolution is automatic
 - **Interrupts** — resumable conditions: a function `signal`s and **suspends**;
   an enclosing `try`/`catch` decides to `recover` (resume) or `skip` (abandon).
   See [`docs/interrupts.md`](docs/interrupts.md).
+- **Atoms** — active-state stores: an immutable `state` changed only via
+  `transition` reducers (Redux-style). See [`docs/atoms.md`](docs/atoms.md).
 - **Refined types** carry constraints (`type Age = Number where value >= 0`)
   that are **checked at construction**.
 - **Result-based error handling** (`T!`, `ok`/`err`, `?` propagation) — no

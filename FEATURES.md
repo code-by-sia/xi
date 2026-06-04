@@ -14,6 +14,8 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Array types (`T[]`) | ✓ |
 | Type aliases incl. plural/array (`type People = Person[]`, `type Name = String`) | ✓ |
 | `empty T` — the zero value of any type (struct all-zero, array empty) | ✓ |
+| `atom` — active-state store: immutable `state` + `transition` reducers | ✓ |
+| `machine` — state machine on atoms (named states, guards, graph) | ✗ (proposed) |
 | `Bytes` — raw binary buffer primitive (distinct from `String`) | ✓ |
 | Result type `T!` with `ok`/`err` and `?` propagation | ✓ |
 | Interfaces with vtable dispatch | ✓ |

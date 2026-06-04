@@ -248,6 +248,15 @@ type FuncSpec = {
     fnDeps:      DepSpec[] // function-level dependencies:  kind { d: I } name(...)
 }
 
+// An `atom` (active-state / store): a holder of an immutable state value, with
+// `transition`s (reducers) that produce the next value.
+type AtomSpec = {
+    name:          String,
+    stateTypeName: String,     // e.g. "Cart" — the state type (for .current)
+    initToks:      Token[],    // tokens of the `initial` expression
+    transitions:   FuncSpec[] // transition f(s: T, ...) -> T { body }
+}
+
 // The whole program
 type Program = {
     types:      TypeSpec[],
@@ -257,7 +266,8 @@ type Program = {
     functions:  FuncSpec[],
     externs:    FuncSpec[],   // extern "C" signatures (bodyTokens empty)
     entrySpec:  FuncSpec,     // isCreator=false, kind="entry"
-    interrupts: String[]      // names of declared `interrupt` types (for type ids)
+    interrupts: String[],     // names of declared `interrupt` types (for type ids)
+    atoms:      AtomSpec[]    // declared `atom`s
 }
 
 // C helpers for building typed arrays used by Program
@@ -271,6 +281,9 @@ extern "C" {
     mapper appendBindSpec(arr: BindSpec[], s: BindSpec) -> BindSpec[]
     mapper appendModuleSpec(arr: ModuleSpec[], s: ModuleSpec) -> ModuleSpec[]
     mapper appendFuncSpec(arr: FuncSpec[], s: FuncSpec) -> FuncSpec[]
+    mapper appendAtomSpec(arr: AtomSpec[], s: AtomSpec) -> AtomSpec[]
+    mapper atomSpecLen(arr: AtomSpec[]) -> Integer
+    mapper atomSpecGet(arr: AtomSpec[], i: Integer) -> AtomSpec
 
     mapper methodSpecLen(arr: MethodSpec[]) -> Integer
     mapper methodSpecGet(arr: MethodSpec[], i: Integer) -> MethodSpec
@@ -675,6 +688,8 @@ mapper parseTypeDecl(ps: PState) -> TypeResult2 {
 decision isDeclStart(tok: Token) -> Bool {
     when tok.kind == 200 => true   // type
     when tok.kind == 280 => true   // interrupt
+    when tok.kind == 288 => true   // atom
+    when tok.kind == 289 => true   // state
     when tok.kind == 201 => true   // interface
     when tok.kind == 202 => true   // class
     when tok.kind == 210 => true   // module
@@ -926,6 +941,82 @@ mapper parseModule(ps: PState) -> ModuleResult {
 
 // ── Program parser ────────────────────────────────────────────────
 
+type AtomResult = { spec: AtomSpec, ps: PState }
+
+// atom name { initial <expr>  (transition f(params) -> T { body })* }
+mapper parseAtom(ps: PState) -> AtomResult {
+    let ps2 = advance(ps)                 // consume 'atom'
+    let name = peek(ps2).text
+    ps2 = advance(ps2)
+    if peek(ps2).kind == 102 { ps2 = advance(ps2) }   // {
+
+    let initToks: Token[] = []
+    let transitions: FuncSpec[] = []
+    let running = true
+    while running {
+        let t = peek(ps2)
+        if t.kind == 103 or t.kind == 0 {
+            running = false
+        } else {
+            if t.kind == 291 {            // initial <expr>
+                ps2 = advance(ps2)
+                let d = 0
+                let coll = true
+                while coll {
+                    let c = peek(ps2)
+                    if c.kind == 0 { coll = false }
+                    else {
+                        if d == 0 and (c.kind == 290 or c.kind == 103) { coll = false }
+                        else {
+                            if c.kind == 100 or c.kind == 104 or c.kind == 102 { d = d + 1 }
+                            if c.kind == 101 or c.kind == 105 or c.kind == 103 { d = d - 1 }
+                            initToks = appendToken(initToks, c)
+                            ps2 = advance(ps2)
+                        }
+                    }
+                }
+            } else {
+                if t.kind == 290 {        // transition name(params) -> ret { body }
+                    ps2 = advance(ps2)
+                    let fnameTok = peek(ps2)
+                    ps2 = advance(ps2)
+                    if peek(ps2).kind == 100 { ps2 = advance(ps2) }   // (
+                    let pr = parseParams(ps2)
+                    ps2 = pr.ps
+                    if peek(ps2).kind == 101 { ps2 = advance(ps2) }   // )
+                    let rr = parseRetType(ps2)
+                    ps2 = rr.ps
+                    let br = parseBody(ps2)
+                    ps2 = br.ps
+                    let fs = FuncSpec {
+                        isCreator: false, isAsync: false, kind: "mapper",
+                        name: name + "__" + fnameTok.text,
+                        params: pr.params, retCtype: rr.ctype,
+                        bodyTokens: br.bodyTokens,
+                        hasWhere: false, whereTokens: [], fnDeps: []
+                    }
+                    transitions = appendFuncSpec(transitions, fs)
+                } else {
+                    ps2 = advance(ps2)
+                }
+            }
+        }
+    }
+    if peek(ps2).kind == 103 { ps2 = advance(ps2) }   // }
+
+    let stateTypeName = ""
+    if funcSpecLen(transitions) > 0 {
+        stateTypeName = ctypeSuffix(funcSpecGet(transitions, 0).retCtype)
+    } else {
+        if tokenArrLen(initToks) > 0 { stateTypeName = tokenArrGet(initToks, 0).text }
+    }
+    let spec = AtomSpec {
+        name: name, stateTypeName: stateTypeName,
+        initToks: initToks, transitions: transitions
+    }
+    return AtomResult { spec: spec, ps: ps2 }
+}
+
 creator parseProgram(tokens: Token[]) -> Program {
     let ps = mkPState(tokens)
 
@@ -936,6 +1027,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     let functions: FuncSpec[] = []
     let externs: FuncSpec[] = []
     let interrupts: String[] = []
+    let atoms: AtomSpec[] = []
     let entrySpec = FuncSpec {
         isCreator: false, isAsync: false,
         kind: "entry", name: "main",
@@ -983,13 +1075,19 @@ creator parseProgram(tokens: Token[]) -> Program {
             }
             if peek(ps).kind == 103 { ps = advance(ps) } // }
         } else {
-            // type / interrupt declaration (an interrupt is a compound type that
-            // also gets an integer id for runtime handler matching)
-            if t.kind == 200 or t.kind == 280 {
+            // type / interrupt / state declaration. `interrupt` is a compound
+            // type that also gets an id; `state` is a compound type (an atom's
+            // immutable value type).
+            if t.kind == 200 or t.kind == 280 or t.kind == 289 {
                 let r = parseTypeDecl(ps)
                 types = appendTypeSpec(types, r.spec)
                 if t.kind == 280 { interrupts = appendString(interrupts, r.spec.name) }
                 ps = r.ps
+            } else {
+            if t.kind == 288 {                          // atom declaration
+                let ar = parseAtom(ps)
+                atoms = appendAtomSpec(atoms, ar.spec)
+                ps = ar.ps
             } else {
                 // interface
                 if t.kind == 201 {
@@ -1057,13 +1155,14 @@ creator parseProgram(tokens: Token[]) -> Program {
                     }
                 }
             }
+            }
         }
     }
 
     return Program {
         types: types, ifaces: ifaces, classes: classes,
         modules: modules, functions: functions, externs: externs,
-        entrySpec: entrySpec, interrupts: interrupts
+        entrySpec: entrySpec, interrupts: interrupts, atoms: atoms
     }
 }
 

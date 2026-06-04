@@ -1,8 +1,7 @@
 # Proposal: Atoms & state machines
 
-> **Status: Draft — design for review.** Two related features: `atom` (an
-> active-state / Redux-style store) and `machine` (a state machine built on top).
-> Not implemented.
+> **Status:** Layer 1 (`atom`) is **implemented** — see
+> [Atoms](../atoms.md). Layer 2 (`machine`) is still a **draft** for review.
 
 ## Summary
 

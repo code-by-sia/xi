@@ -189,6 +189,27 @@ predicate isFuncNameC(prog: Program, name: String) {
     return false
 }
 
+predicate isAtomNameC(prog: Program, name: String) {
+    let i = 0
+    let n = atomSpecLen(prog.atoms)
+    while i < n {
+        if atomSpecGet(prog.atoms, i).name == name { return true }
+        i = i + 1
+    }
+    return false
+}
+
+mapper atomStateTypeName(prog: Program, name: String) -> String {
+    let i = 0
+    let n = atomSpecLen(prog.atoms)
+    while i < n {
+        let a = atomSpecGet(prog.atoms, i)
+        if a.name == name { return a.stateTypeName }
+        i = i + 1
+    }
+    return ""
+}
+
 mapper funcRetXType(prog: Program, name: String) -> String {
     let i = 0
     let n = funcSpecLen(prog.functions)
@@ -589,6 +610,9 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if isModuleNameC(ctx.prog, txt) {
             return ExprRes { code: txt, pos: pos + 1, xtyp: "module:" + txt }
         }
+        if isAtomNameC(ctx.prog, txt) {
+            return ExprRes { code: "__atom_" + txt, pos: pos + 1, xtyp: "atom:" + txt }
+        }
         return ExprRes { code: txt, pos: pos + 1, xtyp: lookupVar(ctx, txt) }
     }
     return ExprRes { code: txt, pos: pos + 1, xtyp: "" }
@@ -608,6 +632,14 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             let fld = gtext(toks, p + 1)
             if gkind(toks, p + 2) == 100 {
                 let al = genArgs(toks, p + 2, ctx)
+                if startsWith2(typ, "atom:") {
+                    // atom.transition(args): swap the holder to the reducer result
+                    let an = string_slice(typ, 5, string_len(typ))
+                    let sep = ""
+                    if string_len(al.code) > 0 { sep = ", " }
+                    code = "(__atom_" + an + " = xc_" + an + "__" + fld + "(__atom_" + an + sep + al.code + "))"
+                    typ = atomStateTypeName(ctx.prog, an)
+                } else {
                 if startsWith2(typ, "module:") and fld == "resolve" {
                     // Module.resolve(I) -> automatic interface resolver
                     code = "xc_resolve_" + al.firstRaw + "()"
@@ -635,8 +667,15 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         }
                     }
                 }
+                }
                 p = al.pos
             } else {
+                if startsWith2(typ, "atom:") {
+                    // atom.current (or any field) -> the holder value
+                    let an = string_slice(typ, 5, string_len(typ))
+                    code = "__atom_" + an
+                    typ = atomStateTypeName(ctx.prog, an)
+                } else {
                 if startsWith2(typ, "ns:") {
                     typ = "ns:" + string_slice(typ, 3, string_len(typ)) + "." + fld
                 } else {
@@ -655,6 +694,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                             typ = ft
                         }
                     }
+                }
                 }
                 p = p + 2
             }
@@ -2144,6 +2184,7 @@ mapper genEntry(prog: Program) -> String {
     out = out + "/* === Entry point === */\n"
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
+    out = out + "    xc_atoms_init();\n"
     out = out + "    xc_arr_string_t xc_args;\n"
     out = out + "    xc_args.len = (xc_size_t)argc;\n"
     out = out + "    xc_args.cap = (xc_size_t)argc;\n"
@@ -2265,6 +2306,52 @@ mapper genInterruptDefs(prog: Program) -> String {
     return out + "\n"
 }
 
+// Atom holders + transition prototypes (emitted before any use site).
+mapper genAtomDecls(prog: Program) -> String {
+    let out = "/* === Atom holders & transition prototypes === */\n"
+    let i = 0
+    let n = atomSpecLen(prog.atoms)
+    while i < n {
+        let a = atomSpecGet(prog.atoms, i)
+        out = out + "static xc_" + a.stateTypeName + "_t __atom_" + a.name + ";\n"
+        let j = 0
+        let m = funcSpecLen(a.transitions)
+        while j < m {
+            let fs = funcSpecGet(a.transitions, j)
+            out = out + "static " + fs.retCtype + " xc_" + fs.name + "(" + fs.params + ");\n"
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Atom transition bodies + the runtime initializer that seeds each holder.
+mapper genAtomDefs(prog: Program) -> String {
+    let out = "/* === Atom transitions === */\n"
+    let i = 0
+    let n = atomSpecLen(prog.atoms)
+    while i < n {
+        let a = atomSpecGet(prog.atoms, i)
+        let j = 0
+        let m = funcSpecLen(a.transitions)
+        while j < m {
+            out = out + emitOneFunc(prog, funcSpecGet(a.transitions, j))
+            j = j + 1
+        }
+        i = i + 1
+    }
+    out = out + "static void xc_atoms_init(void) {\n"
+    let k = 0
+    while k < n {
+        let a = atomSpecGet(prog.atoms, k)
+        let e = genExpr(a.initToks, 0, mkGCtx(prog))
+        out = out + "    __atom_" + a.name + " = " + e.code + ";\n"
+        k = k + 1
+    }
+    return out + "}\n\n"
+}
+
 mapper genAll(prog: Program) -> String {
     return genHeader()
          + genInterruptDefs(prog)
@@ -2286,7 +2373,9 @@ mapper genAll(prog: Program) -> String {
          + genResolvers(prog)
          + genSingletonInit(prog)
          + genFuncForwardDecls(prog)
+         + genAtomDecls(prog)
          + genFreeFunctions(prog)
+         + genAtomDefs(prog)
          + genClassMethods(prog)
          + genEntry(prog)
 }
