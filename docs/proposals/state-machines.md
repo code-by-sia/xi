@@ -84,6 +84,17 @@ machine Door {
 }
 ```
 
+That machine's graph:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Open: open
+    Open --> Closed: close
+    Closed --> Locked: lock
+    Open --> Locked: lock
+```
+
 The full form carries data, guards transitions, and updates the data:
 
 ```x

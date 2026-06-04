@@ -1,0 +1,21 @@
+/* Docusaurus theme overrides for the X docs. */
+:root {
+  --ifm-color-primary: #3f51b5;
+  --ifm-color-primary-dark: #3848a3;
+  --ifm-color-primary-darker: #354499;
+  --ifm-color-primary-darkest: #2c387e;
+  --ifm-color-primary-light: #4a5cc7;
+  --ifm-color-primary-lighter: #5160cb;
+  --ifm-color-primary-lightest: #7c89d6;
+  --ifm-code-font-size: 95%;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #8c9eff;
+  --ifm-color-primary-dark: #6b82ff;
+  --ifm-color-primary-darker: #5a74ff;
+  --ifm-color-primary-darkest: #2749ff;
+  --ifm-color-primary-light: #adbaff;
+  --ifm-color-primary-lighter: #bec8ff;
+  --ifm-color-primary-lightest: #f0f3ff;
+}
