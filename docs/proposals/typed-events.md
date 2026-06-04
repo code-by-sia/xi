@@ -1,10 +1,12 @@
 # Proposal: Application & external events — typed in-process payloads + replaceable transport
 
-> **Status: Draft — design for review.** Extends the **shipped** event system
-> ([Events](../events.md)) with *typed* application events that skip
-> serialization in-process, while keeping serialization for events that cross a
-> process boundary. Builds on [serialization](../serialization.md) and
-> [dependency injection](../language-guide.md). Not yet implemented.
+> **Status: Core implemented** — see [Events](../events.md). Typed `event T`
+> declarations, `Events.emit` (typed in-process dispatch, no serialization),
+> typed `listener (e: T)`, derived `toJson`/`fromJson` codecs, external publish
+> when a non-default `PublisherService` is bound, and the inbound
+> `Events.deliver` router all ship today. Kept for the **still-proposed** parts:
+> injected `EventBus`, array fields in codecs, and async/buffered delivery. Builds
+> on [serialization](../serialization.md) and [DI](../language-guide.md).
 
 ## Why
 

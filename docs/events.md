@@ -1,14 +1,79 @@
 # Events (`listener` & `std/events`)
 
-X has a built-in **publish/subscribe** event system. A producer publishes an
-**event** — a topic and a [serializable](serialization.md) `Json` payload — and
-any **`listener`** subscribed to that topic reacts. Producers and listeners never
-reference each other; the bus connects them.
+X has a built-in **publish/subscribe** event system with two tiers:
+
+- **Typed application events** — declare `event T { … }` and `Events.emit(value)`
+  dispatches the value **directly** to typed `listener (e: T)` methods,
+  in-process, with **no serialization**. Use this for events that stay in the
+  process.
+- **String-topic events** — a producer publishes a `Json` payload under a string
+  topic via an injected `PublisherService`; `listener (e: Event) on "topic"`
+  methods receive them. Use this for dynamic/loosely-typed events.
+
+Either way, an event leaving the process is serialized **only at the boundary**
+through a replaceable transport. Producers and listeners never reference each
+other; the bus connects them.
 
 ```x
 import "std/json.x"
 import "std/events.x"
 ```
+
+## Typed application events (no serialization)
+
+Declare a typed event and emit the domain value you already hold — no `Json`
+building, and the field access in the listener is compile-checked:
+
+```x
+event OrderPaid { id: String, item: String, total: Number }
+
+class Shop {
+    deps {}
+    producer checkout(item: String, total: Number) {
+        Events.emit(OrderPaid { id: "o1", item: item, total: total })   // typed, direct
+    }
+}
+
+class Receipts {
+    deps { mailer: Mailer }                 // a listener gets its own deps wired
+    listener onPaid(e: OrderPaid) {         // the parameter TYPE is the subscription
+        mailer.send("buyer@x.dev", "Paid " + e.total + " for " + e.item)
+    }
+}
+```
+
+`Events` is built into the language — you do not inject or import it. `emit`
+dispatches to every typed listener of that event type, in declaration order, on
+the caller's thread. Nothing is serialized.
+
+### Going external
+
+Binding a non-default `PublisherService` makes `Events.emit` *also* serialize the
+event (via a compiler-derived codec) and publish it on the wire — serialization
+happens **only here, at the boundary**. Inbound, a transport hands received
+messages to `Events.deliver(topic, json)`, which deserializes and dispatches to
+the same typed listeners (without re-publishing):
+
+```x
+class WireBus implements PublisherService {          // outbound transport
+    deps {}
+    producer publish(topic: String, payload: Json) {
+        net.sendText(conn, topic + "\t" + json.stringify(payload) + "\n")
+    }
+}
+
+// inbound pump (a ConsumerService) reads the wire and re-injects typed events:
+Events.deliver("OrderPaid", json.parse(body))        // fromJson -> typed dispatch
+
+module App { bind PublisherService -> WireBus as singleton }   // producers unchanged
+```
+
+The event's canonical wire **topic** is its type name (`"OrderPaid"`). The
+derived codec supports `String`, `Number`, `Integer`, `Bool`, `Json`, and nested
+`event` fields (arrays are not encoded yet).
+
+> The rest of this page covers the **string-topic** tier. The typed and
+> string-topic tiers coexist; see the [design notes](proposals/typed-events.md).
 
 ## Publishing
 

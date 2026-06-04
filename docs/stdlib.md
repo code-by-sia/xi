@@ -125,10 +125,15 @@ transport. See [Events](events.md).
 
 | Name | Kind / Signature |
 |------|------------------|
-| `Event` | `type { topic: String, payload: Json }` |
-| `PublisherService` | `interface { producer publish(String, Json) }` |
+| `event T { … }` | a typed event; `Events.emit(T{…})` dispatches it (no serialization) |
+| `listener f(e: T)` | typed subscriber (the parameter type is the channel) |
+| `Events.emit(value)` | built-in: typed in-process dispatch (+ external if a transport is bound) |
+| `Events.deliver(topic, json)` | built-in: inbound router (deserialize → typed dispatch) |
+| `Event` | `type { topic: String, payload: Json }` (string-topic tier) |
+| `PublisherService` | `interface { producer publish(String, Json) }` (outbound transport) |
 | `LocalBus` | default `PublisherService` (in-process, synchronous) |
-| `listener f(e: Event) on "topic"` | a subscribing function kind (`.*` = prefix) |
+| `ConsumerService` | inbound transport seam (`consumer run()`) |
+| `listener f(e: Event) on "topic"` | string-topic subscriber (`.*` = prefix) |
 
 ### `io` — `std/io.x`
 

@@ -220,6 +220,27 @@ predicate isMachineTypeC(prog: Program, name: String) {
     return false
 }
 
+// Is `name` (an X type name) a declared typed `event`?
+predicate isEventTypeC(prog: Program, name: String) {
+    let i = 0
+    let n = stringArrLen(prog.eventTypes)
+    while i < n {
+        if stringArrGet(prog.eventTypes, i) == name { return true }
+        i = i + 1
+    }
+    return false
+}
+
+// The X type name of a listener method's first parameter (the event it handles),
+// extracted from the C param string "xc_OrderPaid_t e[, ...]".
+mapper firstParamXType(params: String) -> String {
+    let n = string_len(params)
+    let sp = 0
+    while sp < n and string_char_at(params, sp) != 32 { sp = sp + 1 }
+    if sp == 0 { return "" }
+    return ctypeToXName(string_slice(params, 0, sp))
+}
+
 mapper machineStateIndex(m: MachineSpec, name: String) -> Integer {
     let i = 0
     let n = stringArrLen(m.states)
@@ -650,6 +671,10 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if txt == "system" {
             return ExprRes { code: "system", pos: pos + 1, xtyp: "ns:system" }
         }
+        if txt == "Events" {
+            // built-in event facility: Events.emit(value) / Events.deliver(topic, json)
+            return ExprRes { code: "", pos: pos + 1, xtyp: "events:" }
+        }
         if isModuleNameC(ctx.prog, txt) {
             return ExprRes { code: txt, pos: pos + 1, xtyp: "module:" + txt }
         }
@@ -677,6 +702,22 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if k == 107 or k == 129 {
             let fld = gtext(toks, p + 1)
             if gkind(toks, p + 2) == 100 {
+                if typ == "events:" and fld == "emit" {
+                    // Events.emit(value): typed in-process dispatch by the value's
+                    // static type (no serialization). p+2 is '(', p+3 the arg.
+                    let a = genExpr(toks, p + 3, ctx)
+                    code = "xc_emit_" + a.xtyp + "(" + a.code + ")"
+                    typ = ""
+                    p = a.pos
+                    if gkind(toks, p) == 101 { p = p + 1 }   // ')'
+                } else {
+                if typ == "events:" and fld == "deliver" {
+                    // Events.deliver(topic, json): inbound router (external -> typed)
+                    let al = genArgs(toks, p + 2, ctx)
+                    code = "xc_event_deliver(" + al.code + ")"
+                    typ = ""
+                    p = al.pos
+                } else {
                 let al = genArgs(toks, p + 2, ctx)
                 if startsWith2(typ, "atom:") {
                     // atom.transition(args): swap the holder to the reducer result
@@ -730,6 +771,8 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 }
                 }
                 p = al.pos
+                }
+                }
             } else {
                 if startsWith2(typ, "atom:") {
                     // atom.current (or any field) -> the holder value
@@ -2244,6 +2287,183 @@ mapper lastWord(s: String) -> String {
     return string_slice(s, lastSp + 1, n)
 }
 
+// Find a TypeSpec by X name (empty spec if absent).
+mapper findTypeSpec(prog: Program, name: String) -> TypeSpec {
+    let empty: String[] = []
+    let none: Token[] = []
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.name == name { return ts }
+        i = i + 1
+    }
+    return TypeSpec { name: "", isCompound: false, baseCtype: "", fields: empty, hasWhere: false, whereSrc: "", whereTokens: none }
+}
+
+// True if the app binds a non-default (non-LocalBus) PublisherService — i.e. an
+// external transport, so emit should also serialize and publish on the wire.
+predicate hasExternalPublisher(prog: Program) {
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let m = moduleSpecGet(prog.modules, i)
+        let j = 0
+        let bn = bindSpecLen(m.bindings)
+        while j < bn {
+            let b = bindSpecGet(m.bindings, j)
+            if b.ifaceName == "PublisherService" and b.concreteName != "LocalBus" { return true }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// JSON encode/decode expressions for one field ctype ("" = unsupported -> skip).
+mapper jsonEncodeExpr(prog: Program, fct: String, expr: String) -> String {
+    if fct == "xc_string_t"  { return "xstd_json_string(" + expr + ")" }
+    if fct == "xc_number_t"  { return "xstd_json_number(" + expr + ")" }
+    if fct == "xc_integer_t" { return "xstd_json_number((xc_number_t)(" + expr + "))" }
+    if fct == "xc_bool_t"    { return "xstd_json_bool(" + expr + ")" }
+    if fct == "xc_Json_t"    { return expr }
+    let xn = ctypeToXName(fct)
+    if isEventTypeC(prog, xn) { return "xc_tojson_" + xn + "(" + expr + ")" }
+    return ""
+}
+mapper jsonDecodeExpr(prog: Program, fct: String, getexpr: String) -> String {
+    if fct == "xc_string_t"  { return "xstd_json_as_string(" + getexpr + ")" }
+    if fct == "xc_number_t"  { return "xstd_json_as_number(" + getexpr + ")" }
+    if fct == "xc_integer_t" { return "(xc_integer_t)xstd_json_as_number(" + getexpr + ")" }
+    if fct == "xc_bool_t"    { return "xstd_json_as_bool(" + getexpr + ")" }
+    if fct == "xc_Json_t"    { return getexpr }
+    let xn = ctypeToXName(fct)
+    if isEventTypeC(prog, xn) { return "xc_fromjson_" + xn + "(" + getexpr + ")" }
+    return ""
+}
+
+// Derived JSON codec for one event type (used only at the process boundary).
+mapper genOneCodec(prog: Program, t: String) -> String {
+    let ts = findTypeSpec(prog, t)
+    let to = "static xc_Json_t xc_tojson_" + t + "(xc_" + t + "_t v) {\n    xc_Json_t o = xstd_json_object();\n"
+    let fr = "static xc_" + t + "_t xc_fromjson_" + t + "(xc_Json_t j) {\n    xc_" + t + "_t v; memset(&v, 0, sizeof(v));\n"
+    let nf = stringArrLen(ts.fields)
+    let i = 0
+    while i < nf {
+        let entry = stringArrGet(ts.fields, i)
+        let colon = findChar(entry, 58)
+        let fname = string_slice(entry, 0, colon)
+        let fct = string_slice(entry, colon + 1, string_len(entry))
+        let key = "xc_string_from_cstr(\"" + fname + "\")"
+        let enc = jsonEncodeExpr(prog, fct, "v." + fname)
+        if string_len(enc) > 0 { to = to + "    o = xstd_json_set(o, " + key + ", " + enc + ");\n" }
+        let dec = jsonDecodeExpr(prog, fct, "xstd_json_get(j, " + key + ")")
+        if string_len(dec) > 0 { fr = fr + "    v." + fname + " = " + dec + ";\n" }
+        i = i + 1
+    }
+    to = to + "    return o;\n}\n"
+    fr = fr + "    return v;\n}\n"
+    return to + fr
+}
+
+// toJson/fromJson for every event type. Emitted but invoked only by external
+// transports (in-process dispatch never serializes).
+mapper genEventCodecs(prog: Program) -> String {
+    let ne = stringArrLen(prog.eventTypes)
+    if ne == 0 { return "" }
+    let out = "/* === Event codecs (toJson/fromJson — boundary only) === */\n"
+    out = out + "extern xc_Json_t xstd_json_object(void);\n"
+    out = out + "extern xc_Json_t xstd_json_set(xc_Json_t, xc_string_t, xc_Json_t);\n"
+    out = out + "extern xc_Json_t xstd_json_string(xc_string_t);\n"
+    out = out + "extern xc_Json_t xstd_json_number(xc_number_t);\n"
+    out = out + "extern xc_Json_t xstd_json_bool(xc_bool_t);\n"
+    out = out + "extern xc_Json_t xstd_json_get(xc_Json_t, xc_string_t);\n"
+    out = out + "extern xc_string_t xstd_json_as_string(xc_Json_t);\n"
+    out = out + "extern xc_number_t xstd_json_as_number(xc_Json_t);\n"
+    out = out + "extern xc_bool_t xstd_json_as_bool(xc_Json_t);\n"
+    let i = 0
+    while i < ne {
+        let t = stringArrGet(prog.eventTypes, i)
+        out = out + "static xc_Json_t xc_tojson_" + t + "(xc_" + t + "_t);\n"
+        out = out + "static xc_" + t + "_t xc_fromjson_" + t + "(xc_Json_t);\n"
+        i = i + 1
+    }
+    i = 0
+    while i < ne {
+        out = out + genOneCodec(prog, stringArrGet(prog.eventTypes, i))
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Forward declarations for the typed emitters and the inbound router, so call
+// sites (in producer bodies) resolve before the definitions.
+mapper genEventFwd(prog: Program) -> String {
+    let ne = stringArrLen(prog.eventTypes)
+    if ne == 0 { return "" }
+    let out = "/* === Event emit forward decls === */\n"
+    let i = 0
+    while i < ne {
+        let t = stringArrGet(prog.eventTypes, i)
+        out = out + "static void xc_emit_" + t + "(xc_" + t + "_t);\n"
+        i = i + 1
+    }
+    out = out + "static void xc_event_deliver(xc_string_t, xc_Json_t);\n"
+    return out + "\n"
+}
+
+// Typed dispatch: per event type, the typed-listener trampolines, the in-process
+// fanout (xc_emit_local_T), the producer-facing emit (local + external if a
+// non-local transport is bound), and the inbound router (xc_event_deliver).
+mapper genEventDispatch(prog: Program) -> String {
+    let ne = stringArrLen(prog.eventTypes)
+    if ne == 0 { return "" }
+    let ext = hasExternalPublisher(prog)
+    let out = "/* === Event dispatch (typed, in-process) === */\n"
+    let ei = 0
+    while ei < ne {
+        let t = stringArrGet(prog.eventTypes, ei)
+        let calls = ""
+        let ci = 0
+        let cn = classSpecLen(prog.classes)
+        while ci < cn {
+            let cs = classSpecGet(prog.classes, ci)
+            let mi = 0
+            let mn = methodSpecLen(cs.methList)
+            while mi < mn {
+                let ms = methodSpecGet(cs.methList, mi)
+                if ms.kind == "listener" and string_len(ms.topic) == 0 and firstParamXType(ms.params) == t {
+                    let tr = "xc_evtT_" + cs.name + "_" + ms.name
+                    out = out + "static void " + tr + "(xc_" + t + "_t e) {\n"
+                    out = out + "    xc_" + cs.name + "_" + ms.name + "_impl((void*)xc_new_" + cs.name + "(), e);\n"
+                    out = out + "}\n"
+                    calls = calls + "    " + tr + "(e);\n"
+                }
+                mi = mi + 1
+            }
+            ci = ci + 1
+        }
+        out = out + "static void xc_emit_local_" + t + "(xc_" + t + "_t e) {\n" + calls + "}\n"
+        out = out + "static void xc_emit_" + t + "(xc_" + t + "_t e) {\n"
+        out = out + "    xc_emit_local_" + t + "(e);\n"
+        if ext {
+            out = out + "    { xc_PublisherService_t __pub = xc_resolve_PublisherService();\n"
+            out = out + "      __pub.vtable->publish(__pub.self, xc_string_from_cstr(\"" + t + "\"), xc_tojson_" + t + "(e)); }\n"
+        }
+        out = out + "}\n"
+        ei = ei + 1
+    }
+    out = out + "static void xc_event_deliver(xc_string_t xc_topic, xc_Json_t xc_payload) {\n"
+    let di = 0
+    while di < ne {
+        let t = stringArrGet(prog.eventTypes, di)
+        out = out + "    if (xc_string_eq(xc_topic, xc_string_from_cstr(\"" + t + "\"))) { xc_emit_local_" + t + "(xc_fromjson_" + t + "(xc_payload)); return; }\n"
+        di = di + 1
+    }
+    out = out + "}\n\n"
+    return out
+}
+
 // Event listeners: for each `listener` method emit a trampoline that builds the
 // Event value and invokes the method on a freshly-resolved owning instance, then
 // emit xc_events_init() which registers each trampoline under its topic.
@@ -2258,7 +2478,9 @@ mapper genEventInit(prog: Program) -> String {
         let mn = methodSpecLen(cs.methList)
         while mi < mn {
             let ms = methodSpecGet(cs.methList, mi)
-            if ms.kind == "listener" {
+            // String-topic (Json) listeners only; typed event listeners (a param
+            // of an `event` type, no `on`) are wired in genEventDispatch.
+            if ms.kind == "listener" and string_len(ms.topic) > 0 {
                 let tramp = "xc_evt_" + cs.name + "_" + ms.name
                 out = out + "static void " + tramp + "(xc_string_t xc_topic, xc_Json_t xc_payload) {\n"
                 out = out + "    xc_Event_t xc_e;\n"
@@ -2533,6 +2755,7 @@ mapper genAll(prog: Program) -> String {
          + genCompoundBodies(prog)
          + genOptTypedefs(prog)
          + genResTypedefs(prog)
+         + genEventCodecs(prog)
          + genExternDecls(prog)
          + genIfaceDecls(prog)
          + genClassStructs(prog)
@@ -2544,6 +2767,7 @@ mapper genAll(prog: Program) -> String {
          + genResolvers(prog)
          + genSingletonInit(prog)
          + genFuncForwardDecls(prog)
+         + genEventFwd(prog)
          + genAtomDecls(prog)
          + genMachineDecls(prog)
          + genFreeFunctions(prog)
@@ -2551,6 +2775,7 @@ mapper genAll(prog: Program) -> String {
          + genMachineDefs(prog)
          + genClassMethods(prog)
          + genEventInit(prog)
+         + genEventDispatch(prog)
          + genEntry(prog)
 }
 

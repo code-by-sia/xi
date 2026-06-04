@@ -281,7 +281,8 @@ type Program = {
     entrySpec:  FuncSpec,     // isCreator=false, kind="entry"
     interrupts: String[],     // names of declared `interrupt` types (for type ids)
     atoms:      AtomSpec[],   // declared `atom`s
-    machines:   MachineSpec[] // declared `machine`s
+    machines:   MachineSpec[], // declared `machine`s
+    eventTypes: String[]      // names of declared `event` types (typed payloads)
 }
 
 // C helpers for building typed arrays used by Program
@@ -723,6 +724,7 @@ decision isDeclStart(tok: Token) -> Bool {
     when tok.kind == 288 => true   // atom
     when tok.kind == 289 => true   // state
     when tok.kind == 292 => true   // machine
+    when tok.kind == 296 => true   // event
     when tok.kind == 201 => true   // interface
     when tok.kind == 202 => true   // class
     when tok.kind == 210 => true   // module
@@ -1160,6 +1162,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     let interrupts: String[] = []
     let atoms: AtomSpec[] = []
     let machines: MachineSpec[] = []
+    let eventTypes: String[] = []
     let entrySpec = FuncSpec {
         isCreator: false, isAsync: false,
         kind: "entry", name: "main",
@@ -1210,10 +1213,11 @@ creator parseProgram(tokens: Token[]) -> Program {
             // type / interrupt / state declaration. `interrupt` is a compound
             // type that also gets an id; `state` is a compound type (an atom's
             // immutable value type).
-            if t.kind == 200 or t.kind == 280 or t.kind == 289 {
+            if t.kind == 200 or t.kind == 280 or t.kind == 289 or t.kind == 296 {
                 let r = parseTypeDecl(ps)
                 types = appendTypeSpec(types, r.spec)
                 if t.kind == 280 { interrupts = appendString(interrupts, r.spec.name) }
+                if t.kind == 296 { eventTypes = appendString(eventTypes, r.spec.name) }
                 ps = r.ps
             } else {
             if t.kind == 288 {                          // atom declaration
@@ -1328,7 +1332,7 @@ creator parseProgram(tokens: Token[]) -> Program {
         types: types, ifaces: ifaces, classes: classes,
         modules: modules, functions: functions, externs: externs,
         entrySpec: entrySpec, interrupts: interrupts, atoms: atoms,
-        machines: machines
+        machines: machines, eventTypes: eventTypes
     }
 }
 
