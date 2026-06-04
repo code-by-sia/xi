@@ -45,18 +45,18 @@ module App {}                             // resolution is automatic
   [decision tables](#decision-tables-dxt).
 - **Interrupts** — resumable conditions: a function `signal`s and **suspends**;
   an enclosing `try`/`catch` decides to `recover` (resume) or `skip` (abandon).
-  See [`docs/interrupts.md`](docs/interrupts.md).
+  See [Interrupts](https://code-by-sia.github.io/x/interrupts).
 - **Atoms** — active-state stores: an immutable `state` changed only via
-  `transition` reducers (Redux-style). See [`docs/atoms.md`](docs/atoms.md).
+  `transition` reducers (Redux-style). See [Atoms](https://code-by-sia.github.io/x/atoms).
 - **Machines** — finite state machines as immutable values: named `states`,
   machine-wide `data`, transitions with parameters, `where` guards and `update`
   clauses, `.can(...)`, and illegal moves that raise the resumable
-  `IllegalTransition` interrupt. See [`docs/machines.md`](docs/machines.md).
+  `IllegalTransition` interrupt. See [Machines](https://code-by-sia.github.io/x/machines).
 - **Events** — built-in typed publish/subscribe. Producers `publish(topic, dto)`
   any DTO; the `listener` kind subscribes to a topic and receives the **typed**
   value (no JSON). The default transport queues in memory with zero serialization;
   bind your own `PublisherService`/`ConsumerService` to go external — producers and
-  listeners are unchanged. See [`docs/events.md`](docs/events.md).
+  listeners are unchanged. See [Events](https://code-by-sia.github.io/x/events).
 - **Refined types** carry constraints (`type Age = Number where value >= 0`)
   that are **checked at construction**.
 - **Result-based error handling** (`T!`, `ok`/`err`, `?` propagation) — no
@@ -66,12 +66,12 @@ module App {}                             // resolution is automatic
 - **Multi-file projects** with `import` and `namespace`.
 - **A growing standard library** — math, text, bytes, convert, **json
   (serialization)**, fs, path, **net (TCP sockets)**, **http (HTTP/1.1 client)**,
-  process, time — see [`docs/stdlib.md`](docs/stdlib.md) and
-  [`docs/serialization.md`](docs/serialization.md).
+  process, time — see [the standard library](https://code-by-sia.github.io/x/stdlib)
+  and [serialization](https://code-by-sia.github.io/x/serialization).
 - **Native, dependency-light output**: X → C99 → a native binary via your `cc`.
 
 Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:
-**[docs/](docs/)** (start at [`docs/index.md`](docs/index.md)).
+**[code-by-sia.github.io/x](https://code-by-sia.github.io/x/)**.
 
 ## Quick start
 
@@ -190,7 +190,7 @@ class StdPricing implements Pricing {
 ```
 
 A decision desugars to an `if/return` chain (zero runtime overhead). See
-[`docs/decisions.md`](docs/decisions.md) and
+[decision tables](https://code-by-sia.github.io/x/decisions) and
 [`examples/decision_demo.x`](examples/decision_demo.x).
 
 ## A tour of the rest
@@ -228,7 +228,7 @@ mapper mapResponse(r: ApiResponse) -> String { return "Unhandled " + r.status } 
 ```
 
 **`match`**, **multi-file `import` / `namespace`**, the **standard library**, and
-more are covered in the [guide](docs/). See [`examples/`](examples/) for runnable
+more are covered in the [guide](https://code-by-sia.github.io/x/). See [`examples/`](examples/) for runnable
 programs (incl. [`fs_demo.x`](examples/fs_demo.x) and a loopback TCP echo in
 [`net_demo.x`](examples/net_demo.x)).
 
@@ -245,7 +245,7 @@ source.x (+ imported files)
 
 The compiler is itself an X program (`compiler/*.x`); `selfhost.sh` proves the
 fixpoint (successive self-compiles emit byte-identical C). See
-[`docs/internals.md`](docs/internals.md).
+[internals](https://code-by-sia.github.io/x/internals).
 
 ## Project layout
 
