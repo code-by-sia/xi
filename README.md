@@ -51,6 +51,9 @@ module App {}                             // resolution is automatic
 - **Machines** — finite state machines as immutable values: named `states`,
   legal-transition graph, illegal moves raise the resumable `IllegalTransition`
   interrupt. See [`docs/machines.md`](docs/machines.md).
+- **Events** — built-in publish/subscribe: producers `publish` serializable
+  events, the `listener` function kind subscribes (`on "topic"`), and the
+  `PublisherService` transport is DI-swappable. See [`docs/events.md`](docs/events.md).
 - **Refined types** carry constraints (`type Age = Number where value >= 0`)
   that are **checked at construction**.
 - **Result-based error handling** (`T!`, `ok`/`err`, `?` propagation) — no
@@ -247,7 +250,7 @@ fixpoint (successive self-compiles emit byte-identical C). See
 compiler/   the compiler, written in X (lexer, parser, codegen, driver) + xc_helpers.c
             plus bootstrap.sh / fetch-seed.sh / selfhost.sh
 runtime/    the C runtime (runtime.h, runtime.c) — the X equivalent of libc/libcore
-std/        standard library (math, text, bytes, convert, json, io, fs, path, net, process, time)
+std/        standard library (math, text, bytes, convert, json, events, io, fs, path, net, process, time)
 examples/   runnable programs, incl. proj/ (multi-file) and showcase/ (full project)
 docs/       MkDocs documentation
 editors/    Tree-sitter grammar, Zed extension, Vim plugin

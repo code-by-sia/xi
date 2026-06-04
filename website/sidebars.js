@@ -15,6 +15,7 @@ const sidebars = {
     'machines',
     'stdlib',
     'serialization',
+    'events',
     'internals',
     {
       type: 'category',

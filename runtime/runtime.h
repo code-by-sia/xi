@@ -150,6 +150,13 @@ typedef struct { xc_bytes_t* data; xc_size_t len; xc_size_t cap; } xc_arr_bytes_
    struct itself is private to runtime.c. */
 typedef struct xc_json_node* xc_Json_t;
 
+/* Event system (std/events). The runtime holds a registry of listeners keyed by
+   a topic pattern ("a.b" exact, or "a.*" prefix). A listener is a generated
+   trampoline taking the topic and the serializable payload. */
+typedef void (*xc_event_handler_t)(xc_string_t topic, xc_Json_t payload);
+void xstd_event_register(xc_string_t pattern, xc_event_handler_t fn);
+void xstd_event_publish(xc_string_t topic, xc_Json_t payload);
+
 /* Number → string */
 static inline xc_string_t xc_number_to_string(xc_number_t n) {
     char buf[64];

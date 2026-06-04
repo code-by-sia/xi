@@ -1,8 +1,12 @@
 # Proposal: Event system — publish/subscribe with `listener`
 
-> **Status: Draft — design for review.** Builds on the **shipped**
-> [serialization library](../serialization.md) (`std/json`) and the
-> [dependency-injection](../language-guide.md) system. Not yet implemented.
+> **Status: Core implemented** — see [Events](../events.md). The `listener` kind,
+> the `Event` type, `PublisherService` + the default in-process `LocalBus`,
+> auto-discovery, and `prefix.*` matching all ship today. This document is kept
+> for the **still-proposed** extensions below: typed payloads, a swappable
+> consumer-side `ConsumerService`, async/buffered delivery, and richer topic
+> matching. It builds on the shipped [serialization library](../serialization.md)
+> (`std/json`) and [dependency injection](../language-guide.md).
 
 ## Why
 

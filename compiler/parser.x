@@ -176,11 +176,12 @@ type ParamSpec = { name: String, ctype: String }
 // A function method signature
 type MethodSpec = {
     isAsync:   Bool,
-    kind:      String,  // "mapper","consumer","predicate","producer","reducer","projector"
+    kind:      String,  // "mapper","consumer","predicate","producer","reducer","projector","listener"
     name:      String,
     params:    String,  // comma-separated "ctype name" pairs
     retCtype:  String,
-    bodyTokens: Token[]
+    bodyTokens: Token[],
+    topic:     String   // for `listener` methods: the subscribed topic ("" otherwise)
 }
 
 // A type declaration (refined or compound)
@@ -245,7 +246,8 @@ type FuncSpec = {
     bodyTokens:  Token[],   // tokens of the body block, excl. outer braces
     hasWhere:    Bool,
     whereTokens: Token[],   // tokens of the overload-selection guard (no braces)
-    fnDeps:      DepSpec[] // function-level dependencies:  kind { d: I } name(...)
+    fnDeps:      DepSpec[], // function-level dependencies:  kind { d: I } name(...)
+    topic:       String    // for `listener`: subscribed topic ("" otherwise)
 }
 
 // An `atom` (active-state / store): a holder of an immutable state value, with
@@ -331,6 +333,7 @@ decision parseFuncKind(ps: PState) -> KindResult {
     when peek(ps).kind == 217 => KindResult { kind: "producer",  ps: advance(ps), ok: true }
     when peek(ps).kind == 218 => KindResult { kind: "reducer",   ps: advance(ps), ok: true }
     when peek(ps).kind == 256 => KindResult { kind: "decision",  ps: advance(ps), ok: true }
+    when peek(ps).kind == 295 => KindResult { kind: "listener",  ps: advance(ps), ok: true }
     else                      => KindResult { kind: "", ps: ps, ok: false }
 }
 
@@ -338,6 +341,7 @@ decision parseFuncKind(ps: PState) -> KindResult {
 decision retCtypeFor(kind: String, declaredRet: String) -> String {
     when kind == "predicate"          => "xc_bool_t"
     when kind == "consumer"           => "void"
+    when kind == "listener"           => "void"
     when string_len(declaredRet) > 0  => declaredRet
     else                              => "void"
 }
@@ -572,6 +576,18 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         }
     }
 
+    // `listener` subscription clause:  on "topic.name"
+    let topic = ""
+    if kindStr == "listener" {
+        if peek(ps2).kind == 1 and peek(ps2).text == "on" {
+            ps2 = advance(ps2)
+            if peek(ps2).kind == 4 {   // string literal
+                topic = peek(ps2).text
+                ps2 = advance(ps2)
+            }
+        }
+    }
+
     // optional `where <guard>` before the body
     let hasWhere = false
     let whereTokens: Token[] = []
@@ -603,7 +619,8 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         bodyTokens: br.bodyTokens,
         hasWhere: hasWhere,
         whereTokens: whereTokens,
-        fnDeps: fdeps
+        fnDeps: fdeps,
+        topic: topic
     }
     return FuncResult { spec: spec, ps: ps2 }
 }
@@ -626,7 +643,7 @@ mapper parseSig(ps: PState, isAsync: Bool) -> SigResult {
     let spec = MethodSpec {
         isAsync: isAsync, kind: kr.kind,
         name: nameTok.text, params: pr.params, retCtype: retCtype,
-        bodyTokens: []
+        bodyTokens: [], topic: ""
     }
     return SigResult { spec: spec, ps: ps2 }
 }
@@ -873,7 +890,8 @@ mapper parseClass(ps: PState) -> ClassResult {
             let ms = MethodSpec {
                 isAsync: isAsync, kind: "creator",
                 name: fr.spec.name, params: fr.spec.params,
-                retCtype: fr.spec.retCtype, bodyTokens: fr.spec.bodyTokens
+                retCtype: fr.spec.retCtype, bodyTokens: fr.spec.bodyTokens,
+                topic: ""
             }
             methList = appendMethodSpec(methList, ms)
         } else {
@@ -884,7 +902,8 @@ mapper parseClass(ps: PState) -> ClassResult {
                 let ms = MethodSpec {
                     isAsync: isAsync, kind: fr.spec.kind,
                     name: fr.spec.name, params: fr.spec.params,
-                    retCtype: fr.spec.retCtype, bodyTokens: fr.spec.bodyTokens
+                    retCtype: fr.spec.retCtype, bodyTokens: fr.spec.bodyTokens,
+                    topic: fr.spec.topic
                 }
                 methList = appendMethodSpec(methList, ms)
             } else {
@@ -1009,7 +1028,7 @@ mapper parseAtom(ps: PState) -> AtomResult {
                         name: name + "__" + fnameTok.text,
                         params: pr.params, retCtype: rr.ctype,
                         bodyTokens: br.bodyTokens,
-                        hasWhere: false, whereTokens: [], fnDeps: []
+                        hasWhere: false, whereTokens: [], fnDeps: [], topic: ""
                     }
                     transitions = appendFuncSpec(transitions, fs)
                 } else {
@@ -1146,7 +1165,7 @@ creator parseProgram(tokens: Token[]) -> Program {
         kind: "entry", name: "main",
         params: "xc_arr_string_t args",
         retCtype: "xc_integer_t",
-        bodyTokens: [], hasWhere: false, whereTokens: [], fnDeps: []
+        bodyTokens: [], hasWhere: false, whereTokens: [], fnDeps: [], topic: ""
     }
 
     let running = true
@@ -1178,7 +1197,7 @@ creator parseProgram(tokens: Token[]) -> Program {
                         isCreator: false, isAsync: isA, kind: kr.kind,
                         name: nameTok.text, params: pr.params,
                         retCtype: retCtypeFor(kr.kind, rr.ctype), bodyTokens: [],
-                        hasWhere: false, whereTokens: [], fnDeps: []
+                        hasWhere: false, whereTokens: [], fnDeps: [], topic: ""
                     }
                     externs = appendFuncSpec(externs, ec)
                     ps = ps3
@@ -1278,7 +1297,7 @@ creator parseProgram(tokens: Token[]) -> Program {
                                     params: pr.params,
                                     retCtype: retCtypeFor("entry", rr.ctype),
                                     bodyTokens: br.bodyTokens,
-                                    hasWhere: false, whereTokens: [], fnDeps: []
+                                    hasWhere: false, whereTokens: [], fnDeps: [], topic: ""
                                 }
                             } else {
                                 // creator or function kind

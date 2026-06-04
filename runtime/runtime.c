@@ -979,3 +979,42 @@ xc_Json_t xstd_json_parse(xc_string_t s) {
     if (P.err) { v->kind = XJ_ERROR; }
     return v;
 }
+
+/* ─── Event system (std/events) ──────────────────────────────────────────────
+ * A tiny synchronous in-process pub/sub. Listeners register a topic pattern and
+ * a handler; publishing delivers to every matching handler in registration
+ * order, on the caller's thread. A pattern ending in ".*" matches by prefix.
+ */
+typedef struct { char* pattern; xc_event_handler_t fn; } xc_event_sub;
+static xc_event_sub* xc_event_subs = NULL;
+static long xc_event_subs_len = 0, xc_event_subs_cap = 0;
+
+void xstd_event_register(xc_string_t pattern, xc_event_handler_t fn) {
+    if (xc_event_subs_len == xc_event_subs_cap) {
+        xc_event_subs_cap = xc_event_subs_cap ? xc_event_subs_cap * 2 : 8;
+        xc_event_subs = (xc_event_sub*)realloc(xc_event_subs,
+            (size_t)xc_event_subs_cap * sizeof(xc_event_sub));
+        if (!xc_event_subs) abort();
+    }
+    xc_event_subs[xc_event_subs_len].pattern = xj_strdup_n(pattern.data, pattern.len);
+    xc_event_subs[xc_event_subs_len].fn = fn;
+    xc_event_subs_len++;
+}
+
+static int xc_event_match(const char* pattern, xc_string_t topic) {
+    size_t plen = strlen(pattern);
+    /* prefix wildcard: "a.b.*" matches any topic starting with "a.b." */
+    if (plen >= 2 && pattern[plen - 1] == '*' && pattern[plen - 2] == '.') {
+        size_t pre = plen - 1;            /* keep the trailing '.' */
+        return topic.len >= pre && memcmp(topic.data, pattern, pre) == 0;
+    }
+    return topic.len == plen && memcmp(topic.data, pattern, plen) == 0;
+}
+
+void xstd_event_publish(xc_string_t topic, xc_Json_t payload) {
+    for (long i = 0; i < xc_event_subs_len; i++) {
+        if (xc_event_match(xc_event_subs[i].pattern, topic)) {
+            xc_event_subs[i].fn(topic, payload);
+        }
+    }
+}

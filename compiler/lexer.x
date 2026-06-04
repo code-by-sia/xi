@@ -236,6 +236,7 @@ decision kwKind(word: String) -> Integer {
     when word == "machine"     => 292
     when word == "states"      => 293
     when word == "terminal"    => 294
+    when word == "listener"    => 295
     when word == "Number"      => 260
     when word == "Integer"     => 261
     when word == "Bool"        => 262

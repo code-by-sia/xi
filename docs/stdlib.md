@@ -115,6 +115,21 @@ guide.
 | `asString`, `asNumber`, `asBool` | leaf coercion |
 | `getString`, `getNumber` | `(Json, String) -> …` (field shortcut) |
 
+### `events` — `std/events.x`
+
+Built-in **publish/subscribe**. Producers depend on `PublisherService` and call
+`publish(topic, payload)`; `listener` methods subscribe with `on "topic"` and
+receive an `Event` (`{ topic: String, payload: Json }`). The default `LocalBus`
+dispatches synchronously in-process; bind a different `PublisherService` to swap
+transport. See [Events](events.md).
+
+| Name | Kind / Signature |
+|------|------------------|
+| `Event` | `type { topic: String, payload: Json }` |
+| `PublisherService` | `interface { producer publish(String, Json) }` |
+| `LocalBus` | default `PublisherService` (in-process, synchronous) |
+| `listener f(e: Event) on "topic"` | a subscribing function kind (`.*` = prefix) |
+
 ### `io` — `std/io.x`
 
 | Function | Signature |

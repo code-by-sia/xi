@@ -2244,6 +2244,38 @@ mapper lastWord(s: String) -> String {
     return string_slice(s, lastSp + 1, n)
 }
 
+// Event listeners: for each `listener` method emit a trampoline that builds the
+// Event value and invokes the method on a freshly-resolved owning instance, then
+// emit xc_events_init() which registers each trampoline under its topic.
+mapper genEventInit(prog: Program) -> String {
+    let out = "/* === Event listeners === */\n"
+    let regs = ""
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn {
+            let ms = methodSpecGet(cs.methList, mi)
+            if ms.kind == "listener" {
+                let tramp = "xc_evt_" + cs.name + "_" + ms.name
+                out = out + "static void " + tramp + "(xc_string_t xc_topic, xc_Json_t xc_payload) {\n"
+                out = out + "    xc_Event_t xc_e;\n"
+                out = out + "    xc_e.topic = xc_topic;\n"
+                out = out + "    xc_e.payload = xc_payload;\n"
+                out = out + "    xc_" + cs.name + "_" + ms.name + "_impl((void*)xc_new_" + cs.name + "(), xc_e);\n"
+                out = out + "}\n\n"
+                regs = regs + "    xstd_event_register(xc_string_from_cstr(\"" + ms.topic + "\"), " + tramp + ");\n"
+            }
+            mi = mi + 1
+        }
+        i = i + 1
+    }
+    out = out + "static void xc_events_init(void) {\n" + regs + "}\n\n"
+    return out
+}
+
 mapper genEntry(prog: Program) -> String {
     let es = prog.entrySpec
     let out = hoistCatches(prog, es.bodyTokens, "entry")
@@ -2251,6 +2283,7 @@ mapper genEntry(prog: Program) -> String {
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
     out = out + "    xc_atoms_init();\n"
+    out = out + "    xc_events_init();\n"
     out = out + "    xc_arr_string_t xc_args;\n"
     out = out + "    xc_args.len = (xc_size_t)argc;\n"
     out = out + "    xc_args.cap = (xc_size_t)argc;\n"
@@ -2517,6 +2550,7 @@ mapper genAll(prog: Program) -> String {
          + genAtomDefs(prog)
          + genMachineDefs(prog)
          + genClassMethods(prog)
+         + genEventInit(prog)
          + genEntry(prog)
 }
 

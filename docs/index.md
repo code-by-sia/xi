@@ -35,8 +35,9 @@ small C runtime (the equivalent of a language's libc/libcore).
   `App.resolve(Interface)`, conditional `when` bindings, `singleton`/`transient`.
 - **`where`-guarded overloading** — multiple functions with one name, selected by
   a guard.
-- **Decision tables, interrupts, atoms & machines** — business rules, resumable
-  conditions, active-state stores, and finite state machines as language features.
+- **Decision tables, interrupts, atoms, machines & events** — business rules,
+  resumable conditions, active-state stores, finite state machines, and
+  publish/subscribe with the `listener` kind, all as language features.
 - **Error handling** — `T!` result types, `ok`/`err`, and `?` propagation.
 - **Serialization** — a built-in [`std/json`](serialization.md) library.
 - **Native output** — compiles to a standalone binary via C; no VM, no GC.
