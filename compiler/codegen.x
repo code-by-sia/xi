@@ -210,6 +210,49 @@ mapper atomStateTypeName(prog: Program, name: String) -> String {
     return ""
 }
 
+predicate isMachineTypeC(prog: Program, name: String) {
+    let i = 0
+    let n = machineSpecLen(prog.machines)
+    while i < n {
+        if machineSpecGet(prog.machines, i).name == name { return true }
+        i = i + 1
+    }
+    return false
+}
+
+mapper machineStateIndex(m: MachineSpec, name: String) -> Integer {
+    let i = 0
+    let n = stringArrLen(m.states)
+    while i < n {
+        if stringArrGet(m.states, i) == name { return i }
+        i = i + 1
+    }
+    return 0 - 1
+}
+
+// Build a C condition over comma-joined state names: (self.__state == i) || ...
+mapper machineStateCond(m: MachineSpec, csv: String) -> String {
+    let cond = ""
+    let start = 0
+    let i = 0
+    let n = string_len(csv)
+    while i <= n {
+        let isSep = false
+        if i == n { isSep = true } else { if string_char_at(csv, i) == 44 { isSep = true } }
+        if isSep {
+            let nm = string_slice(csv, start, i)
+            if string_len(nm) > 0 {
+                if string_len(cond) > 0 { cond = cond + " || " }
+                cond = cond + "(self.__state == " + int_to_string(machineStateIndex(m, nm)) + ")"
+            }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    if string_len(cond) == 0 { cond = "0" }
+    return cond
+}
+
 mapper funcRetXType(prog: Program, name: String) -> String {
     let i = 0
     let n = funcSpecLen(prog.functions)
@@ -613,6 +656,9 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if isAtomNameC(ctx.prog, txt) {
             return ExprRes { code: "__atom_" + txt, pos: pos + 1, xtyp: "atom:" + txt }
         }
+        if isMachineTypeC(ctx.prog, txt) {
+            return ExprRes { code: txt, pos: pos + 1, xtyp: "machinetype:" + txt }
+        }
         return ExprRes { code: txt, pos: pos + 1, xtyp: lookupVar(ctx, txt) }
     }
     return ExprRes { code: txt, pos: pos + 1, xtyp: "" }
@@ -639,6 +685,19 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if string_len(al.code) > 0 { sep = ", " }
                     code = "(__atom_" + an + " = xc_" + an + "__" + fld + "(__atom_" + an + sep + al.code + "))"
                     typ = atomStateTypeName(ctx.prog, an)
+                } else {
+                if startsWith2(typ, "machinetype:") {
+                    // Machine.start(...) -> xc_Machine__start(...)
+                    let mmn = string_slice(typ, 12, string_len(typ))
+                    code = "xc_" + mmn + "__" + fld + "(" + al.code + ")"
+                    typ = mmn
+                } else {
+                if isMachineTypeC(ctx.prog, typ) {
+                    // machineValue.transition(args) -> xc_Machine__transition(value, args)
+                    let msep = ""
+                    if string_len(al.code) > 0 { msep = ", " }
+                    code = "xc_" + typ + "__" + fld + "(" + code + msep + al.code + ")"
+                    if fld == "isTerminal" { typ = "Bool" }
                 } else {
                 if startsWith2(typ, "module:") and fld == "resolve" {
                     // Module.resolve(I) -> automatic interface resolver
@@ -668,6 +727,8 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     }
                 }
                 }
+                }
+                }
                 p = al.pos
             } else {
                 if startsWith2(typ, "atom:") {
@@ -675,6 +736,10 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     let an = string_slice(typ, 5, string_len(typ))
                     code = "__atom_" + an
                     typ = atomStateTypeName(ctx.prog, an)
+                } else {
+                if isMachineTypeC(ctx.prog, typ) and fld == "state" {
+                    code = "xc_" + typ + "__state(" + code + ")"
+                    typ = "String"
                 } else {
                 if startsWith2(typ, "ns:") {
                     typ = "ns:" + string_slice(typ, 3, string_len(typ)) + "." + fld
@@ -694,6 +759,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                             typ = ft
                         }
                     }
+                }
                 }
                 }
                 p = p + 2
@@ -1255,7 +1321,7 @@ mapper hoistCatches(prog: Program, toks: Token[], tag: String) -> String {
                 let typeName = gtext(toks, cp + 3)
                 let catchOpen = cp + 4
                 let catchClose = matchBrace(toks, catchOpen)
-                let bctx = withTag(addSym(mkGCtx(prog), varName, ""), tag)
+                let bctx = withTag(addSym(mkGCtx(prog), varName, typeName), tag)
                 let cbody = genStmts(toks, catchOpen + 1, catchClose, bctx)
                 let hname = "xc_catch_" + tag + "_" + int_to_string(cp)
                 out = out + "static int " + hname + "(void* __pp) {\n"
@@ -2352,6 +2418,78 @@ mapper genAtomDefs(prog: Program) -> String {
     return out + "}\n\n"
 }
 
+// Machine function prototypes (so use sites resolve regardless of order).
+mapper genMachineDecls(prog: Program) -> String {
+    let out = "/* === Machine function prototypes === */\n"
+    let i = 0
+    let n = machineSpecLen(prog.machines)
+    while i < n {
+        let m = machineSpecGet(prog.machines, i)
+        let mn = m.name
+        out = out + "static xc_" + mn + "_t xc_" + mn + "__start(void);\n"
+        out = out + "static xc_string_t xc_" + mn + "__state(xc_" + mn + "_t self);\n"
+        out = out + "static xc_bool_t xc_" + mn + "__isTerminal(xc_" + mn + "_t self);\n"
+        let j = 0
+        let tn = stringArrLen(m.transNames)
+        while j < tn {
+            out = out + "static xc_" + mn + "_t xc_" + mn + "__" + stringArrGet(m.transNames, j) + "(xc_" + mn + "_t self);\n"
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
+// Machine implementations: start, state-name, isTerminal, and one guarded
+// function per transition (illegal moves signal IllegalTransition).
+mapper genMachineDefs(prog: Program) -> String {
+    let out = "/* === Machine implementations === */\n"
+    let i = 0
+    let n = machineSpecLen(prog.machines)
+    while i < n {
+        let m = machineSpecGet(prog.machines, i)
+        let mn = m.name
+        out = out + "static xc_" + mn + "_t xc_" + mn + "__start(void) {\n"
+            + "    xc_" + mn + "_t __r; __r.__state = " + int_to_string(machineStateIndex(m, m.initial)) + "; return __r;\n}\n"
+        out = out + "static xc_string_t xc_" + mn + "__state(xc_" + mn + "_t self) {\n"
+        let si = 0
+        let sn = stringArrLen(m.states)
+        while si < sn {
+            out = out + "    if (self.__state == " + int_to_string(si) + ") return xc_string_from_cstr(\"" + stringArrGet(m.states, si) + "\");\n"
+            si = si + 1
+        }
+        out = out + "    return xc_string_from_cstr(\"?\");\n}\n"
+        let tcsv = ""
+        let ti = 0
+        let ttn = stringArrLen(m.terminals)
+        while ti < ttn {
+            if string_len(tcsv) > 0 { tcsv = tcsv + "," }
+            tcsv = tcsv + stringArrGet(m.terminals, ti)
+            ti = ti + 1
+        }
+        let tcond = "0"
+        if string_len(tcsv) > 0 { tcond = machineStateCond(m, tcsv) }
+        out = out + "static xc_bool_t xc_" + mn + "__isTerminal(xc_" + mn + "_t self) { return " + tcond + "; }\n"
+        let j = 0
+        let jn = stringArrLen(m.transNames)
+        while j < jn {
+            let tname = stringArrGet(m.transNames, j)
+            let froms = stringArrGet(m.transFroms, j)
+            let toState = stringArrGet(m.transTos, j)
+            out = out + "static xc_" + mn + "_t xc_" + mn + "__" + tname + "(xc_" + mn + "_t self) {\n"
+                + "    if (" + machineStateCond(m, froms) + ") { xc_" + mn + "_t __r = self; __r.__state = " + int_to_string(machineStateIndex(m, toState)) + "; return __r; }\n"
+                + "    { xc_IllegalTransition_t __pl; __pl.from = xc_" + mn + "__state(self); __pl.to = xc_string_from_cstr(\"" + toState + "\");\n"
+                + "      xc_handler_t* __hh = xc_int_find(XC_INT_IllegalTransition);\n"
+                + "      if (__hh == ((void*)0)) xc_int_unhandled(\"IllegalTransition\");\n"
+                + "      if (!__hh->fn(&__pl)) longjmp(__hh->unwind, 1); }\n"
+                + "    return self;\n}\n"
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
 mapper genAll(prog: Program) -> String {
     return genHeader()
          + genInterruptDefs(prog)
@@ -2374,8 +2512,10 @@ mapper genAll(prog: Program) -> String {
          + genSingletonInit(prog)
          + genFuncForwardDecls(prog)
          + genAtomDecls(prog)
+         + genMachineDecls(prog)
          + genFreeFunctions(prog)
          + genAtomDefs(prog)
+         + genMachineDefs(prog)
          + genClassMethods(prog)
          + genEntry(prog)
 }

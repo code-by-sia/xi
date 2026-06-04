@@ -1,7 +1,11 @@
 # Proposal: Atoms & state machines
 
-> **Status:** Layer 1 (`atom`) is **implemented** — see
-> [Atoms](../atoms.md). Layer 2 (`machine`) is still a **draft** for review.
+> **Status:** Layer 1 (`atom`) and the core of Layer 2 (`machine`) are
+> **implemented** — see [Atoms](../atoms.md) and [Machines](../machines.md). The
+> shipped `machine` covers named states, `initial`/`terminal`, multi-source
+> transitions, immutable values, and illegal moves via the `IllegalTransition`
+> interrupt. The remaining parts below — machine-wide **`data`** context, **`where`**
+> guards, **`update`** clauses, and `.can(...)` — are still a **draft** for review.
 
 ## Summary
 

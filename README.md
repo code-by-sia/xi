@@ -48,6 +48,9 @@ module App {}                             // resolution is automatic
   See [`docs/interrupts.md`](docs/interrupts.md).
 - **Atoms** — active-state stores: an immutable `state` changed only via
   `transition` reducers (Redux-style). See [`docs/atoms.md`](docs/atoms.md).
+- **Machines** — finite state machines as immutable values: named `states`,
+  legal-transition graph, illegal moves raise the resumable `IllegalTransition`
+  interrupt. See [`docs/machines.md`](docs/machines.md).
 - **Refined types** carry constraints (`type Age = Number where value >= 0`)
   that are **checked at construction**.
 - **Result-based error handling** (`T!`, `ok`/`err`, `?` propagation) — no

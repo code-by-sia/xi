@@ -12,6 +12,7 @@ const sidebars = {
     'decisions',
     'interrupts',
     'atoms',
+    'machines',
     'stdlib',
     'internals',
     {

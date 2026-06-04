@@ -257,6 +257,17 @@ type AtomSpec = {
     transitions:   FuncSpec[] // transition f(s: T, ...) -> T { body }
 }
 
+// A `machine` (finite state machine). MVP: data-less named states.
+type MachineSpec = {
+    name:       String,
+    states:     String[],    // ordered; index = state id
+    initial:    String,
+    terminals:  String[],
+    transNames: String[],
+    transFroms: String[],    // parallel to transNames: comma-joined source states
+    transTos:   String[]     // parallel: destination state
+}
+
 // The whole program
 type Program = {
     types:      TypeSpec[],
@@ -267,7 +278,8 @@ type Program = {
     externs:    FuncSpec[],   // extern "C" signatures (bodyTokens empty)
     entrySpec:  FuncSpec,     // isCreator=false, kind="entry"
     interrupts: String[],     // names of declared `interrupt` types (for type ids)
-    atoms:      AtomSpec[]    // declared `atom`s
+    atoms:      AtomSpec[],   // declared `atom`s
+    machines:   MachineSpec[] // declared `machine`s
 }
 
 // C helpers for building typed arrays used by Program
@@ -284,6 +296,9 @@ extern "C" {
     mapper appendAtomSpec(arr: AtomSpec[], s: AtomSpec) -> AtomSpec[]
     mapper atomSpecLen(arr: AtomSpec[]) -> Integer
     mapper atomSpecGet(arr: AtomSpec[], i: Integer) -> AtomSpec
+    mapper appendMachineSpec(arr: MachineSpec[], s: MachineSpec) -> MachineSpec[]
+    mapper machineSpecLen(arr: MachineSpec[]) -> Integer
+    mapper machineSpecGet(arr: MachineSpec[], i: Integer) -> MachineSpec
 
     mapper methodSpecLen(arr: MethodSpec[]) -> Integer
     mapper methodSpecGet(arr: MethodSpec[], i: Integer) -> MethodSpec
@@ -690,6 +705,7 @@ decision isDeclStart(tok: Token) -> Bool {
     when tok.kind == 280 => true   // interrupt
     when tok.kind == 288 => true   // atom
     when tok.kind == 289 => true   // state
+    when tok.kind == 292 => true   // machine
     when tok.kind == 201 => true   // interface
     when tok.kind == 202 => true   // class
     when tok.kind == 210 => true   // module
@@ -1017,6 +1033,102 @@ mapper parseAtom(ps: PState) -> AtomResult {
     return AtomResult { spec: spec, ps: ps2 }
 }
 
+type MachineResult = { spec: MachineSpec, ps: PState }
+
+// machine Name { states A,B,C  initial A  [terminal X,Y | -]  (t : From(,From)* -> To)* }
+// MVP: data-less. Payloads/guards/update are rejected with a diagnostic.
+mapper parseMachine(ps: PState) -> MachineResult {
+    let ps2 = advance(ps)   // 'machine'
+    let name = peek(ps2).text
+    ps2 = advance(ps2)
+    if peek(ps2).kind == 102 { ps2 = advance(ps2) }   // {
+
+    let states: String[] = []
+    let initial = ""
+    let terminals: String[] = []
+    let transNames: String[] = []
+    let transFroms: String[] = []
+    let transTos: String[] = []
+
+    let running = true
+    while running {
+        let t = peek(ps2)
+        if t.kind == 103 or t.kind == 0 {
+            running = false
+        } else {
+            if t.kind == 293 {                  // states A, B, C
+                ps2 = advance(ps2)
+                let more = true
+                while more {
+                    if peek(ps2).kind == 1 {
+                        states = appendString(states, peek(ps2).text)
+                        ps2 = advance(ps2)
+                        if peek(ps2).kind == 106 { ps2 = advance(ps2) } else { more = false }
+                    } else { more = false }
+                }
+            } else {
+            if t.kind == 291 {                  // initial X
+                ps2 = advance(ps2)
+                initial = peek(ps2).text
+                ps2 = advance(ps2)
+            } else {
+            if t.kind == 294 {                  // terminal X, Y  |  terminal -
+                ps2 = advance(ps2)
+                if peek(ps2).kind == 119 { ps2 = advance(ps2) }   // '-' = none
+                else {
+                    let more = true
+                    while more {
+                        if peek(ps2).kind == 1 {
+                            terminals = appendString(terminals, peek(ps2).text)
+                            ps2 = advance(ps2)
+                            if peek(ps2).kind == 106 { ps2 = advance(ps2) } else { more = false }
+                        } else { more = false }
+                    }
+                }
+            } else {
+            if t.kind == 1 {                    // transition: name : From(,From)* -> To
+                let tname = t.text
+                ps2 = advance(ps2)
+                if peek(ps2).kind == 100 {
+                    diag_error(t.line, "machine: transition payloads/guards/update are not yet supported (data-less machines only)")
+                }
+                if peek(ps2).kind == 108 { ps2 = advance(ps2) }   // :
+                let froms = ""
+                let more = true
+                while more {
+                    if peek(ps2).kind == 1 {
+                        if string_len(froms) > 0 { froms = froms + "," }
+                        froms = froms + peek(ps2).text
+                        ps2 = advance(ps2)
+                        if peek(ps2).kind == 106 { ps2 = advance(ps2) } else { more = false }
+                    } else { more = false }
+                }
+                if peek(ps2).kind == 109 { ps2 = advance(ps2) }   // ->
+                let toState = peek(ps2).text
+                ps2 = advance(ps2)
+                if peek(ps2).kind == 242 {
+                    diag_error(t.line, "machine: transition guards (where) are not yet supported")
+                }
+                transNames = appendString(transNames, tname)
+                transFroms = appendString(transFroms, froms)
+                transTos = appendString(transTos, toState)
+            } else {
+                ps2 = advance(ps2)
+            }
+            }
+            }
+            }
+        }
+    }
+    if peek(ps2).kind == 103 { ps2 = advance(ps2) }   // }
+
+    let spec = MachineSpec {
+        name: name, states: states, initial: initial, terminals: terminals,
+        transNames: transNames, transFroms: transFroms, transTos: transTos
+    }
+    return MachineResult { spec: spec, ps: ps2 }
+}
+
 creator parseProgram(tokens: Token[]) -> Program {
     let ps = mkPState(tokens)
 
@@ -1028,6 +1140,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     let externs: FuncSpec[] = []
     let interrupts: String[] = []
     let atoms: AtomSpec[] = []
+    let machines: MachineSpec[] = []
     let entrySpec = FuncSpec {
         isCreator: false, isAsync: false,
         kind: "entry", name: "main",
@@ -1088,6 +1201,38 @@ creator parseProgram(tokens: Token[]) -> Program {
                 let ar = parseAtom(ps)
                 atoms = appendAtomSpec(atoms, ar.spec)
                 ps = ar.ps
+            } else {
+            if t.kind == 292 {                          // machine declaration
+                let mr = parseMachine(ps)
+                machines = appendMachineSpec(machines, mr.spec)
+                // the machine's value type: { __state: Integer }  (build fields on
+                // the heap via appendString — array literals would dangle).
+                let mfields: String[] = []
+                mfields = appendString(mfields, "__state:xc_integer_t")
+                types = appendTypeSpec(types, TypeSpec {
+                    name: mr.spec.name, isCompound: true, baseCtype: "",
+                    fields: mfields,
+                    hasWhere: false, whereSrc: "", whereTokens: []
+                })
+                // register the IllegalTransition interrupt once
+                let hasIT = false
+                let ii = 0
+                while ii < stringArrLen(interrupts) {
+                    if stringArrGet(interrupts, ii) == "IllegalTransition" { hasIT = true }
+                    ii = ii + 1
+                }
+                if not hasIT {
+                    let itfields: String[] = []
+                    itfields = appendString(itfields, "from:xc_string_t")
+                    itfields = appendString(itfields, "to:xc_string_t")
+                    types = appendTypeSpec(types, TypeSpec {
+                        name: "IllegalTransition", isCompound: true, baseCtype: "",
+                        fields: itfields,
+                        hasWhere: false, whereSrc: "", whereTokens: []
+                    })
+                    interrupts = appendString(interrupts, "IllegalTransition")
+                }
+                ps = mr.ps
             } else {
                 // interface
                 if t.kind == 201 {
@@ -1156,13 +1301,15 @@ creator parseProgram(tokens: Token[]) -> Program {
                 }
             }
             }
+            }
         }
     }
 
     return Program {
         types: types, ifaces: ifaces, classes: classes,
         modules: modules, functions: functions, externs: externs,
-        entrySpec: entrySpec, interrupts: interrupts, atoms: atoms
+        entrySpec: entrySpec, interrupts: interrupts, atoms: atoms,
+        machines: machines
     }
 }
 
