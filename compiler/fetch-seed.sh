@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Fetch the released X compiler binary that matches this platform and print the
-# path to its `xc` executable on stdout. This is the bootstrap seed: there is no
-# checked-in C seed — building X requires a previously published release binary
-# for this OS/arch (or an explicit override).
+# Fetch a released X compiler binary that matches this platform and print the
+# path to its `xc` executable on stdout. This is the bootstrap seed: building X
+# requires a previously published release binary for this OS/arch.
 #
-# Overrides (env):
-#   XC_SEED=/path/to/xc          use an existing xc binary, skip the download
-#   XC_BOOTSTRAP_VERSION=v0.0.0  pin a release tag (default: latest)
-#   XC_BOOTSTRAP_REPO=owner/name (default: code-by-sia/x)
-#   GH_TOKEN / GITHUB_TOKEN      used for the GitHub API (avoids rate limits)
+# Resolution order (first one with a matching-platform asset wins):
+#   1. XC_SEED=/path/to/xc        — use an existing binary, no download
+#   2. XC_BOOTSTRAP_VERSION=vX     — try this tag first (default: none)
+#   3. published releases, newest first — so an in-progress release whose asset
+#      isn't uploaded yet is skipped and the PREVIOUS release is used instead.
+#
+#   XC_BOOTSTRAP_REPO=owner/name  (default: code-by-sia/x)
+#   GH_TOKEN / GITHUB_TOKEN       used for the GitHub API (avoids rate limits)
 #
 # Diagnostics go to stderr so stdout is just the binary path.
 set -euo pipefail
@@ -19,7 +21,6 @@ if [ -n "${XC_SEED:-}" ]; then
 fi
 
 REPO="${XC_BOOTSTRAP_REPO:-code-by-sia/x}"
-VER="${XC_BOOTSTRAP_VERSION:-latest}"
 
 os=$(uname -s); arch=$(uname -m)
 case "$os" in
@@ -38,23 +39,34 @@ auth=()
 tok="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 [ -n "$tok" ] && auth=(-H "Authorization: Bearer $tok")
 
-if [ "$VER" = latest ]; then
-    VER=$(curl -fsSL ${auth[@]+"${auth[@]}"} "https://api.github.com/repos/$REPO/releases/latest" \
-          | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)
-    [ -n "$VER" ] || { echo "fetch-seed: could not resolve latest release of $REPO" >&2; exit 1; }
-fi
+# Candidate versions: a pin (if any) first, then published tags newest-first.
+candidates=""
+pin="${XC_BOOTSTRAP_VERSION:-}"
+if [ -n "$pin" ] && [ "$pin" != latest ]; then candidates="$pin"; fi
+tags=$(curl -fsSL ${auth[@]+"${auth[@]}"} \
+        "https://api.github.com/repos/$REPO/releases?per_page=50" 2>/dev/null \
+       | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' || true)
+candidates="$candidates $tags"
 
-cache="${XC_OUT:-build}/.seed/$VER-$target"
-seedxc="$cache/x-$VER-$target/libexec/xc"
+cache="${XC_OUT:-build}/.seed"
+mkdir -p "$cache"
 
-if [ ! -x "$seedxc" ]; then
-    rm -rf "$cache"; mkdir -p "$cache"
-    url="https://github.com/$REPO/releases/download/$VER/x-$VER-$target.tar.gz"
-    echo "fetch-seed: downloading bootstrap compiler $VER ($target)" >&2
-    curl -fSL ${auth[@]+"${auth[@]}"} "$url" -o "$cache/x.tgz" >&2 \
-        || { echo "fetch-seed: download failed: $url" >&2; exit 1; }
-    tar -xzf "$cache/x.tgz" -C "$cache"
-fi
+for ver in $candidates; do
+    [ -n "$ver" ] || continue
+    seedxc="$cache/$ver-$target/x-$ver-$target/libexec/xc"
+    if [ -x "$seedxc" ]; then echo "$seedxc"; exit 0; fi          # cached
 
-[ -x "$seedxc" ] || { echo "fetch-seed: seed compiler not found: $seedxc" >&2; exit 1; }
-echo "$seedxc"
+    dst="$cache/$ver-$target"
+    url="https://github.com/$REPO/releases/download/$ver/x-$ver-$target.tar.gz"
+    rm -rf "$dst"; mkdir -p "$dst"
+    if curl -fsSL ${auth[@]+"${auth[@]}"} "$url" -o "$dst/x.tgz" 2>/dev/null \
+       && tar -xzf "$dst/x.tgz" -C "$dst" 2>/dev/null \
+       && [ -x "$seedxc" ]; then
+        echo "fetch-seed: using bootstrap seed $ver ($target)" >&2
+        echo "$seedxc"; exit 0
+    fi
+    rm -rf "$dst"                                                 # no asset for $target; try older
+done
+
+echo "fetch-seed: no release with a '$target' asset found in $REPO" >&2
+exit 1
