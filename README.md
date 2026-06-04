@@ -64,10 +64,11 @@ module App {}                             // resolution is automatic
 - **`where`-guarded overloading**, `match`, optionals (`T?`), arrays (`T[]`),
   and a `Bytes` type for binary data.
 - **Multi-file projects** with `import` and `namespace`.
-- **A growing standard library** — math, text, bytes, convert, **json
-  (serialization)**, fs, path, **net (TCP sockets)**, **http (HTTP/1.1 client)**,
-  process, time — see [the standard library](https://code-by-sia.github.io/x/stdlib)
-  and [serialization](https://code-by-sia.github.io/x/serialization).
+- **A growing standard library** — math, text, bytes, convert, **serialization
+  (json / yaml / xml)**, fs, path, **net (TCP sockets)**, **http (HTTP/1.1
+  client)**, process, time — see
+  [the standard library](https://code-by-sia.github.io/x/stdlib) and
+  [serialization](https://code-by-sia.github.io/x/serialization).
 - **Native, dependency-light output**: Xi → C99 → a native binary via your `cc`.
 
 Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:
@@ -267,7 +268,7 @@ fixpoint (successive self-compiles emit byte-identical C). See
 compiler/   the compiler, written in Xi (lexer, parser, codegen, driver) + xc_helpers.c
             plus bootstrap.sh / fetch-seed.sh / selfhost.sh
 runtime/    the C runtime (runtime.h, runtime.c) — the Xi equivalent of libc/libcore
-std/        standard library (math, text, bytes, convert, json, events, io, fs, path, net, process, time)
+std/        standard library (math, text, bytes, convert, json, yaml, xml, events, io, fs, path, net, process, time)
 examples/   runnable programs, incl. proj/ (multi-file) and showcase/ (full project)
 docs/       MkDocs documentation
 editors/    Tree-sitter grammar, Zed extension, Vim plugin

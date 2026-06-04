@@ -115,6 +115,26 @@ guide.
 | `asString`, `asNumber`, `asBool` | leaf coercion |
 | `getString`, `getNumber` | `(Json, String) -> …` (field shortcut) |
 
+### `yaml` — `std/yaml.x`
+
+YAML over the same `Json` tree (block style). See [Serialization](serialization.md).
+
+| Function | Signature |
+|----------|-----------|
+| `stringify` | `(Json) -> String` |
+| `parse` | `(String) -> Json` |
+
+### `xml` — `std/xml.x`
+
+XML over the same `Json` tree (object → child elements, array → repeated element,
+scalar → text). See [Serialization](serialization.md).
+
+| Function | Signature |
+|----------|-----------|
+| `stringify` | `(Json) -> String` (wraps in `<root>`) |
+| `stringifyAs` | `(Json, String) -> String` (custom root tag) |
+| `parse` | `(String) -> Json` |
+
 ### `events` — `std/events.x`
 
 Built-in **typed publish/subscribe**. A producer publishes any DTO under a topic

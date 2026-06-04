@@ -1031,3 +1031,285 @@ xc_Event_t xstd_eventq_shift(void) {
     if (xc_eq_len == 0) xc_eq_head = 0;
     return e;
 }
+
+/* ─── YAML & XML (std/yaml, std/xml) ─────────────────────────────────────────
+ * Both reuse the JSON value tree (xc_json_node) as a generic document model:
+ * stringify walks the tree; parse builds one. Supported subsets are documented
+ * in docs/serialization.md.
+ */
+
+static void xj_num_str(char* buf, xc_number_t n) {
+    if (n == (xc_integer_t)n) snprintf(buf, 64, "%lld", (long long)(xc_integer_t)n);
+    else snprintf(buf, 64, "%g", n);
+}
+static int xj_is_scalar(struct xc_json_node* v) { return v && v->kind <= XJ_STRING; }
+
+/* infer a scalar node from raw text (null/bool/number, else string; strips quotes) */
+static struct xc_json_node* xj_scalar_from_text(const char* s, size_t n) {
+    while (n > 0 && (s[0]==' '||s[0]=='\t')) { s++; n--; }
+    while (n > 0 && (s[n-1]==' '||s[n-1]=='\t')) n--;
+    if (n >= 2 && ((s[0]=='"'&&s[n-1]=='"')||(s[0]=='\''&&s[n-1]=='\''))) {
+        struct xc_json_node* nd = xj_alloc(XJ_STRING); nd->str = xj_strdup_n(s+1, n-2); return nd;
+    }
+    if (n == 0) { struct xc_json_node* nd = xj_alloc(XJ_STRING); nd->str = xj_strdup_n("",0); return nd; }
+    if ((n==4 && memcmp(s,"null",4)==0) || (n==1 && s[0]=='~')) return xj_alloc(XJ_NULL);
+    if (n==4 && memcmp(s,"true",4)==0)  { struct xc_json_node* nd=xj_alloc(XJ_BOOL); nd->b=1; return nd; }
+    if (n==5 && memcmp(s,"false",5)==0) { struct xc_json_node* nd=xj_alloc(XJ_BOOL); nd->b=0; return nd; }
+    if (n < 63) { char tmp[64]; memcpy(tmp,s,n); tmp[n]='\0'; char* e; errno=0;
+        double d = strtod(tmp,&e); if (e==tmp+n && e!=tmp && errno==0) {
+            struct xc_json_node* nd=xj_alloc(XJ_NUMBER); nd->num=d; return nd; } }
+    { struct xc_json_node* nd=xj_alloc(XJ_STRING); nd->str=xj_strdup_n(s,n); return nd; }
+}
+static void xj_obj_set_n(struct xc_json_node* o, const char* k, size_t kn, struct xc_json_node* v) {
+    xj_grow(o); o->keys[o->len]=xj_strdup_n(k,kn); o->items[o->len]=v; o->len++;
+}
+static void xj_arr_push_n(struct xc_json_node* a, struct xc_json_node* v) {
+    xj_grow(a); a->keys[a->len]=NULL; a->items[a->len]=v; a->len++;
+}
+
+/* ── YAML stringify (block style) ── */
+static int xj_yaml_needs_quote(const char* s) {
+    if (!s || !*s) return 1;
+    size_t n = strlen(s);
+    if (s[0]==' ' || s[n-1]==' ') return 1;
+    for (size_t i=0;i<n;i++) { char c=s[i];
+        if (c==':'||c=='#'||c=='\n'||c=='['||c==']'||c=='{'||c=='}'||c==','||c=='"'||c=='\''||(c=='-'&&i==0)) return 1; }
+    if (!strcmp(s,"true")||!strcmp(s,"false")||!strcmp(s,"null")||!strcmp(s,"~")) return 1;
+    { char* e; errno=0; strtod(s,&e); if (*e=='\0' && e!=s) return 1; }
+    return 0;
+}
+static void xj_yaml_str(xj_sb* sb, const char* s) {
+    if (xj_yaml_needs_quote(s)) {
+        xj_sb_putc(sb,'"');
+        for (const char* p=s; p && *p; p++) {
+            if (*p=='"'||*p=='\\') xj_sb_putc(sb,'\\');
+            if (*p=='\n') { xj_sb_put(sb,"\\n"); continue; }
+            xj_sb_putc(sb,*p);
+        }
+        xj_sb_putc(sb,'"');
+    } else xj_sb_put(sb, s?s:"");
+}
+static void xj_yaml_scalar(xj_sb* sb, struct xc_json_node* v) {
+    char b[64];
+    switch (v->kind) {
+        case XJ_NULL:   xj_sb_put(sb,"null"); break;
+        case XJ_BOOL:   xj_sb_put(sb, v->b?"true":"false"); break;
+        case XJ_NUMBER: xj_num_str(b,v->num); xj_sb_put(sb,b); break;
+        case XJ_STRING: xj_yaml_str(sb, v->str); break;
+        default:        xj_sb_put(sb,"null");
+    }
+}
+static void xj_yaml_block(xj_sb* sb, struct xc_json_node* v, int indent) {
+    int obj = (v->kind == XJ_OBJECT);
+    for (long i=0;i<v->len;i++) {
+        for (int k=0;k<indent;k++) xj_sb_putc(sb,' ');
+        if (obj) { xj_yaml_str(sb, v->keys[i]); xj_sb_putc(sb,':'); } else { xj_sb_putc(sb,'-'); }
+        struct xc_json_node* c = v->items[i];
+        if (xj_is_scalar(c)) { xj_sb_putc(sb,' '); xj_yaml_scalar(sb,c); xj_sb_putc(sb,'\n'); }
+        else if (c->len==0) { xj_sb_put(sb, c->kind==XJ_ARRAY?" []\n":" {}\n"); }
+        else { xj_sb_putc(sb,'\n'); xj_yaml_block(sb,c,indent+2); }
+    }
+}
+xc_string_t xstd_yaml_stringify(xc_Json_t v) {
+    xj_sb s={0,0,0};
+    if (!v) return xc_str_copy("null\n",5);
+    if (xj_is_scalar(v)) { xj_yaml_scalar(&s,v); xj_sb_putc(&s,'\n'); }
+    else if (v->len==0) { xj_sb_put(&s, v->kind==XJ_ARRAY?"[]\n":"{}\n"); }
+    else xj_yaml_block(&s,v,0);
+    if (!s.buf) return xc_str_copy("",0);
+    return (xc_string_t){ .data=s.buf, .len=s.len };
+}
+
+/* ── YAML parse (block subset: maps, seqs, scalars, nesting, # comments) ── */
+typedef struct { int indent; int seq; char* content; } xy_line;
+static long xy_key_colon(const char* s) {
+    int q = 0;
+    for (long i=0; s[i]; i++) { char c=s[i];
+        if (q) { if (c==q) q=0; continue; }
+        if (c=='"'||c=='\'') { q=c; continue; }
+        if (c==':' && (s[i+1]=='\0'||s[i+1]==' ')) return i;
+    }
+    return -1;
+}
+static struct xc_json_node* xy_parse_block(xy_line* L, long n, long* i, int minIndent) {
+    (void)minIndent;
+    if (*i >= n) return xj_alloc(XJ_NULL);
+    int ci = L[*i].indent;
+    if (L[*i].seq) {
+        struct xc_json_node* arr = xj_alloc(XJ_ARRAY);
+        while (*i < n && L[*i].seq && L[*i].indent == ci) {
+            char* rest = L[*i].content;
+            if (rest[0] == '\0') {
+                (*i)++;
+                if (*i < n && L[*i].indent > ci) xj_arr_push_n(arr, xy_parse_block(L,n,i,ci+1));
+                else xj_arr_push_n(arr, xj_alloc(XJ_NULL));
+            } else {
+                L[*i].seq = 0; L[*i].indent = ci + 2;       /* reinterpret inline content */
+                xj_arr_push_n(arr, xy_parse_block(L,n,i,ci+1));
+            }
+        }
+        return arr;
+    }
+    long colon = xy_key_colon(L[*i].content);
+    if (colon < 0) { struct xc_json_node* v = xj_scalar_from_text(L[*i].content, strlen(L[*i].content)); (*i)++; return v; }
+    struct xc_json_node* obj = xj_alloc(XJ_OBJECT);
+    while (*i < n && !L[*i].seq && L[*i].indent == ci) {
+        char* line = L[*i].content;
+        long c2 = xy_key_colon(line);
+        if (c2 < 0) break;
+        const char* ks = line; long kn = c2;
+        while (kn > 0 && ks[0]==' ') { ks++; kn--; }
+        while (kn > 0 && ks[kn-1]==' ') kn--;
+        if (kn >= 2 && ((ks[0]=='"'&&ks[kn-1]=='"')||(ks[0]=='\''&&ks[kn-1]=='\''))) { ks++; kn-=2; }
+        const char* rest = line + c2 + 1;
+        while (*rest == ' ') rest++;
+        (*i)++;
+        if (*rest == '\0') {
+            if (*i < n && L[*i].indent > ci) xj_obj_set_n(obj, ks, (size_t)kn, xy_parse_block(L,n,i,ci+1));
+            else xj_obj_set_n(obj, ks, (size_t)kn, xj_alloc(XJ_NULL));
+        } else {
+            xj_obj_set_n(obj, ks, (size_t)kn, xj_scalar_from_text(rest, strlen(rest)));
+        }
+    }
+    return obj;
+}
+xc_Json_t xstd_yaml_parse(xc_string_t src) {
+    xy_line* L = (xy_line*)malloc(sizeof(xy_line) * (src.len + 2)); if (!L) abort();
+    long n = 0; size_t i = 0;
+    while (i < src.len) {
+        size_t start=i; while (i<src.len && src.data[i]!='\n') i++;
+        size_t end=i; if (i<src.len) i++;
+        size_t p=start; int indent=0;
+        while (p<end && (src.data[p]==' '||src.data[p]=='\t')) { p++; indent++; }
+        if (p>=end || src.data[p]=='#') continue;
+        size_t e=end; while (e>p && (src.data[e-1]==' '||src.data[e-1]=='\r')) e--;
+        int seq=0;
+        if (src.data[p]=='-' && (p+1>=e || src.data[p+1]==' ')) { seq=1; p++; if (p<e && src.data[p]==' ') p++; }
+        L[n].indent=indent; L[n].seq=seq; L[n].content=xj_strdup_n(src.data+p, e-p); n++;
+    }
+    if (n == 0) { free(L); return xj_alloc(XJ_NULL); }
+    long idx = 0;
+    xc_Json_t r = xy_parse_block(L, n, &idx, 0);
+    free(L);
+    return r;
+}
+
+/* ── XML stringify (element-tree convention) ── */
+static void xx_escape(xj_sb* sb, const char* s) {
+    for (; s && *s; s++) switch (*s) {
+        case '<': xj_sb_put(sb,"&lt;");  break;
+        case '>': xj_sb_put(sb,"&gt;");  break;
+        case '&': xj_sb_put(sb,"&amp;"); break;
+        case '"': xj_sb_put(sb,"&quot;");break;
+        default:  xj_sb_putc(sb,*s);
+    }
+}
+static void xx_scalar(xj_sb* sb, struct xc_json_node* v) {
+    char b[64];
+    switch (v->kind) {
+        case XJ_BOOL:   xj_sb_put(sb, v->b?"true":"false"); break;
+        case XJ_NUMBER: xj_num_str(b,v->num); xj_sb_put(sb,b); break;
+        case XJ_STRING: xx_escape(sb, v->str); break;
+        default: break;
+    }
+}
+static void xx_emit(xj_sb* sb, struct xc_json_node* v, const char* tag, int indent) {
+    if (v && v->kind == XJ_ARRAY) { for (long i=0;i<v->len;i++) xx_emit(sb, v->items[i], tag, indent); return; }
+    for (int k=0;k<indent;k++) xj_sb_putc(sb,' ');
+    xj_sb_putc(sb,'<'); xj_sb_put(sb,tag); xj_sb_putc(sb,'>');
+    if (!v || xj_is_scalar(v)) { if (v) xx_scalar(sb,v); }
+    else {
+        xj_sb_putc(sb,'\n');
+        for (long i=0;i<v->len;i++) xx_emit(sb, v->items[i], v->keys[i]?v->keys[i]:"item", indent+2);
+        for (int k=0;k<indent;k++) xj_sb_putc(sb,' ');
+    }
+    xj_sb_putc(sb,'<'); xj_sb_putc(sb,'/'); xj_sb_put(sb,tag); xj_sb_put(sb,">\n");
+}
+xc_string_t xstd_xml_stringify_as(xc_Json_t v, xc_string_t root) {
+    xj_sb s={0,0,0};
+    char* r = xc_string_to_cstr(root);
+    if (v && v->kind == XJ_ARRAY) {
+        xj_sb_putc(&s,'<'); xj_sb_put(&s,r); xj_sb_put(&s,">\n");
+        for (long i=0;i<v->len;i++) xx_emit(&s, v->items[i], "item", 2);
+        xj_sb_putc(&s,'<'); xj_sb_putc(&s,'/'); xj_sb_put(&s,r); xj_sb_put(&s,">\n");
+    } else xx_emit(&s, v, r, 0);
+    free(r);
+    if (!s.buf) return xc_str_copy("",0);
+    return (xc_string_t){ .data=s.buf, .len=s.len };
+}
+xc_string_t xstd_xml_stringify(xc_Json_t v) { return xstd_xml_stringify_as(v, xc_string_from_cstr("root")); }
+
+/* ── XML parse (elements, text, nesting; repeated tags -> array; attrs ignored) ── */
+typedef struct { const char* p; const char* end; } xx_parser;
+static void xx_decode_into(xj_sb* sb, const char* s, size_t n) {
+    for (size_t i=0;i<n;i++) {
+        if (s[i]=='&') {
+            if (i+3<n && memcmp(s+i,"&lt;",4)==0)  { xj_sb_putc(sb,'<'); i+=3; continue; }
+            if (i+3<n && memcmp(s+i,"&gt;",4)==0)  { xj_sb_putc(sb,'>'); i+=3; continue; }
+            if (i+4<n && memcmp(s+i,"&amp;",5)==0) { xj_sb_putc(sb,'&'); i+=4; continue; }
+            if (i+5<n && memcmp(s+i,"&quot;",6)==0){ xj_sb_putc(sb,'"'); i+=5; continue; }
+            if (i+5<n && memcmp(s+i,"&apos;",6)==0){ xj_sb_putc(sb,'\''); i+=5; continue; }
+        }
+        xj_sb_putc(sb, s[i]);
+    }
+}
+static void xx_ws_misc(xx_parser* P) {
+    for (;;) {
+        while (P->p<P->end && (*P->p==' '||*P->p=='\t'||*P->p=='\n'||*P->p=='\r')) P->p++;
+        if (P->end-P->p>=4 && memcmp(P->p,"<!--",4)==0) { P->p+=4; while (P->p<P->end && !(P->end-P->p>=3 && memcmp(P->p,"-->",3)==0)) P->p++; if (P->p<P->end) P->p+=3; continue; }
+        if (P->end-P->p>=2 && (memcmp(P->p,"<?",2)==0 || memcmp(P->p,"<!",2)==0)) { while (P->p<P->end && *P->p!='>') P->p++; if (P->p<P->end) P->p++; continue; }
+        break;
+    }
+}
+static void xx_obj_add(struct xc_json_node* obj, const char* k, size_t kn, struct xc_json_node* child) {
+    for (long i=0;i<obj->len;i++) {
+        if (obj->keys[i] && strlen(obj->keys[i])==kn && memcmp(obj->keys[i],k,kn)==0) {
+            struct xc_json_node* ex = obj->items[i];
+            if (ex->kind == XJ_ARRAY) xj_arr_push_n(ex, child);
+            else { struct xc_json_node* a=xj_alloc(XJ_ARRAY); xj_arr_push_n(a,ex); xj_arr_push_n(a,child); obj->items[i]=a; }
+            return;
+        }
+    }
+    xj_obj_set_n(obj, k, kn, child);
+}
+static struct xc_json_node* xx_element(xx_parser* P, const char** tag, size_t* tlen) {
+    P->p++;                                   /* '<' */
+    const char* ns = P->p;
+    while (P->p<P->end && *P->p!=' '&&*P->p!='\t'&&*P->p!='\n'&&*P->p!='\r'&&*P->p!='>'&&*P->p!='/') P->p++;
+    *tag = ns; *tlen = (size_t)(P->p - ns);
+    while (P->p<P->end && *P->p!='>'&&*P->p!='/') P->p++;     /* skip attributes */
+    int self = 0;
+    if (P->p<P->end && *P->p=='/') { self=1; P->p++; }
+    if (P->p<P->end && *P->p=='>') P->p++;
+    if (self) { struct xc_json_node* nd=xj_alloc(XJ_STRING); nd->str=xj_strdup_n("",0); return nd; }
+    struct xc_json_node* obj = xj_alloc(XJ_OBJECT);
+    xj_sb text = {0,0,0};
+    int hasChild = 0;
+    while (P->p < P->end) {
+        if (*P->p == '<') {
+            if (P->end-P->p>=2 && P->p[1]=='/') { while (P->p<P->end && *P->p!='>') P->p++; if (P->p<P->end) P->p++; break; }
+            if (P->end-P->p>=4 && memcmp(P->p,"<!--",4)==0) { xx_ws_misc(P); continue; }
+            hasChild = 1;
+            const char* ct; size_t cl;
+            struct xc_json_node* child = xx_element(P, &ct, &cl);
+            xx_obj_add(obj, ct, cl, child);
+        } else {
+            const char* ts = P->p; while (P->p<P->end && *P->p!='<') P->p++;
+            xx_decode_into(&text, ts, (size_t)(P->p - ts));
+        }
+    }
+    if (!hasChild) {
+        struct xc_json_node* v = xj_scalar_from_text(text.buf?text.buf:"", text.len);
+        if (text.buf) free(text.buf);
+        return v;
+    }
+    if (text.buf) free(text.buf);
+    return obj;
+}
+xc_Json_t xstd_xml_parse(xc_string_t src) {
+    xx_parser P; P.p=src.data; P.end=src.data+src.len;
+    xx_ws_misc(&P);
+    if (P.p>=P.end || *P.p!='<') return xj_alloc(XJ_ERROR);
+    const char* tag; size_t tl;
+    return xx_element(&P, &tag, &tl);         /* returns the root element's value */
+}

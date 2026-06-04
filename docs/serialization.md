@@ -128,11 +128,56 @@ typed payload is turned into `Json` (`stringify`) to leave the process and rebui
 (`parse`) on the far side — see [Events](events.md). The `std/json` codecs for
 `event` types are derived automatically.
 
+## YAML and XML
+
+The `Json` value tree is a **format-agnostic document model**: the same tree can
+be rendered as JSON, **YAML** (`std/yaml`), or **XML** (`std/xml`), and parsed
+back from any of them. Build/read with `std/json`; pick the wire format at the
+edge.
+
+```x
+import "std/json.x"
+import "std/yaml.x"
+import "std/xml.x"
+
+let y = yaml.stringify(person)   // block YAML
+let p = yaml.parse(y)            // -> Json (check with json.isValid)
+
+let x = xml.stringify(person)               // wrapped in <root>…</root>
+let q = xml.parse("<root><name>Ada</name></root>")   // -> Json (root value)
+```
+
+### `yaml` — `std/yaml`
+
+| Function | Signature |
+|----------|-----------|
+| `stringify` | `(Json) -> String` (block style) |
+| `parse` | `(String) -> Json` |
+
+Supports block **mappings**, **sequences**, scalars, nesting, and `#` comments
+(including `- key: val` sequences-of-maps). Not supported: flow style (`{}`/`[]`),
+anchors/aliases, multi-line scalars, and inline (end-of-line) comments.
+
+### `xml` — `std/xml`
+
+| Function | Signature |
+|----------|-----------|
+| `stringify` | `(Json) -> String` (wraps in `<root>`) |
+| `stringifyAs` | `(Json, String) -> String` (custom root tag) |
+| `parse` | `(String) -> Json` (returns the root element's value) |
+
+Convention: an **object** → child elements (one per key); an **array** → a
+repeated element; a **scalar** → element text. On parse, repeated tags collect
+into an array and leaf text is type-inferred. Entities
+(`&lt; &gt; &amp; &quot; &apos;`) are handled. **Attributes are ignored** on parse
+and not emitted, and mixed text+element content isn't represented — XML↔JSON is
+inherently lossy, so use it for data interchange, not document fidelity.
+
 ## Notes & limits
 
-- One serialization format today (JSON). The `Json` tree is format-agnostic
-  enough that other encoders (e.g. a compact binary form) could target it later.
+- Three formats today (JSON, YAML, XML) over one `Json` tree; other encoders
+  could target it later.
 - No streaming parser — `parse` reads a whole string.
 - No schema validation; you check shapes yourself with `kind`/`is*`.
 
-See `examples/json_demo.x`.
+See `examples/json_demo.x` and `examples/yaml_xml_demo.x`.
