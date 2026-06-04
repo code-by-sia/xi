@@ -1,6 +1,6 @@
 # Error handling
 
-X models recoverable failure with a result type, constructors `ok`/`err`, and
+Ξ models recoverable failure with a result type, constructors `ok`/`err`, and
 the `?` propagation operator.
 
 ## The result type `T!`

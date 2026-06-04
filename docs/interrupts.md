@@ -7,7 +7,7 @@
 
 ## Summary
 
-`interrupt` introduces **resumable conditions** to X. When a function `signal`s
+`interrupt` introduces **resumable conditions** to Ξ. When a function `signal`s
 an interrupt, that function is **suspended at the signal site** — it does *not*
 unwind. A handler in an enclosing `try`/`catch` runs while the suspended frame is
 still alive and **decides** what happens next:
@@ -21,7 +21,7 @@ It is **checked**: a function that may signal declares `interrupts T`, and the
 compiler verifies that callers either handle or re-declare it.
 
 This is the Common Lisp condition/restart model (also seen in Smalltalk's
-resumable exceptions and algebraic effects), adapted to X's C backend and its
+resumable exceptions and algebraic effects), adapted to Ξ's C backend and its
 pure/impure function-kind system.
 
 ## Execution model (the key idea)
@@ -40,13 +40,13 @@ foo() running ──signal T──▶ foo SUSPENDED here (frame kept alive)
                      └─ skip ────▶ unwind to the try, foo ABANDONED
 ```
 
-Contrast with X's existing `Result` and with classic exceptions:
+Contrast with Ξ's existing `Result` and with classic exceptions:
 
 | Mechanism | Use | Stack behaviour |
 |-----------|-----|-----------------|
 | `Result` (`T!`, `?`) | expected, local errors handled as values | none; caller inspects |
 | **Interrupt** | recoverable conditions; an outer policy decides | handler runs with the signalling frame intact, then resumes or abandons |
-| (classic exceptions) | — | would unwind *before* the handler; not in X |
+| (classic exceptions) | — | would unwind *before* the handler; not in Ξ |
 
 ## Syntax
 
@@ -128,7 +128,7 @@ handler matches, the signal is **unhandled** (see checked signatures).
 Signalling is an effect, permitted only in the impure kinds — `consumer`,
 `producer`, `creator` (and `entry`). The pure kinds — `mapper`, `projector`,
 `predicate`, `reducer` — may neither `signal` nor call an `interrupts` function.
-This reuses X's existing purity line.
+This reuses Ξ's existing purity line.
 
 ### The catch-as-function restriction
 
@@ -140,7 +140,7 @@ body may therefore read:
 - module-level / global state,
 - and call functions,
 
-but **may not capture `try`-scope local variables** (X has no closures). This is
+but **may not capture `try`-scope local variables** (Ξ has no closures). This is
 the simplification that makes resumption implementable without continuations or
 coroutines. (Future work could lift it with explicit captures.)
 

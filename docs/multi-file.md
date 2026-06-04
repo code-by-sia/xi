@@ -60,7 +60,7 @@ qualified form `a.b.Name`, which the compiler resolves to the prefixed symbol.
 
 ## The compiler itself is multi-file
 
-The X compiler uses exactly this feature for its own source. `compiler/xc.x` is
+The Ξ compiler uses exactly this feature for its own source. `compiler/xc.x` is
 just a manifest:
 
 ```x

@@ -3,7 +3,7 @@ const {themes} = require('prism-react-renderer');
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'The X Programming Language',
+  title: 'The Ξ Programming Language',
   tagline: 'Statically-typed, AOT-compiled, with first-class dependency injection',
   favicon: 'img/logo.svg',
 
@@ -44,8 +44,8 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       navbar: {
-        title: 'The X Programming Language',
-        logo: {alt: 'X logo', src: 'img/logo.svg', srcDark: 'img/logo-white.svg'},
+        title: 'The Ξ Programming Language',
+        logo: {alt: 'Ξ logo', src: 'img/logo.svg', srcDark: 'img/logo-white.svg'},
         items: [
           {href: 'https://github.com/code-by-sia/x', label: 'GitHub', position: 'right'},
         ],

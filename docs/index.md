@@ -1,14 +1,14 @@
 ---
-title: The X Programming Language
+title: The Ξ Programming Language
 hide_title: true
 sidebar_label: Overview
 slug: /
 ---
 
 <div class="hero-x">
-  <img class="hero-x__logo hero-x__logo--light" src="/x/img/logo.svg" alt="X logo" width="88" height="88" />
-  <img class="hero-x__logo hero-x__logo--dark" src="/x/img/logo-white.svg" alt="X logo" width="88" height="88" />
-  <h1 class="hero-x__title">The X Programming Language</h1>
+  <img class="hero-x__logo hero-x__logo--light" src="/x/img/logo.svg" alt="Ξ logo" width="88" height="88" />
+  <img class="hero-x__logo hero-x__logo--dark" src="/x/img/logo-white.svg" alt="Ξ logo" width="88" height="88" />
+  <h1 class="hero-x__title">The Ξ Programming Language</h1>
   <p class="hero-x__tagline">
     A statically-typed, ahead-of-time compiled language that makes
     <strong>dependency injection</strong>, <strong>function intent</strong>, and
@@ -21,8 +21,8 @@ slug: /
   </p>
 </div>
 
-The compiler is **written in X itself** (`compiler/xc.x`) and is **self-hosting** —
-it compiles its own source to a byte-identical fixpoint. The only non-X code is a
+The compiler is **written in Ξ itself** (`compiler/xc.x`) and is **self-hosting** —
+it compiles its own source to a byte-identical fixpoint. The only non-Ξ code is a
 small C runtime (the equivalent of a language's libc/libcore).
 
 ## Highlights

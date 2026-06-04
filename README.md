@@ -1,16 +1,16 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-white.svg">
-    <img alt="X programming language logo" src="docs/assets/logo.svg" width="140" height="140">
+    <img alt="Ξ programming language logo" src="docs/assets/logo.svg" width="140" height="140">
   </picture>
 </p>
 
-<h1 align="center">The X Programming Language</h1>
+<h1 align="center">The Ξ Programming Language</h1>
 
-X is a **statically-typed, ahead-of-time compiled** language with **first-class
+Ξ is a **statically-typed, ahead-of-time compiled** language with **first-class
 dependency injection**, **seven function kinds**, and **refined types** that
 enforce their constraints. It compiles to native binaries through a C99 backend,
-and its compiler is **written in X and self-hosting**.
+and its compiler is **written in Ξ and self-hosting**.
 
 ```x
 interface Greeter { mapper greet(name: String) -> String }
@@ -31,7 +31,7 @@ async entry main(args: String[]) -> Integer {
 module App {}                             // resolution is automatic
 ```
 
-## Why X
+## Why Ξ
 
 - **Dependency injection & IoC are part of the language**, not a framework.
   Implementations are discovered and wired automatically; `bind` is an optional
@@ -68,7 +68,7 @@ module App {}                             // resolution is automatic
   (serialization)**, fs, path, **net (TCP sockets)**, **http (HTTP/1.1 client)**,
   process, time — see [the standard library](https://code-by-sia.github.io/x/stdlib)
   and [serialization](https://code-by-sia.github.io/x/serialization).
-- **Native, dependency-light output**: X → C99 → a native binary via your `cc`.
+- **Native, dependency-light output**: Ξ → C99 → a native binary via your `cc`.
 
 Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:
 **[code-by-sia.github.io/x](https://code-by-sia.github.io/x/)**.
@@ -243,16 +243,16 @@ source.x (+ imported files)
   ↓ cc       C → native binary (invoked automatically)
 ```
 
-The compiler is itself an X program (`compiler/*.x`); `selfhost.sh` proves the
+The compiler is itself an Ξ program (`compiler/*.x`); `selfhost.sh` proves the
 fixpoint (successive self-compiles emit byte-identical C). See
 [internals](https://code-by-sia.github.io/x/internals).
 
 ## Project layout
 
 ```
-compiler/   the compiler, written in X (lexer, parser, codegen, driver) + xc_helpers.c
+compiler/   the compiler, written in Ξ (lexer, parser, codegen, driver) + xc_helpers.c
             plus bootstrap.sh / fetch-seed.sh / selfhost.sh
-runtime/    the C runtime (runtime.h, runtime.c) — the X equivalent of libc/libcore
+runtime/    the C runtime (runtime.h, runtime.c) — the Ξ equivalent of libc/libcore
 std/        standard library (math, text, bytes, convert, json, events, io, fs, path, net, process, time)
 examples/   runnable programs, incl. proj/ (multi-file) and showcase/ (full project)
 docs/       MkDocs documentation
@@ -266,7 +266,7 @@ A Tree-sitter grammar plus **Zed** and **Vim** integrations live in
 
 ## License
 
-X is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) and
+Ξ is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) and
 [NOTICE](NOTICE) (the same license Kotlin uses). It is provided **"AS IS",
 without warranties of any kind, and with no obligation of support**
 (Apache-2.0 §7–§8). It's an experimental personal project — issues/PRs are

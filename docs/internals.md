@@ -1,8 +1,8 @@
 # How it works (self-hosting)
 
-## The compiler is written in X
+## The compiler is written in Ξ
 
-`compiler/xc.x` is the X compiler, written in X. It is split across four files
+`compiler/xc.x` is the Ξ compiler, written in Ξ. It is split across four files
 (imported by the `xc.x` manifest):
 
 | File | Role |
@@ -13,11 +13,11 @@
 | `driver.x`  | `import` resolution + entry point |
 
 The compiler emits C and then invokes `cc` to produce a native binary. The only
-non-X code is:
+non-Ξ code is:
 
 - `runtime/runtime.{h,c}` — the runtime: primitive types, strings, arrays,
   optionals, regex for refined-type `matches`, file/stdin I/O, and the
-  `cc`-invocation helper. This is X's equivalent of libc/libcore.
+  `cc`-invocation helper. This is Ξ's equivalent of libc/libcore.
 - `compiler/xc_helpers.c` — C primitives the compiler declares via `extern "C"`
   (growable typed arrays, file I/O, `cc` invocation). It is appended into the
   generated C, sharing the translation unit.
@@ -25,12 +25,12 @@ non-X code is:
 ## Bootstrapping from source
 
 Self-hosting has a chicken-and-egg problem: you need a compiler to build the
-compiler. X solves it by **seeding from a released binary** — the previously
+compiler. Ξ solves it by **seeding from a released binary** — the previously
 published `xc` for your platform:
 
 ```
 released xc   (downloaded by compiler/fetch-seed.sh)
-        │  xc compiler/xc.x          (X compiling X)
+        │  xc compiler/xc.x          (Ξ compiling Ξ)
         ▼
        xc   (built from current source)
         │  xc compiler/xc.x          (self-rebuild)
@@ -83,7 +83,7 @@ state-machine when used. There is no VM, no GC, and no reflection.
 ```
 compiler/
   xc.x          manifest (imports the parts)
-  lexer.x parser.x codegen.x driver.x   the compiler, in X
+  lexer.x parser.x codegen.x driver.x   the compiler, in Ξ
   repl.x        the REPL / run tool (compiled to ./x)
   xc_helpers.c  C primitives (extern "C")
   fetch-seed.sh download the released seed compiler
