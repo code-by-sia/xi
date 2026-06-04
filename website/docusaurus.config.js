@@ -44,7 +44,7 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       navbar: {
-        title: 'X',
+        title: 'The X Programming Language',
         logo: {alt: 'X logo', src: 'img/logo.svg', srcDark: 'img/logo-white.svg'},
         items: [
           {href: 'https://github.com/code-by-sia/x', label: 'GitHub', position: 'right'},
