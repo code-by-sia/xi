@@ -19,3 +19,43 @@
   --ifm-color-primary-lighter: #bec8ff;
   --ifm-color-primary-lightest: #f0f3ff;
 }
+
+/* ── Landing-page hero (docs/index.md) ─────────────────────────────────── */
+.hero-x {
+  text-align: center;
+  padding: 1.5rem 1rem 2rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+.hero-x__logo {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 0.5rem;
+}
+.hero-x__title {
+  font-size: 2.5rem;
+  line-height: 1.1;
+  margin: 0.4rem 0 0.6rem;
+  letter-spacing: -0.02em;
+}
+.hero-x__tagline {
+  max-width: 42rem;
+  margin: 0 auto 1.4rem;
+  font-size: 1.15rem;
+  color: var(--ifm-color-emphasis-700);
+}
+.hero-x__cta {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 0;
+}
+/* Swap the logo by color mode (light SVG is dark navy; dark SVG is white). */
+[data-theme='light'] .hero-x__logo--dark { display: none; }
+[data-theme='dark'] .hero-x__logo--light { display: none; }
+
+@media (max-width: 600px) {
+  .hero-x__title { font-size: 2rem; }
+  .hero-x__tagline { font-size: 1.05rem; }
+}

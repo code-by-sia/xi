@@ -1,28 +1,44 @@
-# The X Programming Language
+---
+title: The X Programming Language
+hide_title: true
+sidebar_label: Overview
+slug: /
+---
 
-![X logo](assets/logo.svg)
+<div class="hero-x">
+  <img class="hero-x__logo hero-x__logo--light" src="/x/img/logo.svg" alt="X logo" width="88" height="88" />
+  <img class="hero-x__logo hero-x__logo--dark" src="/x/img/logo-white.svg" alt="X logo" width="88" height="88" />
+  <h1 class="hero-x__title">The X Programming Language</h1>
+  <p class="hero-x__tagline">
+    A statically-typed, ahead-of-time compiled language that makes
+    <strong>dependency injection</strong>, <strong>function intent</strong>, and
+    <strong>refined types</strong> first-class — compiled to native binaries
+    through C, and self-hosting.
+  </p>
+  <p class="hero-x__cta">
+    <a class="button button--primary button--lg" href="/x/getting-started">Get started →</a>
+    <a class="button button--secondary button--lg" href="https://github.com/code-by-sia/x">GitHub</a>
+  </p>
+</div>
 
-X is a statically-typed, ahead-of-time compiled language that elevates patterns
-usually left to frameworks — **dependency injection**, **function intent**,
-**refined types** — into first-class language features. It compiles to native
-executables through C.
-
-The compiler is **written in X itself** (`compiler/xc.x`) and is **self-hosting**:
-it compiles its own source. The only non-X code is a small C runtime (the
-equivalent of a language's libc/libcore).
+The compiler is **written in X itself** (`compiler/xc.x`) and is **self-hosting** —
+it compiles its own source to a byte-identical fixpoint. The only non-X code is a
+small C runtime (the equivalent of a language's libc/libcore).
 
 ## Highlights
 
-- **Refined types** — `type Age = Number where value >= 0 and value <= 130`
+- **Refined types** — `type Age = Number where value >= 0 and value <= 130`,
+  checked at construction.
 - **Seven function kinds** — `mapper`, `projector`, `predicate`, `consumer`,
-  `producer`, `reducer`, `creator` — intent is syntactic.
+  `producer`, `reducer`, `creator`: intent is syntactic.
 - **Dependency injection** in the language — `deps { ... }`, `module { bind ... }`,
   `App.resolve(Interface)`, conditional `when` bindings, `singleton`/`transient`.
-- **`where`-guarded overloading** — multiple functions with one name, selected at
-  runtime by a guard.
+- **`where`-guarded overloading** — multiple functions with one name, selected by
+  a guard.
+- **Decision tables, interrupts, atoms & machines** — business rules, resumable
+  conditions, active-state stores, and finite state machines as language features.
 - **Error handling** — `T!` result types, `ok`/`err`, and `?` propagation.
-- **`match`** expressions over literals and bindings.
-- **Multi-file projects** — `import "file.x"` and `namespace a.b`.
+- **Serialization** — a built-in [`std/json`](serialization.md) library.
 - **Native output** — compiles to a standalone binary via C; no VM, no GC.
 
 ## A taste
@@ -48,4 +64,4 @@ async entry main(args: String[]) -> Integer {
 $ ./compiler/xc examples/greeting.x && ./examples/greeting
 ```
 
-Continue with [Getting started](getting-started.md).
+Ready? Head to [Getting started](getting-started.md).
