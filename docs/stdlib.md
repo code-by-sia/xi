@@ -89,6 +89,32 @@ let r = convert.parseInteger("42")
 if isOk(r) { system.stdout.writeln("got " + r.value) }
 ```
 
+### `json` — `std/json.x`
+
+X's **serialization** library. `Json` is an opaque value tree; build it with the
+constructors, compose with `set`/`push`, render with `stringify`/`pretty`, and
+read text back with `parse`. See [Serialization](serialization.md) for the full
+guide.
+
+| Function | Signature |
+|----------|-----------|
+| `nul` | `() -> Json` |
+| `of` | `(Bool) -> Json` |
+| `num` / `int` | `(Number) -> Json` / `(Integer) -> Json` |
+| `str` | `(String) -> Json` |
+| `array`, `object` | `() -> Json` |
+| `push` | `(Json, Json) -> Json` (append to array; returns it) |
+| `set` | `(Json, String, Json) -> Json` (set object key; returns it) |
+| `stringify`, `pretty` | `(Json) -> String` |
+| `parse` | `(String) -> Json` (check with `isValid`) |
+| `isValid` | `predicate (Json)` |
+| `kind`, `length` | `(Json) -> Integer` |
+| `isNull` … `isObject` | `predicate (Json)` |
+| `at` | `(Json, Integer) -> Json` (array element) |
+| `get`, `has`, `keyAt` | object access |
+| `asString`, `asNumber`, `asBool` | leaf coercion |
+| `getString`, `getNumber` | `(Json, String) -> …` (field shortcut) |
+
 ### `io` — `std/io.x`
 
 | Function | Signature |

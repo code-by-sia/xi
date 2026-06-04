@@ -145,6 +145,11 @@ typedef struct { bool ok; xc_bytes_t value; xc_string_t err; } xc_res_bytes_t;
 typedef struct { bool has_value; xc_bytes_t value; }           xc_opt_bytes_t;
 typedef struct { xc_bytes_t* data; xc_size_t len; xc_size_t cap; } xc_arr_bytes_t;
 
+/* JSON value — an opaque, heap-allocated DOM node used by std/json (the
+   serialization library). It is referenced from X as the `Json` type; the
+   struct itself is private to runtime.c. */
+typedef struct xc_json_node* xc_Json_t;
+
 /* Number → string */
 static inline xc_string_t xc_number_to_string(xc_number_t n) {
     char buf[64];

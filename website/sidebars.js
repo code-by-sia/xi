@@ -14,11 +14,12 @@ const sidebars = {
     'atoms',
     'machines',
     'stdlib',
+    'serialization',
     'internals',
     {
       type: 'category',
       label: 'Proposals (draft)',
-      items: ['proposals/state-machines', 'proposals/decision-tables'],
+      items: ['proposals/event-system', 'proposals/state-machines', 'proposals/decision-tables'],
     },
   ],
 };
