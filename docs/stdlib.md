@@ -1,6 +1,6 @@
 # Standard library
 
-The standard library lives in `std/` as ordinary Ξ modules that wrap C runtime
+The standard library lives in `std/` as ordinary Xi modules that wrap C runtime
 primitives. Import a module and call it through its namespace:
 
 ```x
@@ -91,7 +91,7 @@ if isOk(r) { system.stdout.writeln("got " + r.value) }
 
 ### `json` — `std/json.x`
 
-Ξ's **serialization** library. `Json` is an opaque value tree; build it with the
+Xi's **serialization** library. `Json` is an opaque value tree; build it with the
 constructors, compose with `set`/`push`, render with `stringify`/`pretty`, and
 read text back with `parse`. See [Serialization](serialization.md) for the full
 guide.
@@ -164,7 +164,7 @@ receive). See [Events](events.md).
 
 ### `path` — `std/path.x`
 
-Pure-Ξ path string helpers (no I/O).
+Pure-Xi path string helpers (no I/O).
 
 | Function | Signature |
 |----------|-----------|

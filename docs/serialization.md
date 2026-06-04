@@ -1,6 +1,6 @@
 # Serialization (`std/json`)
 
-Ξ serializes data through **JSON**. The `std/json` module gives you a `Json`
+Xi serializes data through **JSON**. The `std/json` module gives you a `Json`
 value tree you can build in code, render to text, and parse back. It is the
 foundation for anything that crosses a boundary — files, sockets, HTTP bodies,
 and external [event](events.md) transports.

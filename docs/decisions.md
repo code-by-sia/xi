@@ -2,7 +2,7 @@
 
 `decision` is a function kind for expressing business rules as a list of
 `when <condition> => <result>` arms with a final `else`. It reads like a
-decision table, and the conditions are ordinary Ξ expressions — so they can call
+decision table, and the conditions are ordinary Xi expressions — so they can call
 `predicate` functions and use injected dependencies.
 
 ```x

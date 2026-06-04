@@ -45,7 +45,7 @@ const config = {
     ({
       navbar: {
         title: 'The Ξ Programming Language',
-        logo: {alt: 'Ξ logo', src: 'img/logo.svg', srcDark: 'img/logo-white.svg'},
+        logo: {alt: 'Xi logo', src: 'img/logo.svg', srcDark: 'img/logo-white.svg'},
         items: [
           {href: 'https://github.com/code-by-sia/x', label: 'GitHub', position: 'right'},
         ],

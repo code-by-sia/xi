@@ -1,6 +1,6 @@
 # Events (`listener` & `std/events`)
 
-Ξ has a built-in **typed publish/subscribe** event system. A producer publishes
+Xi has a built-in **typed publish/subscribe** event system. A producer publishes
 any **DTO** under a topic; a **`listener`** subscribed to that topic receives the
 **typed value** — never `Json`. Producers and listeners never reference each
 other, and the *same* code works whether events stay in the process or cross the
