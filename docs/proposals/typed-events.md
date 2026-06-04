@@ -1,12 +1,15 @@
 # Proposal: Application & external events — typed in-process payloads + replaceable transport
 
-> **Status: Core implemented** — see [Events](../events.md). Typed `event T`
-> declarations, `Events.emit` (typed in-process dispatch, no serialization),
-> typed `listener (e: T)`, derived `toJson`/`fromJson` codecs, external publish
-> when a non-default `PublisherService` is bound, and the inbound
-> `Events.deliver` router all ship today. Kept for the **still-proposed** parts:
-> injected `EventBus`, array fields in codecs, and async/buffered delivery. Builds
-> on [serialization](../serialization.md) and [DI](../language-guide.md).
+> **Status: Implemented (final shape differs from this draft)** — see
+> [Events](../events.md) for what shipped. The realized model: producers
+> `events.publish(topic, dto)` through an injected `PublisherService`; typed
+> `listener (e: T) on "topic"` receive the DTO; events travel as a type-erased
+> envelope; the default `MemoryBus`/`MemoryConsumer` queue in memory with **no
+> serialization** and a pump (`Events.run`) drains them; external transports
+> serialize via `Events.encode`/`decode`. This document is kept as the original
+> design notes (it used an `Events.emit` builtin and topic-from-type); **the docs
+> are the source of truth.** Remaining future work: array fields in the derived
+> codec, and async/buffered delivery.
 
 ## Why
 

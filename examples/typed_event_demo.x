@@ -1,26 +1,29 @@
-// Typed application & external events.
+// Typed events with a swappable transport.
 //
-// `event T { … }` declares a typed event. `Events.emit(value)` dispatches it
-// directly to typed `listener (e: T)` methods — in-process, with NO serialization.
-// Binding a non-default PublisherService makes emit ALSO serialize and ship the
-// event on the wire (serialize only at the boundary). An inbound transport hands
-// received messages to `Events.deliver(topic, json)`, which deserializes and
-// dispatches to the same typed listeners.
+// A producer publishes any DTO under a topic via an injected PublisherService;
+// a `listener` subscribes to a topic and receives the TYPED DTO (no JSON). The
+// only thing that differs between application and external events is which
+// PublisherService / ConsumerService is bound:
+//
+//   * default (MemoryBus / MemoryConsumer): the event is queued in memory and the
+//     typed value is passed straight to listeners — NO serialization.
+//   * a developer's transport serializes on publish and deserializes on receive,
+//     using Events.encode / Events.decode — JSON lives only inside that transport.
 import "std/json.x"
 import "std/events.x"
 
 event OrderPaid { id: String, item: String, total: Number }
 
-// ── A producer emits the domain value it already has — no Json building ──────
+// ── Producer: publish any DTO under a topic ─────────────────────────────────
 interface Store { producer checkout(item: String, total: Number) }
 class Shop implements Store {
-    deps {}
+    deps { events: PublisherService }
     producer checkout(item: String, total: Number) {
-        Events.emit(OrderPaid { id: "o-42", item: item, total: total })
+        events.publish("order.paid", OrderPaid { id: "o-42", item: item, total: total })
     }
 }
 
-// ── Typed listeners: the parameter TYPE is the subscription ──────────────────
+// ── Listeners: typed DTO, no JSON ───────────────────────────────────────────
 interface Mailer { consumer send(to: String, body: String) }
 class StdoutMailer implements Mailer {
     deps {}
@@ -28,37 +31,27 @@ class StdoutMailer implements Mailer {
 }
 
 class Receipts {
-    deps { mailer: Mailer }                 // listeners get their own deps wired
-    listener onPaid(e: OrderPaid) {
+    deps { mailer: Mailer }                       // a listener gets its own deps wired
+    listener onPaid(e: OrderPaid) on "order.paid" {
         mailer.send("buyer@x.dev", "Paid " + e.total + " for " + e.item)
     }
 }
 class Audit {
     deps {}
-    listener log(e: OrderPaid) { system.stdout.writeln("[audit] " + e.id + " " + e.item) }
-}
-
-// ── An external transport — serialize and ship (here, just print the bytes) ──
-class WireBus implements PublisherService {
-    deps {}
-    producer publish(topic: String, payload: Json) {
-        system.stdout.writeln("[wire>] " + topic + " " + json.stringify(payload))
-    }
+    listener log(e: OrderPaid) on "order.paid" { system.stdout.writeln("[audit] " + e.id + " " + e.item) }
 }
 
 async entry main(args: String[]) -> Integer {
     let shop = App.resolve(Store)
-
-    system.stdout.writeln("== emit: typed local dispatch + external publish ==")
     shop.checkout("book", 29.0)
+    shop.checkout("pen", 3.5)
 
-    system.stdout.writeln("== inbound from the wire: deserialize + typed dispatch ==")
-    let body = "{\"id\":\"r1\",\"item\":\"remote-widget\",\"total\":99}"
-    Events.deliver("OrderPaid", json.parse(body))
+    // Drive the pump: deliver queued events to the listeners (no serialization).
+    Events.run()
     return 0
 }
 
-// Replace the publisher to make events external; producers/listeners are unchanged.
-module App {
-    bind PublisherService -> WireBus as singleton
-}
+// No binding needed — MemoryBus / MemoryConsumer are the defaults. To go external,
+// bind your own PublisherService (serialize + send) and ConsumerService (receive
+// + deserialize + Events.dispatch); producers and listeners stay unchanged.
+module App {}

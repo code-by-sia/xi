@@ -150,12 +150,18 @@ typedef struct { xc_bytes_t* data; xc_size_t len; xc_size_t cap; } xc_arr_bytes_
    struct itself is private to runtime.c. */
 typedef struct xc_json_node* xc_Json_t;
 
-/* Event system (std/events). The runtime holds a registry of listeners keyed by
-   a topic pattern ("a.b" exact, or "a.*" prefix). A listener is a generated
-   trampoline taking the topic and the serializable payload. */
-typedef void (*xc_event_handler_t)(xc_string_t topic, xc_Json_t payload);
-void xstd_event_register(xc_string_t pattern, xc_event_handler_t fn);
-void xstd_event_publish(xc_string_t topic, xc_Json_t payload);
+/* Event system (std/events). An event is a type-erased envelope: a topic, the
+   payload's type name, and an opaque pointer to a heap copy of the typed value.
+   The default transport moves envelopes through an in-memory FIFO with no
+   serialization; external transports (de)serialize the payload themselves. */
+typedef struct xc_event_env* xc_Event_t;
+xc_Event_t   xstd_event_make(xc_string_t topic, xc_string_t type, void* payload);
+xc_string_t  xstd_event_topic(xc_Event_t);
+xc_string_t  xstd_event_type(xc_Event_t);
+void*        xstd_event_payload(xc_Event_t);
+void         xstd_eventq_push(xc_Event_t);
+xc_integer_t xstd_eventq_len(void);
+xc_Event_t   xstd_eventq_shift(void);
 
 /* Number → string */
 static inline xc_string_t xc_number_to_string(xc_number_t n) {

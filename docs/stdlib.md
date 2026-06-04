@@ -117,23 +117,25 @@ guide.
 
 ### `events` — `std/events.x`
 
-Built-in **publish/subscribe**. Producers depend on `PublisherService` and call
-`publish(topic, payload)`; `listener` methods subscribe with `on "topic"` and
-receive an `Event` (`{ topic: String, payload: Json }`). The default `LocalBus`
-dispatches synchronously in-process; bind a different `PublisherService` to swap
-transport. See [Events](events.md).
+Built-in **typed publish/subscribe**. A producer publishes any DTO under a topic
+through an injected `PublisherService`; a `listener` subscribes to a topic and
+receives the **typed DTO** — no JSON. The default `MemoryBus`/`MemoryConsumer`
+queue events in memory and pass the typed value through without serialization;
+bind your own transport to go external (serialize on publish, deserialize on
+receive). See [Events](events.md).
 
 | Name | Kind / Signature |
 |------|------------------|
-| `event T { … }` | a typed event; `Events.emit(T{…})` dispatches it (no serialization) |
-| `listener f(e: T)` | typed subscriber (the parameter type is the channel) |
-| `Events.emit(value)` | built-in: typed in-process dispatch (+ external if a transport is bound) |
-| `Events.deliver(topic, json)` | built-in: inbound router (deserialize → typed dispatch) |
-| `Event` | `type { topic: String, payload: Json }` (string-topic tier) |
-| `PublisherService` | `interface { producer publish(String, Json) }` (outbound transport) |
-| `LocalBus` | default `PublisherService` (in-process, synchronous) |
-| `ConsumerService` | inbound transport seam (`consumer run()`) |
-| `listener f(e: Event) on "topic"` | string-topic subscriber (`.*` = prefix) |
+| `event T { … }` | a typed event DTO (publishable; gets a derived codec) |
+| `events.publish(topic, dto)` | publish any DTO under a topic (via `PublisherService`) |
+| `listener f(e: T) on "topic"` | typed subscriber for a topic |
+| `PublisherService` | `interface { producer publish(e: Event) }` — outbound transport |
+| `ConsumerService` | `interface { consumer run() }` — the delivery pump |
+| `MemoryBus` / `MemoryConsumer` | defaults: in-memory queue, no serialization |
+| `Events.run()` | run the pump (resolve + run the `ConsumerService`) |
+| `Events.dispatch(e)` | deliver an envelope to its typed listeners |
+| `Events.encode(e)` / `Events.decode(topic, type, json)` | codec helpers for transports |
+| `Events.topic(e)` / `Events.type(e)` | envelope accessors |
 
 ### `io` — `std/io.x`
 

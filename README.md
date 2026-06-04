@@ -51,10 +51,11 @@ module App {}                             // resolution is automatic
 - **Machines** — finite state machines as immutable values: named `states`,
   legal-transition graph, illegal moves raise the resumable `IllegalTransition`
   interrupt. See [`docs/machines.md`](docs/machines.md).
-- **Events** — built-in publish/subscribe. Typed `event T` + `Events.emit` give
-  zero-serialization in-process dispatch to typed `listener (e: T)`s; string-topic
-  events carry `Json`; and the transport is DI-swappable, serializing only when an
-  event crosses the process boundary. See [`docs/events.md`](docs/events.md).
+- **Events** — built-in typed publish/subscribe. Producers `publish(topic, dto)`
+  any DTO; the `listener` kind subscribes to a topic and receives the **typed**
+  value (no JSON). The default transport queues in memory with zero serialization;
+  bind your own `PublisherService`/`ConsumerService` to go external — producers and
+  listeners are unchanged. See [`docs/events.md`](docs/events.md).
 - **Refined types** carry constraints (`type Age = Number where value >= 0`)
   that are **checked at construction**.
 - **Result-based error handling** (`T!`, `ok`/`err`, `?` propagation) — no

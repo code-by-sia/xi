@@ -1,15 +1,13 @@
 # Proposal: Event system — publish/subscribe with `listener`
 
-> **Status: Core implemented** — see [Events](../events.md). The `listener` kind,
-> the `Event` type, `PublisherService` + the default in-process `LocalBus`,
-> auto-discovery, and `prefix.*` matching all ship today. This document is kept
-> for the **still-proposed** extensions below: typed payloads, a swappable
-> consumer-side `ConsumerService`, async/buffered delivery, and richer topic
-> matching. It builds on the shipped [serialization library](../serialization.md)
-> (`std/json`) and [dependency injection](../language-guide.md).
->
-> The typed-payload + application-vs-external direction is designed in detail in
-> [Application & external events](typed-events.md).
+> **Status: Superseded** by the typed event model — see [Events](../events.md).
+> This original draft used string topics with `Json` payloads
+> (`publish(topic, Json)`, `listener (e: Event) on "topic"`); that API has been
+> **replaced** by typed DTOs (`events.publish(topic, dto)`, `listener (e: T) on
+> "topic"`) so the payload is never `Json` in user code, with serialization
+> confined to external transports. Kept for historical context. The realized
+> direction is in [Application & external events](typed-events.md); the
+> [Events](../events.md) page is the source of truth.
 
 ## Why
 

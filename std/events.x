@@ -1,63 +1,63 @@
-// std/events — pub/sub event system.  import "std/events.x"
+// std/events — typed pub/sub event system.  import "std/events.x"
 //
-// Two ways to send events:
+// A producer publishes any DTO under a topic through an injected
+// `PublisherService`:
 //
-//  1. Typed application events (no serialization). Declare `event T { … }`, then
-//     `Events.emit(T { … })` dispatches the value directly to typed `listener
-//     (e: T)` methods, in-process. The `Events` facility is built into the
-//     language; you do not inject it.
+//     deps { events: PublisherService }
+//     events.publish("order.paid", OrderPaid { ... })
 //
-//  2. String-topic events. A producer injects a `PublisherService` and calls
-//     `bus.publish(topic, payload)` with a `Json` payload; `listener (e: Event)
-//     on "topic"` methods receive them. The default `LocalBus` dispatches
-//     in-process and synchronously.
+// A `listener` subscribes to a topic and receives the TYPED DTO — no JSON:
 //
-// Crossing the process boundary: bind a non-default `PublisherService`
-// (outbound) — `Events.emit` then ALSO serializes the typed event and publishes
-// it on the wire. An inbound transport (a `ConsumerService`) reads wire messages
-// and calls `Events.deliver(topic, json)`, which deserializes and dispatches to
-// the same typed listeners. Serialization happens only at the boundary.
+//     listener onPaid(e: OrderPaid) on "order.paid" { ... }
+//
+// An event travels as a type-erased envelope (`Event`: topic + type name + an
+// opaque pointer to the typed value). The ONLY difference between application
+// and external events is which transport is bound:
+//
+//   * default (MemoryBus / MemoryConsumer): the envelope is kept in an in-memory
+//     queue and the typed value is passed straight through — NO serialization.
+//   * developer's: serialize on publish, ship over the network, then deserialize
+//     and re-dispatch on the other side (using Events.encode / Events.decode).
+//
+// The pump (`ConsumerService.run`) drains delivered events to the listeners.
 
 import "std/json.x"
 
-// ── Event ───────────────────────────────────────────────────────────────────
-// What a listener receives: the topic that fired and its serializable payload.
-type Event = {
-    topic:   String,
-    payload: Json
-}
-
-// ── Runtime bridge ─────────────────────────────────────────────────────────
-
-extern "C" {
-    producer xstd_event_publish(topic: String, payload: Json)
-}
-
-// ── PublisherService interface ─────────────────────────────────────────────
+// ── Transport seams (replace these to go external) ──────────────────────────
 
 interface PublisherService {
-    producer publish(topic: String, payload: Json)
+    // Producers call `publish(topic, dto)`; the compiler wraps the DTO into the
+    // `Event` envelope, so an implementation receives a single `Event`.
+    producer publish(e: Event)
 }
 
-// ── LocalBus: default in-process, synchronous implementation ──────────────
-
-class LocalBus implements PublisherService {
-    deps {}
-
-    producer publish(topic: String, payload: Json) {
-        xstd_event_publish(topic, payload)
-    }
-}
-
-// ── ConsumerService: the inbound seam (the "system listener" to replace) ─────
-// An external transport implements `run` to pull a message off the wire and feed
-// it to `Events.deliver(topic, payload)`, which routes it to the typed listeners.
-// The default does nothing (in-process apps need no inbound pump).
 interface ConsumerService {
+    // The pump: deliver queued/received events to their listeners.
     consumer run()
 }
 
-class LocalConsumer implements ConsumerService {
+// ── Runtime bridge: the in-memory queue ─────────────────────────────────────
+
+extern "C" {
+    producer xstd_eventq_push(e: Event)
+    mapper   xstd_eventq_len() -> Integer
+    producer xstd_eventq_shift() -> Event
+}
+
+// ── Default in-process transport: a queue, no serialization ─────────────────
+
+class MemoryBus implements PublisherService {
     deps {}
-    consumer run() { }
+    producer publish(e: Event) {
+        xstd_eventq_push(e)
+    }
+}
+
+class MemoryConsumer implements ConsumerService {
+    deps {}
+    consumer run() {
+        while xstd_eventq_len() > 0 {
+            Events.dispatch(xstd_eventq_shift())
+        }
+    }
 }

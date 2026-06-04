@@ -672,7 +672,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             return ExprRes { code: "system", pos: pos + 1, xtyp: "ns:system" }
         }
         if txt == "Events" {
-            // built-in event facility: Events.emit(value) / Events.deliver(topic, json)
+            // built-in event facility: Events.dispatch/encode/decode/topic/type/run
             return ExprRes { code: "", pos: pos + 1, xtyp: "events:" }
         }
         if isModuleNameC(ctx.prog, txt) {
@@ -702,21 +702,29 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if k == 107 or k == 129 {
             let fld = gtext(toks, p + 1)
             if gkind(toks, p + 2) == 100 {
-                if typ == "events:" and fld == "emit" {
-                    // Events.emit(value): typed in-process dispatch by the value's
-                    // static type (no serialization). p+2 is '(', p+3 the arg.
-                    let a = genExpr(toks, p + 3, ctx)
-                    code = "xc_emit_" + a.xtyp + "(" + a.code + ")"
-                    typ = ""
-                    p = a.pos
-                    if gkind(toks, p) == 101 { p = p + 1 }   // ')'
-                } else {
-                if typ == "events:" and fld == "deliver" {
-                    // Events.deliver(topic, json): inbound router (external -> typed)
+                if typ == "events:" {
+                    // Built-in event facility (over the type-erased envelope).
                     let al = genArgs(toks, p + 2, ctx)
-                    code = "xc_event_deliver(" + al.code + ")"
-                    typ = ""
+                    if fld == "dispatch" { code = "xc_event_dispatch(" + al.code + ")"  typ = "" }
+                    if fld == "encode"   { code = "xc_event_encode(" + al.code + ")"    typ = "Json" }
+                    if fld == "decode"   { code = "xc_event_decode(" + al.code + ")"    typ = "Event" }
+                    if fld == "topic"    { code = "xstd_event_topic(" + al.code + ")"   typ = "String" }
+                    if fld == "type"     { code = "xstd_event_type(" + al.code + ")"    typ = "String" }
+                    if fld == "run"      { code = "xc_events_run()"  typ = "" }
                     p = al.pos
+                } else {
+                if typ == "PublisherService" and fld == "publish" {
+                    // publish(topic, dto): wrap the typed DTO into an Event envelope.
+                    let recv = code
+                    let topicE = genExpr(toks, p + 3, ctx)
+                    let q = topicE.pos
+                    if gkind(toks, q) == 106 { q = q + 1 }   // ','
+                    let dtoE = genExpr(toks, q, ctx)
+                    code = recv + ".vtable->publish(" + recv + ".self, xc_wrap_" + dtoE.xtyp
+                         + "(" + topicE.code + ", " + dtoE.code + "))"
+                    typ = ""
+                    p = dtoE.pos
+                    if gkind(toks, p) == 101 { p = p + 1 }   // ')'
                 } else {
                 let al = genArgs(toks, p + 2, ctx)
                 if startsWith2(typ, "atom:") {
@@ -2398,104 +2406,97 @@ mapper genEventCodecs(prog: Program) -> String {
 
 // Forward declarations for the typed emitters and the inbound router, so call
 // sites (in producer bodies) resolve before the definitions.
+// Forward declarations for the per-type wrap helpers and the built-in event
+// facility, so producer/consumer bodies resolve before the definitions.
 mapper genEventFwd(prog: Program) -> String {
     let ne = stringArrLen(prog.eventTypes)
     if ne == 0 { return "" }
-    let out = "/* === Event emit forward decls === */\n"
+    let out = "/* === Event forward decls === */\n"
     let i = 0
     while i < ne {
         let t = stringArrGet(prog.eventTypes, i)
-        out = out + "static void xc_emit_" + t + "(xc_" + t + "_t);\n"
+        out = out + "static xc_Event_t xc_wrap_" + t + "(xc_string_t, xc_" + t + "_t);\n"
         i = i + 1
     }
-    out = out + "static void xc_event_deliver(xc_string_t, xc_Json_t);\n"
+    out = out + "static void xc_event_dispatch(xc_Event_t);\n"
+    out = out + "static xc_Json_t xc_event_encode(xc_Event_t);\n"
+    out = out + "static xc_Event_t xc_event_decode(xc_string_t, xc_string_t, xc_Json_t);\n"
+    if isInterface(prog, "ConsumerService") {
+        out = out + "static void xc_events_run(void);\n"
+    }
     return out + "\n"
 }
 
-// Typed dispatch: per event type, the typed-listener trampolines, the in-process
-// fanout (xc_emit_local_T), the producer-facing emit (local + external if a
-// non-local transport is bound), and the inbound router (xc_event_deliver).
+// The typed event machinery: per-type envelope wrappers (heap-copy the DTO, no
+// serialization), the dispatcher that routes an envelope to the typed listeners,
+// and the encode/decode helpers + pump runner used by external transports.
 mapper genEventDispatch(prog: Program) -> String {
     let ne = stringArrLen(prog.eventTypes)
     if ne == 0 { return "" }
-    let ext = hasExternalPublisher(prog)
-    let out = "/* === Event dispatch (typed, in-process) === */\n"
-    let ei = 0
-    while ei < ne {
-        let t = stringArrGet(prog.eventTypes, ei)
-        let calls = ""
-        let ci = 0
-        let cn = classSpecLen(prog.classes)
-        while ci < cn {
-            let cs = classSpecGet(prog.classes, ci)
-            let mi = 0
-            let mn = methodSpecLen(cs.methList)
-            while mi < mn {
-                let ms = methodSpecGet(cs.methList, mi)
-                if ms.kind == "listener" and string_len(ms.topic) == 0 and firstParamXType(ms.params) == t {
-                    let tr = "xc_evtT_" + cs.name + "_" + ms.name
-                    out = out + "static void " + tr + "(xc_" + t + "_t e) {\n"
-                    out = out + "    xc_" + cs.name + "_" + ms.name + "_impl((void*)xc_new_" + cs.name + "(), e);\n"
-                    out = out + "}\n"
-                    calls = calls + "    " + tr + "(e);\n"
-                }
-                mi = mi + 1
-            }
-            ci = ci + 1
-        }
-        out = out + "static void xc_emit_local_" + t + "(xc_" + t + "_t e) {\n" + calls + "}\n"
-        out = out + "static void xc_emit_" + t + "(xc_" + t + "_t e) {\n"
-        out = out + "    xc_emit_local_" + t + "(e);\n"
-        if ext {
-            out = out + "    { xc_PublisherService_t __pub = xc_resolve_PublisherService();\n"
-            out = out + "      __pub.vtable->publish(__pub.self, xc_string_from_cstr(\"" + t + "\"), xc_tojson_" + t + "(e)); }\n"
-        }
-        out = out + "}\n"
-        ei = ei + 1
-    }
-    out = out + "static void xc_event_deliver(xc_string_t xc_topic, xc_Json_t xc_payload) {\n"
-    let di = 0
-    while di < ne {
-        let t = stringArrGet(prog.eventTypes, di)
-        out = out + "    if (xc_string_eq(xc_topic, xc_string_from_cstr(\"" + t + "\"))) { xc_emit_local_" + t + "(xc_fromjson_" + t + "(xc_payload)); return; }\n"
-        di = di + 1
-    }
-    out = out + "}\n\n"
-    return out
-}
-
-// Event listeners: for each `listener` method emit a trampoline that builds the
-// Event value and invokes the method on a freshly-resolved owning instance, then
-// emit xc_events_init() which registers each trampoline under its topic.
-mapper genEventInit(prog: Program) -> String {
-    let out = "/* === Event listeners === */\n"
-    let regs = ""
+    let out = "/* === Event dispatch (typed envelopes) === */\n"
+    // per-type wrap helpers: heap-copy the value into an envelope.
     let i = 0
-    let n = classSpecLen(prog.classes)
-    while i < n {
-        let cs = classSpecGet(prog.classes, i)
+    while i < ne {
+        let t = stringArrGet(prog.eventTypes, i)
+        out = out + "static xc_Event_t xc_wrap_" + t + "(xc_string_t topic, xc_" + t + "_t v) {\n"
+        out = out + "    xc_" + t + "_t* p = (xc_" + t + "_t*)malloc(sizeof(xc_" + t + "_t));\n"
+        out = out + "    if (!p) abort();\n    *p = v;\n"
+        out = out + "    return xstd_event_make(topic, xc_string_from_cstr(\"" + t + "\"), (void*)p);\n}\n"
+        i = i + 1
+    }
+    // dispatcher: typed-listener trampolines + a topic/type match table.
+    let disp = "static void xc_event_dispatch(xc_Event_t __e) {\n"
+    disp = disp + "    xc_string_t __t = xstd_event_topic(__e);\n"
+    disp = disp + "    xc_string_t __ty = xstd_event_type(__e);\n"
+    disp = disp + "    void* __pl = xstd_event_payload(__e);\n"
+    disp = disp + "    (void)__t; (void)__ty; (void)__pl;\n"
+    let ci = 0
+    let cn = classSpecLen(prog.classes)
+    while ci < cn {
+        let cs = classSpecGet(prog.classes, ci)
         let mi = 0
         let mn = methodSpecLen(cs.methList)
         while mi < mn {
             let ms = methodSpecGet(cs.methList, mi)
-            // String-topic (Json) listeners only; typed event listeners (a param
-            // of an `event` type, no `on`) are wired in genEventDispatch.
-            if ms.kind == "listener" and string_len(ms.topic) > 0 {
-                let tramp = "xc_evt_" + cs.name + "_" + ms.name
-                out = out + "static void " + tramp + "(xc_string_t xc_topic, xc_Json_t xc_payload) {\n"
-                out = out + "    xc_Event_t xc_e;\n"
-                out = out + "    xc_e.topic = xc_topic;\n"
-                out = out + "    xc_e.payload = xc_payload;\n"
-                out = out + "    xc_" + cs.name + "_" + ms.name + "_impl((void*)xc_new_" + cs.name + "(), xc_e);\n"
-                out = out + "}\n\n"
-                regs = regs + "    xstd_event_register(xc_string_from_cstr(\"" + ms.topic + "\"), " + tramp + ");\n"
+            let pt = firstParamXType(ms.params)
+            if ms.kind == "listener" and string_len(ms.topic) > 0 and isEventTypeC(prog, pt) {
+                let tr = "xc_evtT_" + cs.name + "_" + ms.name
+                out = out + "static void " + tr + "(xc_" + pt + "_t e) {\n"
+                out = out + "    xc_" + cs.name + "_" + ms.name + "_impl((void*)xc_new_" + cs.name + "(), e);\n}\n"
+                disp = disp + "    if (xc_string_eq(__t, xc_string_from_cstr(\"" + ms.topic + "\")) && xc_string_eq(__ty, xc_string_from_cstr(\"" + pt + "\"))) " + tr + "(*(xc_" + pt + "_t*)__pl);\n"
             }
             mi = mi + 1
         }
-        i = i + 1
+        ci = ci + 1
     }
-    out = out + "static void xc_events_init(void) {\n" + regs + "}\n\n"
-    return out
+    disp = disp + "}\n"
+    out = out + disp
+    // encode: payload -> Json (by type name), for external transports.
+    out = out + "static xc_Json_t xc_event_encode(xc_Event_t __e) {\n"
+    out = out + "    xc_string_t __ty = xstd_event_type(__e);\n    void* __pl = xstd_event_payload(__e);\n"
+    let ei = 0
+    while ei < ne {
+        let t = stringArrGet(prog.eventTypes, ei)
+        out = out + "    if (xc_string_eq(__ty, xc_string_from_cstr(\"" + t + "\"))) return xc_tojson_" + t + "(*(xc_" + t + "_t*)__pl);\n"
+        ei = ei + 1
+    }
+    out = out + "    return (xc_Json_t)0;\n}\n"
+    // decode: (topic, type, Json) -> envelope, for external transports.
+    out = out + "static xc_Event_t xc_event_decode(xc_string_t topic, xc_string_t type, xc_Json_t payload) {\n"
+    let di = 0
+    while di < ne {
+        let t = stringArrGet(prog.eventTypes, di)
+        out = out + "    if (xc_string_eq(type, xc_string_from_cstr(\"" + t + "\"))) return xc_wrap_" + t + "(topic, xc_fromjson_" + t + "(payload));\n"
+        di = di + 1
+    }
+    out = out + "    return xstd_event_make(topic, type, (void*)0);\n}\n"
+    // the pump: resolve the bound ConsumerService and run it.
+    if isInterface(prog, "ConsumerService") {
+        out = out + "static void xc_events_run(void) {\n"
+        out = out + "    xc_ConsumerService_t __c = xc_resolve_ConsumerService();\n"
+        out = out + "    __c.vtable->run(__c.self);\n}\n"
+    }
+    return out + "\n"
 }
 
 mapper genEntry(prog: Program) -> String {
@@ -2505,7 +2506,6 @@ mapper genEntry(prog: Program) -> String {
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
     out = out + "    xc_atoms_init();\n"
-    out = out + "    xc_events_init();\n"
     out = out + "    xc_arr_string_t xc_args;\n"
     out = out + "    xc_args.len = (xc_size_t)argc;\n"
     out = out + "    xc_args.cap = (xc_size_t)argc;\n"
@@ -2774,7 +2774,6 @@ mapper genAll(prog: Program) -> String {
          + genAtomDefs(prog)
          + genMachineDefs(prog)
          + genClassMethods(prog)
-         + genEventInit(prog)
          + genEventDispatch(prog)
          + genEntry(prog)
 }
