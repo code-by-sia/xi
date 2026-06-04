@@ -55,7 +55,13 @@ const config = {
         copyright:
           'The X programming language — Apache-2.0. Built with Docusaurus.',
       },
-      prism: {theme: themes.github, darkTheme: themes.dracula},
+      prism: {
+        theme: themes.oneLight,
+        darkTheme: themes.oneDark,
+        // typescript is loaded so `x` can be aliased to it (see
+        // src/theme/prism-include-languages.js).
+        additionalLanguages: ['typescript', 'bash', 'json', 'c'],
+      },
       colorMode: {respectPrefersColorScheme: true},
     }),
 };
