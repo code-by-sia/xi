@@ -1,6 +1,6 @@
 id = "x"
 name = "X"
-version = "0.0.5"
+version = "0.0.6"
 schema_version = 1
 authors = ["The X programming language"]
 description = "Syntax highlighting and language support for the X programming language."
