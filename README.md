@@ -189,9 +189,23 @@ class StdPricing implements Pricing {
 }
 ```
 
+For multi-dimensional rules there is also a **table form** — `in`/`out` columns
+and one `| … => … |` row per rule, with a small cell DSL (`-`, `>= n`, `[a .. b]`,
+`in {…}`, `not`, `?(expr)`):
+
+```x
+decision shipping {
+    in weight: Number   in zone: String   out cost: Number   hit first
+    |  <= 1     | "US"            =>  5 |
+    |  [1 .. 5] | -               => 15 |
+    |  -        | -               => 25 |   // default
+}
+```
+
 A decision desugars to an `if/return` chain (zero runtime overhead). See
-[decision tables](https://code-by-sia.github.io/x/decisions) and
-[`examples/decision_demo.x`](examples/decision_demo.x).
+[decision tables](https://code-by-sia.github.io/x/decisions),
+[`examples/decision_demo.x`](examples/decision_demo.x), and
+[`examples/decision_table_demo.x`](examples/decision_table_demo.x).
 
 ## A tour of the rest
 

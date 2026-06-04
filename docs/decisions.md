@@ -91,21 +91,56 @@ module App {}
 - An `else` arm is required (`decision requires an 'else' arm`).
 - A `when` after `else` is rejected (it can never match).
 
-## Beyond the when-form
+## The tabular form
 
-The form above is single-input/single-output with `hit first` — close to a
-guarded `match`. A proposed **tabular form** adds multiple input columns,
-multiple outputs, and hit policies (`unique`, `collect`) to make decisions more
-than `match`. See [the decision-tables proposal](proposals/decision-tables.md).
+For genuinely multi-dimensional rules there is a **table form**: declare `in`
+columns (which become the parameters) and a single `out` column (the result),
+then write one rule per `| … => … |` row. The first matching row wins
+(`hit first`):
+
+```x
+decision shipping {
+    in  weight: Number
+    in  zone:   String
+    out cost:   Number
+    hit first
+
+    //  weight        zone              => cost
+    |   <= 1       | "US"               =>  5  |
+    |   <= 1       | in {"CA", "MX"}    => 10  |
+    |   [1 .. 5]   | -                  => 15  |
+    |   > 5        | ?( zone == "US" )  => 30  |
+    |   -          | -                  => 25  |   // default
+}
+
+let c = shipping(0.5, "US")     // 5
+```
+
+Each input **cell** is a unary test on its column:
+
+| Cell | Means |
+|------|-------|
+| `-` | any (wildcard) |
+| `42` / `"US"` | equals |
+| `>= n`, `> n`, `<= n`, `< n` | comparison |
+| `[a .. b]` | inclusive range |
+| `in { a, b, c }` | membership |
+| `not <test>` | negation |
+| `?( <expr> )` | escape hatch: any boolean over the inputs (may call predicates) |
+
+A row whose cells are all `-` is the default. The table desugars to the same
+`if/return` chain as the when-form — zero runtime overhead — and a table
+`decision` is equally DI-injectable.
 
 ## Limitations (current)
 
-- Only `hit first` is implemented. `unique` (exactly one arm may match) and
-  other hit policies (`priority`, `collect`) are planned.
-- Single output only.
-- Arm results are expressions, not blocks.
-- Because conditions are arbitrary expressions, the compiler does not yet prove
-  completeness/overlap statically; that requires the finite-domain tabular form
-  (a future addition).
+- **`hit first`** only. `unique` (exactly one match) and `collect` (all matches /
+  aggregators) are [planned](proposals/decision-tables.md).
+- **Single `out`** column (multiple outputs / synthesized records are planned).
+- Arm/output results are expressions, not blocks.
+- Conditions are arbitrary expressions, so the compiler does not prove
+  completeness/overlap statically (a future analysis over the constrained cell
+  DSL).
 
-See `examples/decision_demo.x`.
+See `examples/decision_demo.x` (when-form) and
+`examples/decision_table_demo.x` (table form).

@@ -542,6 +542,247 @@ mapper collectArmResult(ps: PState) -> BodyResult {
     return BodyResult { bodyTokens: res, ps: ps2 }
 }
 
+// ── decision table-form ──────────────────────────────────────────────────
+// Lowers a grid `decision` to the same if/return chain as the when-form, with
+// `in` columns synthesized into params and a single `out` column as the result.
+// Core subset: in/out (single out), the cell DSL, and `hit first`.
+
+type DecisionResult = { bodyTokens: Token[], ps: PState, params: String, retCtype: String, isTable: Bool }
+
+// Build a boolean test for one input cell, with `col` as the implicit subject.
+// Returns synthesized tokens ([] = wildcard, contributes no condition).
+mapper buildCellCond(colName: String, cell: Token[], line: Integer) -> Token[] {
+    let out: Token[] = []
+    let n = tokenArrLen(cell)
+    if n == 0 { return out }
+    let f0 = tokenArrGet(cell, 0)
+    if n == 1 and f0.kind == 119 { return out }                 // '-' wildcard
+    // comparison op first: col OP rest
+    if f0.kind == 112 or f0.kind == 114 or f0.kind == 115 or f0.kind == 116 or f0.kind == 117 {
+        out = appendToken(out, mkTok(1, colName, line))
+        out = concatTokens(out, cell)
+        return out
+    }
+    // not <test>
+    if f0.kind == 227 {
+        let rest: Token[] = []
+        let k = 1
+        while k < n { rest = appendToken(rest, tokenArrGet(cell, k)) k = k + 1 }
+        out = appendToken(out, mkTok(227, "not", line))
+        out = appendToken(out, mkTok(100, "(", line))
+        out = concatTokens(out, buildCellCond(colName, rest, line))
+        out = appendToken(out, mkTok(101, ")", line))
+        return out
+    }
+    // [ lo .. hi ]  ->  ( col >= lo and col <= hi )   (inclusive range)
+    if f0.kind == 104 {
+        // split on the `..` (two consecutive '.') between '[' and ']'
+        let lo: Token[] = []
+        let hi: Token[] = []
+        let inHi = false
+        let i = 1
+        while i < n {
+            let it = tokenArrGet(cell, i)
+            if it.kind == 105 { i = n }                                  // ]
+            else {
+                if it.kind == 107 and i + 1 < n and tokenArrGet(cell, i + 1).kind == 107 {
+                    inHi = true
+                    i = i + 2
+                } else {
+                    if inHi { hi = appendToken(hi, it) } else { lo = appendToken(lo, it) }
+                    i = i + 1
+                }
+            }
+        }
+        out = appendToken(out, mkTok(100, "(", line))
+        out = appendToken(out, mkTok(1, colName, line))
+        out = appendToken(out, mkTok(117, ">=", line))
+        out = concatTokens(out, lo)
+        out = appendToken(out, mkTok(225, "and", line))
+        out = appendToken(out, mkTok(1, colName, line))
+        out = appendToken(out, mkTok(116, "<=", line))
+        out = concatTokens(out, hi)
+        out = appendToken(out, mkTok(101, ")", line))
+        return out
+    }
+    // in { a, b, ... }  ->  ( col == a or col == b ... )
+    if f0.kind == 229 {
+        out = appendToken(out, mkTok(100, "(", line))
+        let i = 1
+        if i < n and tokenArrGet(cell, i).kind == 102 { i = i + 1 }   // {
+        let firstItem = true
+        while i < n and tokenArrGet(cell, i).kind != 103 {
+            let it = tokenArrGet(cell, i)
+            if it.kind == 106 { i = i + 1 }                           // ,
+            else {
+                if not firstItem { out = appendToken(out, mkTok(226, "or", line)) }
+                out = appendToken(out, mkTok(1, colName, line))
+                out = appendToken(out, mkTok(112, "==", line))
+                out = appendToken(out, it)
+                firstItem = false
+                i = i + 1
+            }
+        }
+        out = appendToken(out, mkTok(101, ")", line))
+        return out
+    }
+    // ?( expr )  -> the inner expression verbatim (escape hatch)
+    if f0.kind == 127 {
+        let i = 1
+        if i < n and tokenArrGet(cell, i).kind == 100 { i = i + 1 }   // (
+        while i < n and tokenArrGet(cell, i).kind != 101 {
+            out = appendToken(out, tokenArrGet(cell, i))
+            i = i + 1
+        }
+        return out
+    }
+    // bare literal/ident  ->  col == <cell>
+    out = appendToken(out, mkTok(1, colName, line))
+    out = appendToken(out, mkTok(112, "==", line))
+    out = concatTokens(out, cell)
+    return out
+}
+
+// Parse one `| c1 | c2 => out |` row into an if/return (or a default return).
+mapper parseDecisionRow(ps: PState, inNames: String[]) -> BodyResult {
+    let ps2 = ps
+    let line = peek(ps2).line
+    if peek(ps2).kind == 125 { ps2 = advance(ps2) }       // leading |
+    let cond: Token[] = []
+    let condStarted = false
+    let ci = 0
+    let nCols = stringArrLen(inNames)
+    let collecting = true
+    while collecting {
+        let cell: Token[] = []
+        let d = 0
+        let cellDone = false
+        while not cellDone {
+            let c = peek(ps2)
+            if c.kind == 0 { cellDone = true collecting = false }
+            else {
+                if d == 0 and (c.kind == 125 or c.kind == 110) { cellDone = true }
+                else {
+                    if c.kind == 100 or c.kind == 104 or c.kind == 102 { d = d + 1 }
+                    if c.kind == 101 or c.kind == 105 or c.kind == 103 { d = d - 1 }
+                    cell = appendToken(cell, c)
+                    ps2 = advance(ps2)
+                }
+            }
+        }
+        if ci < nCols {
+            let cc = buildCellCond(stringArrGet(inNames, ci), cell, line)
+            if tokenArrLen(cc) > 0 {
+                if condStarted { cond = appendToken(cond, mkTok(225, "and", line)) }
+                cond = appendToken(cond, mkTok(100, "(", line))
+                cond = concatTokens(cond, cc)
+                cond = appendToken(cond, mkTok(101, ")", line))
+                condStarted = true
+            }
+        }
+        ci = ci + 1
+        if peek(ps2).kind == 125 { ps2 = advance(ps2) }                 // | -> next cell
+        else { if peek(ps2).kind == 110 { ps2 = advance(ps2) collecting = false }  // =>
+               else { collecting = false } }
+    }
+    // single output expression, up to | or }
+    let outExpr: Token[] = []
+    let d2 = 0
+    let od = false
+    while not od {
+        let c = peek(ps2)
+        if c.kind == 0 or c.kind == 103 { od = true }
+        else {
+            if d2 == 0 and c.kind == 125 { od = true }
+            else {
+                if c.kind == 100 or c.kind == 104 or c.kind == 102 { d2 = d2 + 1 }
+                if c.kind == 101 or c.kind == 105 or c.kind == 103 { d2 = d2 - 1 }
+                outExpr = appendToken(outExpr, c)
+                ps2 = advance(ps2)
+            }
+        }
+    }
+    if peek(ps2).kind == 125 { ps2 = advance(ps2) }       // trailing |
+    let body: Token[] = []
+    if condStarted {
+        body = appendToken(body, mkTok(222, "if", line))
+        body = concatTokens(body, cond)
+        body = appendToken(body, mkTok(102, "{", line))
+        body = appendToken(body, mkTok(221, "return", line))
+        body = concatTokens(body, outExpr)
+        body = appendToken(body, mkTok(103, "}", line))
+    } else {
+        body = appendToken(body, mkTok(221, "return", line))
+        body = concatTokens(body, outExpr)
+    }
+    return BodyResult { bodyTokens: body, ps: ps2 }
+}
+
+// Dispatch a `decision` body: table-form (in/out grid) or the shipped when-form.
+mapper parseDecision(name: String, ps: PState) -> DecisionResult {
+    let empty: Token[] = []
+    // probe past `{` and an optional `hit <policy>` to detect the form
+    let probe = 1
+    if peekAt(ps, probe).kind == 257 { probe = probe + 2 }
+    let det = peekAt(ps, probe)
+    let isTable = det.kind == 229 or (det.kind == 1 and det.text == "out")
+    if not isTable {
+        let br = parseDecisionBody(ps)
+        return DecisionResult { bodyTokens: br.bodyTokens, ps: br.ps, params: "", retCtype: "", isTable: false }
+    }
+    let ps2 = advance(ps)   // {
+    if peek(ps2).kind == 257 {                            // hit <policy>
+        ps2 = advance(ps2)
+        let pol = peek(ps2)
+        if pol.text != "first" { diag_error(pol.line, "decision table: only 'hit first' is supported in this version (got '" + pol.text + "')") }
+        ps2 = advance(ps2)
+    }
+    let inNames: String[] = []
+    let params = ""
+    let outCtype = ""
+    let outCount = 0
+    let cols = true
+    while cols {
+        let t = peek(ps2)
+        if t.kind == 257 { ps2 = advance(ps2) ps2 = advance(ps2) }      // stray hit
+        else {
+        if t.kind == 229 {                                              // in name : Type
+            ps2 = advance(ps2)
+            let cn = peek(ps2).text
+            ps2 = advance(ps2)
+            if peek(ps2).kind == 108 { ps2 = advance(ps2) }
+            let tr = parseTypeExpr(ps2)
+            ps2 = tr.ps
+            inNames = appendString(inNames, cn)
+            if string_len(params) > 0 { params = params + ", " }
+            params = params + tr.ctype + " " + cn
+        } else {
+        if t.kind == 1 and t.text == "out" {                            // out name : Type
+            ps2 = advance(ps2)
+            ps2 = advance(ps2)                                          // name (unused for single out)
+            if peek(ps2).kind == 108 { ps2 = advance(ps2) }
+            let tr = parseTypeExpr(ps2)
+            ps2 = tr.ps
+            outCount = outCount + 1
+            if outCount == 1 { outCtype = tr.ctype }
+            else { diag_error(t.line, "decision table: multiple 'out' columns are not yet supported (single out only)") }
+        } else { cols = false }
+        }
+        }
+    }
+    let body: Token[] = []
+    let rows = true
+    while rows {
+        if peek(ps2).kind == 125 {
+            let rr = parseDecisionRow(ps2, inNames)
+            ps2 = rr.ps
+            body = concatTokens(body, rr.bodyTokens)
+        } else { rows = false }
+    }
+    if peek(ps2).kind == 103 { ps2 = advance(ps2) }       // }
+    return DecisionResult { bodyTokens: body, ps: ps2, params: params, retCtype: outCtype, isTable: true }
+}
+
 // Parse one function/method signature + body → FuncSpec
 type FuncResult = { spec: FuncSpec, ps: PState }
 
@@ -574,11 +815,14 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
     let nameTok = peek(ps2)
     ps2 = advance(ps2)
 
-    // (params)
-    if peek(ps2).kind == 100 { ps2 = advance(ps2) }  // (
-    let pr = parseParams(ps2)
-    ps2 = pr.ps
-    if peek(ps2).kind == 101 { ps2 = advance(ps2) }  // )
+    // (params) — table-form decisions have none (columns are declared in the body)
+    let pr = ParamResult { params: "", ps: ps2 }
+    if peek(ps2).kind == 100 {  // (
+        ps2 = advance(ps2)
+        pr = parseParams(ps2)
+        ps2 = pr.ps
+        if peek(ps2).kind == 101 { ps2 = advance(ps2) }  // )
+    }
 
     // -> rettype
     let rr = parseRetType(ps2)
@@ -619,11 +863,15 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         }
     }
 
-    // body { ... }  (decisions desugar their when/else arms to an if/return chain)
+    // body { ... }  (decisions desugar to an if/return chain — when- or table-form)
     let br = parseBody(ps2)
     if kindStr == "decision" {
-        let dbr = parseDecisionBody(ps2)
-        br = dbr
+        let dr = parseDecision(nameTok.text, ps2)
+        br = BodyResult { bodyTokens: dr.bodyTokens, ps: dr.ps }
+        if dr.isTable {
+            pr = ParamResult { params: dr.params, ps: pr.ps }   // in-columns become params
+            retCtype = dr.retCtype                              // single out-column is the result
+        }
     }
     ps2 = br.ps
 
