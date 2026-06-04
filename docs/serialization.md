@@ -3,7 +3,7 @@
 X serializes data through **JSON**. The `std/json` module gives you a `Json`
 value tree you can build in code, render to text, and parse back. It is the
 foundation for anything that crosses a boundary — files, sockets, HTTP bodies,
-and the [event system](proposals/event-system.md)'s payloads.
+and external [event](events.md) transports.
 
 ```x
 import "std/json.x"
@@ -123,9 +123,10 @@ mapper userFromJson(v: Json) -> User {
 }
 ```
 
-This pairing is exactly what a serializable **event payload** needs: produce a
-`Json`, `stringify` it onto the bus, and `parse` + `fromJson` on the listener
-side. See the [event system proposal](proposals/event-system.md).
+This is what an **external event transport** does under the hood: an event's
+typed payload is turned into `Json` (`stringify`) to leave the process and rebuilt
+(`parse`) on the far side — see [Events](events.md). The `std/json` codecs for
+`event` types are derived automatically.
 
 ## Notes & limits
 
