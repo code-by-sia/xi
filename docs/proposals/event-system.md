@@ -7,6 +7,9 @@
 > consumer-side `ConsumerService`, async/buffered delivery, and richer topic
 > matching. It builds on the shipped [serialization library](../serialization.md)
 > (`std/json`) and [dependency injection](../language-guide.md).
+>
+> The typed-payload + application-vs-external direction is designed in detail in
+> [Application & external events](typed-events.md).
 
 ## Why
 
