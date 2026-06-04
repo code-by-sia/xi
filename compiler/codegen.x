@@ -742,11 +742,33 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     typ = mmn
                 } else {
                 if isMachineTypeC(ctx.prog, typ) {
-                    // machineValue.transition(args) -> xc_Machine__transition(value, args)
-                    let msep = ""
-                    if string_len(al.code) > 0 { msep = ", " }
-                    code = "xc_" + typ + "__" + fld + "(" + code + msep + al.code + ")"
-                    if fld == "isTerminal" { typ = "Bool" }
+                    if fld == "can" {
+                        // m.can(transition, args?) -> xc_M__can_<transition>(value, args?)
+                        // first arg is the transition NAME (a bare identifier).
+                        let tname = gtext(toks, p + 3)
+                        let q = p + 4
+                        if gkind(toks, q) == 106 { q = q + 1 }   // skip ',' after name
+                        let restargs = ""
+                        let firstA = true
+                        while gkind(toks, q) != 101 and gkind(toks, q) != 0 {
+                            let a = genExpr(toks, q, ctx)
+                            q = a.pos
+                            if not firstA { restargs = restargs + ", " }
+                            restargs = restargs + a.code
+                            firstA = false
+                            if gkind(toks, q) == 106 { q = q + 1 }
+                        }
+                        let csep = ""
+                        if string_len(restargs) > 0 { csep = ", " }
+                        code = "xc_" + typ + "__can_" + tname + "(" + code + csep + restargs + ")"
+                        typ = "Bool"
+                    } else {
+                        // machineValue.transition(args) -> xc_M__transition(value, args)
+                        let msep = ""
+                        if string_len(al.code) > 0 { msep = ", " }
+                        code = "xc_" + typ + "__" + fld + "(" + code + msep + al.code + ")"
+                        if fld == "isTerminal" { typ = "Bool" }
+                    }
                 } else {
                 if startsWith2(typ, "module:") and fld == "resolve" {
                     // Module.resolve(I) -> automatic interface resolver
@@ -2673,6 +2695,23 @@ mapper genAtomDefs(prog: Program) -> String {
     return out + "}\n\n"
 }
 
+// Signature suffix after `self` for a transition's params ("" or ", <params>").
+mapper machineSig(params: String) -> String {
+    if string_len(params) > 0 { return ", " + params }
+    return ""
+}
+
+// The legality condition for a transition: source-state match (&& guard).
+mapper machineCond(prog: Program, m: MachineSpec, tr: MachineTransition) -> String {
+    let cond = machineStateCond(m, tr.froms)
+    if tr.hasGuard {
+        let gctx = seedParams(mkGCtx(prog), tr.params)
+        if m.hasData { gctx = addSym(gctx, "data", m.name + "Data") }
+        cond = "(" + cond + ") && (" + genExpr(tr.guardTokens, 0, gctx).code + ")"
+    }
+    return cond
+}
+
 // Machine function prototypes (so use sites resolve regardless of order).
 mapper genMachineDecls(prog: Program) -> String {
     let out = "/* === Machine function prototypes === */\n"
@@ -2685,9 +2724,12 @@ mapper genMachineDecls(prog: Program) -> String {
         out = out + "static xc_string_t xc_" + mn + "__state(xc_" + mn + "_t self);\n"
         out = out + "static xc_bool_t xc_" + mn + "__isTerminal(xc_" + mn + "_t self);\n"
         let j = 0
-        let tn = stringArrLen(m.transNames)
+        let tn = machineTransLen(m.transitions)
         while j < tn {
-            out = out + "static xc_" + mn + "_t xc_" + mn + "__" + stringArrGet(m.transNames, j) + "(xc_" + mn + "_t self);\n"
+            let tr = machineTransGet(m.transitions, j)
+            let sig = machineSig(tr.params)
+            out = out + "static xc_" + mn + "_t xc_" + mn + "__" + tr.name + "(xc_" + mn + "_t self" + sig + ");\n"
+            out = out + "static xc_bool_t xc_" + mn + "__can_" + tr.name + "(xc_" + mn + "_t self" + sig + ");\n"
             j = j + 1
         }
         i = i + 1
@@ -2695,8 +2737,9 @@ mapper genMachineDecls(prog: Program) -> String {
     return out + "\n"
 }
 
-// Machine implementations: start, state-name, isTerminal, and one guarded
-// function per transition (illegal moves signal IllegalTransition).
+// Machine implementations: start (seeds state + data), state-name, isTerminal,
+// and per transition a guarded mover + a `can` predicate. Illegal moves (wrong
+// source state or failed guard) signal IllegalTransition.
 mapper genMachineDefs(prog: Program) -> String {
     let out = "/* === Machine implementations === */\n"
     let i = 0
@@ -2704,8 +2747,25 @@ mapper genMachineDefs(prog: Program) -> String {
     while i < n {
         let m = machineSpecGet(prog.machines, i)
         let mn = m.name
+        // start(): initial state + data initial values
         out = out + "static xc_" + mn + "_t xc_" + mn + "__start(void) {\n"
-            + "    xc_" + mn + "_t __r; __r.__state = " + int_to_string(machineStateIndex(m, m.initial)) + "; return __r;\n}\n"
+            + "    xc_" + mn + "_t __r; __r.__state = " + int_to_string(machineStateIndex(m, m.initial)) + ";\n"
+        if m.hasData {
+            let di = m.dataInit
+            let dp = 0
+            let ictx = mkGCtx(prog)
+            while gkind(di, dp) != 0 {
+                let fname = gtext(di, dp)
+                dp = dp + 1
+                if gkind(di, dp) == 111 { dp = dp + 1 }   // =
+                let e = genExpr(di, dp, ictx)
+                dp = e.pos
+                out = out + "    __r.data." + fname + " = " + e.code + ";\n"
+                if gkind(di, dp) == 106 { dp = dp + 1 }   // ,
+            }
+        }
+        out = out + "    return __r;\n}\n"
+        // state(): tag -> name
         out = out + "static xc_string_t xc_" + mn + "__state(xc_" + mn + "_t self) {\n"
         let si = 0
         let sn = stringArrLen(m.states)
@@ -2714,6 +2774,7 @@ mapper genMachineDefs(prog: Program) -> String {
             si = si + 1
         }
         out = out + "    return xc_string_from_cstr(\"?\");\n}\n"
+        // isTerminal()
         let tcsv = ""
         let ti = 0
         let ttn = stringArrLen(m.terminals)
@@ -2725,19 +2786,48 @@ mapper genMachineDefs(prog: Program) -> String {
         let tcond = "0"
         if string_len(tcsv) > 0 { tcond = machineStateCond(m, tcsv) }
         out = out + "static xc_bool_t xc_" + mn + "__isTerminal(xc_" + mn + "_t self) { return " + tcond + "; }\n"
+        // a data-local declaration reused by guard/update bodies
+        let dataLocal = ""
+        if m.hasData { dataLocal = "    xc_" + mn + "Data_t data = self.data; (void)data;\n" }
         let j = 0
-        let jn = stringArrLen(m.transNames)
+        let jn = machineTransLen(m.transitions)
         while j < jn {
-            let tname = stringArrGet(m.transNames, j)
-            let froms = stringArrGet(m.transFroms, j)
-            let toState = stringArrGet(m.transTos, j)
-            out = out + "static xc_" + mn + "_t xc_" + mn + "__" + tname + "(xc_" + mn + "_t self) {\n"
-                + "    if (" + machineStateCond(m, froms) + ") { xc_" + mn + "_t __r = self; __r.__state = " + int_to_string(machineStateIndex(m, toState)) + "; return __r; }\n"
-                + "    { xc_IllegalTransition_t __pl; __pl.from = xc_" + mn + "__state(self); __pl.to = xc_string_from_cstr(\"" + toState + "\");\n"
+            let tr = machineTransGet(m.transitions, j)
+            let sig = machineSig(tr.params)
+            let cond = machineCond(prog, m, tr)
+            let toIdx = int_to_string(machineStateIndex(m, tr.toState))
+            // update assignments (over the OLD data local; written to __r.data)
+            let upd = ""
+            if tr.hasUpdate {
+                let ut = tr.updateTokens
+                let up = 0
+                let uctx = seedParams(mkGCtx(prog), tr.params)
+                if m.hasData { uctx = addSym(uctx, "data", mn + "Data") }
+                while gkind(ut, up) != 0 {
+                    let fname = gtext(ut, up)
+                    up = up + 1
+                    if gkind(ut, up) == 108 { up = up + 1 }   // :
+                    let e = genExpr(ut, up, uctx)
+                    up = e.pos
+                    upd = upd + "        __r.data." + fname + " = " + e.code + ";\n"
+                    if gkind(ut, up) == 106 { up = up + 1 }   // ,
+                }
+            }
+            // the mover
+            out = out + "static xc_" + mn + "_t xc_" + mn + "__" + tr.name + "(xc_" + mn + "_t self" + sig + ") {\n"
+                + dataLocal
+                + "    if (" + cond + ") { xc_" + mn + "_t __r = self; __r.__state = " + toIdx + ";\n"
+                + upd
+                + "        return __r; }\n"
+                + "    { xc_IllegalTransition_t __pl; __pl.from = xc_" + mn + "__state(self); __pl.to = xc_string_from_cstr(\"" + tr.toState + "\");\n"
                 + "      xc_handler_t* __hh = xc_int_find(XC_INT_IllegalTransition);\n"
                 + "      if (__hh == ((void*)0)) xc_int_unhandled(\"IllegalTransition\");\n"
                 + "      if (!__hh->fn(&__pl)) longjmp(__hh->unwind, 1); }\n"
                 + "    return self;\n}\n"
+            // the can predicate
+            out = out + "static xc_bool_t xc_" + mn + "__can_" + tr.name + "(xc_" + mn + "_t self" + sig + ") {\n"
+                + dataLocal
+                + "    return (" + cond + ");\n}\n"
             j = j + 1
         }
         i = i + 1

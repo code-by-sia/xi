@@ -49,8 +49,9 @@ module App {}                             // resolution is automatic
 - **Atoms** — active-state stores: an immutable `state` changed only via
   `transition` reducers (Redux-style). See [`docs/atoms.md`](docs/atoms.md).
 - **Machines** — finite state machines as immutable values: named `states`,
-  legal-transition graph, illegal moves raise the resumable `IllegalTransition`
-  interrupt. See [`docs/machines.md`](docs/machines.md).
+  machine-wide `data`, transitions with parameters, `where` guards and `update`
+  clauses, `.can(...)`, and illegal moves that raise the resumable
+  `IllegalTransition` interrupt. See [`docs/machines.md`](docs/machines.md).
 - **Events** — built-in typed publish/subscribe. Producers `publish(topic, dto)`
   any DTO; the `listener` kind subscribes to a topic and receives the **typed**
   value (no JSON). The default transport queues in memory with zero serialization;

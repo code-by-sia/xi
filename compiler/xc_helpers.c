@@ -76,6 +76,7 @@ DEFINE_TYPED_ARR(xc_ModuleSpec_t,  xc_arr_ModuleSpec_t,  appendModuleSpec)
 DEFINE_TYPED_ARR(xc_FuncSpec_t,    xc_arr_FuncSpec_t,    appendFuncSpec)
 DEFINE_TYPED_ARR(xc_AtomSpec_t,    xc_arr_AtomSpec_t,    appendAtomSpec)
 DEFINE_TYPED_ARR(xc_MachineSpec_t, xc_arr_MachineSpec_t, appendMachineSpec)
+DEFINE_TYPED_ARR(xc_MachineTransition_t, xc_arr_MachineTransition_t, appendMachineTransition)
 
 /* ─── Token array ────────────────────────────────────────────────────────── */
 
@@ -153,6 +154,9 @@ xc_AtomSpec_t atomSpecGet(xc_arr_AtomSpec_t a, xc_integer_t i) { return appendAt
 
 xc_integer_t machineSpecLen(xc_arr_MachineSpec_t a)  { return appendMachineSpec_len(a); }
 xc_MachineSpec_t machineSpecGet(xc_arr_MachineSpec_t a, xc_integer_t i) { return appendMachineSpec_get(a, i); }
+
+xc_integer_t machineTransLen(xc_arr_MachineTransition_t a) { return appendMachineTransition_len(a); }
+xc_MachineTransition_t machineTransGet(xc_arr_MachineTransition_t a, xc_integer_t i) { return appendMachineTransition_get(a, i); }
 
 /* ─── String utility ─────────────────────────────────────────────────────── */
 

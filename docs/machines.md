@@ -61,6 +61,50 @@ try {
 }
 ```
 
+## Data, parameters, guards & updates
+
+A machine may carry **machine-wide `data`** (extended state), and a transition may
+take **parameters**, be gated by a **`where` guard**, and **`update`** the data:
+
+```x
+machine Lock {
+    states  Locked, Open
+    initial Locked
+    data { code: String = "1234", attempts: Integer = 0 }   // context + initial values
+
+    unlock(attempt: String) : Locked -> Open
+        where attempt == data.code                          // guard gates the move
+        update { attempts: 0 }                              // next context (partial)
+
+    fail(attempt: String) : Locked -> Locked
+        where attempt != data.code
+        update { attempts: data.attempts + 1 }
+
+    lock : Open -> Locked
+}
+```
+
+- **`data { f: T = expr, … }`** declares the context; `Lock.start()` seeds it with
+  the initial expressions. Read it with **`value.data.f`**.
+- A transition **`name(params) : from… -> to`** may add:
+  - **`where <guard>`** — a boolean over the params and `data`; the move is legal
+    only if the source state matches **and** the guard holds. A failed guard is an
+    illegal move (signals `IllegalTransition`), exactly like a wrong source state.
+  - **`update { f: expr, … }`** — produces the next context; only the listed fields
+    change (the rest carry over). `expr` may read `data` (the old context) and the
+    params.
+- **`value.can(name, args…)`** reports whether a transition would be legal (source
+  state + guard) **without** performing it.
+
+```x
+let l = Lock.start()             // Locked, attempts=0
+l = l.fail("0000")               // guard holds -> stays Locked, attempts=1
+if l.can(unlock, "1234") { l = l.unlock("1234") }   // -> Open, attempts reset to 0
+system.stdout.writeln(l.state + " / " + l.data.attempts)
+```
+
+Guards are written on the line following the arrow; `update` blocks may span lines.
+
 ## Lowering
 
 A machine compiles to a small integer tag plus pure functions — no runtime
@@ -87,8 +131,9 @@ an atom when you just need one evolving piece of state.
 
 ## Notes & limits
 
-- The state is the only thing carried — per-state data payloads and transition
-  guards are [proposed](proposals/state-machines.md), not yet implemented.
+- `data` is **machine-wide context** shared by all states. **Per-state** data
+  (distinct fields per state) needs sum types and isn't supported yet.
 - Transitions are synchronous and single-threaded.
 
-See `examples/machine_demo.x`.
+See `examples/machine_demo.x` (data-less) and `examples/machine_data_demo.x`
+(data + guards + `update` + `can`).

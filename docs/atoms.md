@@ -54,8 +54,8 @@ atom.
 - A `state` whose fields use only `String[]`/user-type arrays is fine; primitive
   arrays (`Integer[]`) aren't supported yet (a general limitation).
 
-A higher-level **state machine** layer (named states, legal-transition graph,
-guards) builds on atoms — see the
-[atoms & state machines proposal](proposals/state-machines.md).
+A higher-level **state machine** layer (named states, a legal-transition graph,
+machine-wide `data`, and `where` guards) is also available — see
+[Machines](machines.md).
 
 See `examples/atom_demo.x`.

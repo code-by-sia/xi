@@ -259,15 +259,29 @@ type AtomSpec = {
     transitions:   FuncSpec[] // transition f(s: T, ...) -> T { body }
 }
 
-// A `machine` (finite state machine). MVP: data-less named states.
+// One arrow of a machine: name(params) : from(,from)* -> to [where g] [update {..}]
+type MachineTransition = {
+    name:        String,
+    params:      String,      // C param string ("" if none)
+    froms:       String,      // comma-joined source states
+    toState:     String,
+    hasGuard:    Bool,
+    guardTokens: Token[],     // boolean over params + `data` (no `where`)
+    hasUpdate:   Bool,
+    updateTokens: Token[]     // tokens inside `update { field: expr, ... }`
+}
+
+// A `machine` (finite state machine): named states, optional machine-wide `data`
+// context, and transitions with optional params / `where` guards / `update`.
 type MachineSpec = {
-    name:       String,
-    states:     String[],    // ordered; index = state id
-    initial:    String,
-    terminals:  String[],
-    transNames: String[],
-    transFroms: String[],    // parallel to transNames: comma-joined source states
-    transTos:   String[]     // parallel: destination state
+    name:        String,
+    states:      String[],    // ordered; index = state id
+    initial:     String,
+    terminals:   String[],
+    hasData:     Bool,
+    dataFields:  String[],    // "name:ctype" for the data context
+    dataInit:    Token[],     // tokens inside `data { name: T = expr, ... }`
+    transitions: MachineTransition[]
 }
 
 // The whole program
@@ -302,6 +316,9 @@ extern "C" {
     mapper appendMachineSpec(arr: MachineSpec[], s: MachineSpec) -> MachineSpec[]
     mapper machineSpecLen(arr: MachineSpec[]) -> Integer
     mapper machineSpecGet(arr: MachineSpec[], i: Integer) -> MachineSpec
+    mapper appendMachineTransition(arr: MachineTransition[], s: MachineTransition) -> MachineTransition[]
+    mapper machineTransLen(arr: MachineTransition[]) -> Integer
+    mapper machineTransGet(arr: MachineTransition[], i: Integer) -> MachineTransition
 
     mapper methodSpecLen(arr: MethodSpec[]) -> Integer
     mapper methodSpecGet(arr: MethodSpec[], i: Integer) -> MethodSpec
@@ -1056,8 +1073,11 @@ mapper parseAtom(ps: PState) -> AtomResult {
 
 type MachineResult = { spec: MachineSpec, ps: PState }
 
-// machine Name { states A,B,C  initial A  [terminal X,Y | -]  (t : From(,From)* -> To)* }
-// MVP: data-less. Payloads/guards/update are rejected with a diagnostic.
+// machine Name {
+//   states A,B,C   initial A   [terminal X,Y | -]
+//   [data { f: T = expr, ... }]
+//   ( name[(params)] : From(,From)* -> To  [where <guard>]  [update { f: expr, ... }] )*
+// }
 mapper parseMachine(ps: PState) -> MachineResult {
     let ps2 = advance(ps)   // 'machine'
     let name = peek(ps2).text
@@ -1067,9 +1087,10 @@ mapper parseMachine(ps: PState) -> MachineResult {
     let states: String[] = []
     let initial = ""
     let terminals: String[] = []
-    let transNames: String[] = []
-    let transFroms: String[] = []
-    let transTos: String[] = []
+    let hasData = false
+    let dataFields: String[] = []
+    let dataInit: Token[] = []
+    let transitions: MachineTransition[] = []
 
     let running = true
     while running {
@@ -1107,11 +1128,53 @@ mapper parseMachine(ps: PState) -> MachineResult {
                     }
                 }
             } else {
-            if t.kind == 1 {                    // transition: name : From(,From)* -> To
+            if t.kind == 1 and t.text == "data" and peekAt(ps2, 1).kind == 102 {
+                // data { f: T = expr, ... }  — machine-wide context
+                hasData = true
+                ps2 = advance(ps2)   // data
+                ps2 = advance(ps2)   // {
+                while peek(ps2).kind != 103 and peek(ps2).kind != 0 {
+                    let fname = peek(ps2).text
+                    dataInit = appendToken(dataInit, peek(ps2))   // name
+                    ps2 = advance(ps2)
+                    if peek(ps2).kind == 108 { ps2 = advance(ps2) }   // :
+                    let dtr = parseTypeExpr(ps2)
+                    ps2 = dtr.ps
+                    dataFields = appendString(dataFields, fname + ":" + dtr.ctype)
+                    if peek(ps2).kind == 111 {                        // =
+                        dataInit = appendToken(dataInit, peek(ps2))
+                        ps2 = advance(ps2)
+                    }
+                    let depth = 0
+                    let coll = true
+                    while coll {
+                        let it = peek(ps2)
+                        if it.kind == 0 { coll = false }
+                        else { if depth == 0 and (it.kind == 106 or it.kind == 103) { coll = false }
+                        else {
+                            if it.kind == 100 or it.kind == 104 or it.kind == 102 { depth = depth + 1 }
+                            if it.kind == 101 or it.kind == 105 or it.kind == 103 { depth = depth - 1 }
+                            dataInit = appendToken(dataInit, it)
+                            ps2 = advance(ps2)
+                        } }
+                    }
+                    if peek(ps2).kind == 106 {                        // ,
+                        dataInit = appendToken(dataInit, peek(ps2))
+                        ps2 = advance(ps2)
+                    }
+                }
+                if peek(ps2).kind == 103 { ps2 = advance(ps2) }       // }
+            } else {
+            if t.kind == 1 {                    // transition: name[(params)] : From* -> To
                 let tname = t.text
                 ps2 = advance(ps2)
-                if peek(ps2).kind == 100 {
-                    diag_error(t.line, "machine: transition payloads/guards/update are not yet supported (data-less machines only)")
+                let params = ""
+                if peek(ps2).kind == 100 {       // (params)
+                    ps2 = advance(ps2)
+                    let pr = parseParams(ps2)
+                    params = pr.params
+                    ps2 = pr.ps
+                    if peek(ps2).kind == 101 { ps2 = advance(ps2) }
                 }
                 if peek(ps2).kind == 108 { ps2 = advance(ps2) }   // :
                 let froms = ""
@@ -1127,14 +1190,44 @@ mapper parseMachine(ps: PState) -> MachineResult {
                 if peek(ps2).kind == 109 { ps2 = advance(ps2) }   // ->
                 let toState = peek(ps2).text
                 ps2 = advance(ps2)
+                // optional `where <guard>` (collected to the end of its line)
+                let hasGuard = false
+                let guardTokens: Token[] = []
                 if peek(ps2).kind == 242 {
-                    diag_error(t.line, "machine: transition guards (where) are not yet supported")
+                    hasGuard = true
+                    let wline = peek(ps2).line
+                    ps2 = advance(ps2)
+                    let gc = true
+                    while gc {
+                        let gt = peek(ps2)
+                        if gt.kind == 0 or gt.kind == 103 or gt.line != wline or gt.text == "update" { gc = false }
+                        else { guardTokens = appendToken(guardTokens, gt) ps2 = advance(ps2) }
+                    }
                 }
-                transNames = appendString(transNames, tname)
-                transFroms = appendString(transFroms, froms)
-                transTos = appendString(transTos, toState)
+                // optional `update { f: expr, ... }`
+                let hasUpdate = false
+                let updateTokens: Token[] = []
+                if peek(ps2).kind == 1 and peek(ps2).text == "update" and peekAt(ps2, 1).kind == 102 {
+                    hasUpdate = true
+                    ps2 = advance(ps2)   // update
+                    ps2 = advance(ps2)   // {
+                    let depth = 1
+                    while depth > 0 and peek(ps2).kind != 0 {
+                        let ut = peek(ps2)
+                        if ut.kind == 102 { depth = depth + 1 }
+                        if ut.kind == 103 { depth = depth - 1 }
+                        if depth > 0 { updateTokens = appendToken(updateTokens, ut) }
+                        ps2 = advance(ps2)
+                    }
+                }
+                transitions = appendMachineTransition(transitions, MachineTransition {
+                    name: tname, params: params, froms: froms, toState: toState,
+                    hasGuard: hasGuard, guardTokens: guardTokens,
+                    hasUpdate: hasUpdate, updateTokens: updateTokens
+                })
             } else {
                 ps2 = advance(ps2)
+            }
             }
             }
             }
@@ -1145,7 +1238,8 @@ mapper parseMachine(ps: PState) -> MachineResult {
 
     let spec = MachineSpec {
         name: name, states: states, initial: initial, terminals: terminals,
-        transNames: transNames, transFroms: transFroms, transTos: transTos
+        hasData: hasData, dataFields: dataFields, dataInit: dataInit,
+        transitions: transitions
     }
     return MachineResult { spec: spec, ps: ps2 }
 }
@@ -1228,10 +1322,19 @@ creator parseProgram(tokens: Token[]) -> Program {
             if t.kind == 292 {                          // machine declaration
                 let mr = parseMachine(ps)
                 machines = appendMachineSpec(machines, mr.spec)
-                // the machine's value type: { __state: Integer }  (build fields on
-                // the heap via appendString — array literals would dangle).
+                // the machine's value type: { __state: Integer [, data: <M>Data] }
+                // (build fields on the heap via appendString — literals would dangle).
                 let mfields: String[] = []
                 mfields = appendString(mfields, "__state:xc_integer_t")
+                if mr.spec.hasData {
+                    // the data context as a nested struct, so `m.data.field` works.
+                    types = appendTypeSpec(types, TypeSpec {
+                        name: mr.spec.name + "Data", isCompound: true, baseCtype: "",
+                        fields: mr.spec.dataFields,
+                        hasWhere: false, whereSrc: "", whereTokens: []
+                    })
+                    mfields = appendString(mfields, "data:xc_" + mr.spec.name + "Data_t")
+                }
                 types = appendTypeSpec(types, TypeSpec {
                     name: mr.spec.name, isCompound: true, baseCtype: "",
                     fields: mfields,
