@@ -1,6 +1,6 @@
-# Editor support for X
+# Editor support for Xi
 
-- **`tree-sitter-x/`** — a Tree-sitter grammar for X (syntax tree + highlight
+- **`tree-sitter-x/`** — a Tree-sitter grammar for Xi (syntax tree + highlight
   queries). Used by Zed, Neovim, Helix, and any Tree-sitter-based editor.
 - **`zed/`** — a Zed extension that wires the grammar + queries into Zed.
 - **`vim/`** — a Vim / Neovim plugin (syntax, filetype detection, indentation).

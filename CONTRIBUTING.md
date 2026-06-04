@@ -1,10 +1,10 @@
-# Contributing to X
+# Contributing to Xi
 
-Thanks for your interest! X is an experimental, self-hosting language. This
+Thanks for your interest! Xi is an experimental, self-hosting language. This
 guide covers how to build it, what to check before opening a pull request, and
 how the project is laid out.
 
-> X is provided **as is**, with no warranty and no obligation of support
+> Xi is provided **as is**, with no warranty and no obligation of support
 > (see [SUPPORT.md](SUPPORT.md) and the [LICENSE](LICENSE)). Contributions are
 > welcome but reviewed on a best-effort basis.
 
@@ -21,7 +21,7 @@ platform, compiles `compiler/xc.x` with it, then rebuilds the result from source
 with itself:
 
 ```sh
-./compiler/bootstrap.sh        # -> ./compiler/xc and ./bin/x
+./compiler/bootstrap.sh        # -> ./compiler/xc and ./bin/xi
 ```
 
 To build offline, point `XC_SEED` at any working `xc`:
@@ -61,9 +61,9 @@ from source, so you never commit generated C.
 ## Project layout
 
 ```
-compiler/   the compiler, written in X (lexer, parser, codegen, driver) + xc_helpers.c
+compiler/   the compiler, written in Xi (lexer, parser, codegen, driver) + xc_helpers.c
 runtime/    the C runtime (runtime.h, runtime.c)
-std/        the standard library (X modules wrapping the runtime)
+std/        the standard library (Xi modules wrapping the runtime)
 examples/   programs exercised by CI
 docs/       MkDocs documentation
 editors/    tree-sitter grammar, Zed and Vim integrations

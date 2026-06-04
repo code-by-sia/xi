@@ -18,7 +18,7 @@ The smallest `.x` program that triggers it:
 // paste here
 ```
 
-Command you ran (e.g. `./compiler/xc foo.x`, `./bin/x`, `./compiler/selfhost.sh`):
+Command you ran (e.g. `./compiler/xc foo.x`, `./bin/xi`, `./compiler/selfhost.sh`):
 
 ```sh
 
@@ -31,7 +31,7 @@ Command you ran (e.g. `./compiler/xc foo.x`, `./bin/x`, `./compiler/selfhost.sh`
 
 ## Environment
 
-- X version / release tag or commit:
+- Xi version / release tag or commit:
 - OS and arch (e.g. `macos-arm64`, `linux-x86_64`):
 - C compiler (`cc --version` first line):
 - Built via `bootstrap.sh`, a downloaded release, or `XC_SEED`?

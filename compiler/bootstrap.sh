@@ -31,13 +31,13 @@ XC_HELPERS="$HELP" ./compiler/xc compiler/xc.x >/dev/null
 cp "$XC_OUT/xc" compiler/xc
 echo "    compiler/xc is now built from source by itself"
 
-echo "==> Building the REPL / run tool 'x' from compiler/repl.x ..."
+echo "==> Building the REPL / run tool 'xi' from compiler/repl.x ..."
 ./compiler/xc compiler/repl.x >/dev/null
 mkdir -p bin
-cp "$XC_OUT/repl" bin/x
-echo "    built ./bin/x"
+cp "$XC_OUT/repl" bin/xi
+echo "    built ./bin/xi"
 
-echo "Bootstrap complete. The compiler is built from current X source."
+echo "Bootstrap complete. The compiler is built from current Xi source."
 echo "  ./compiler/xc <file.x>   compile to a native binary"
-echo "  ./bin/x                  start the REPL"
-echo "  ./bin/x <file.x>         compile and run a file"
+echo "  ./bin/xi                 start the REPL"
+echo "  ./bin/xi <file.x>        compile and run a file"

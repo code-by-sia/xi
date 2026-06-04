@@ -1,6 +1,6 @@
 name: Release
 
-# Build and publish the X toolchain (compiler `xc` + REPL `x`) for several
+# Build and publish the Xi toolchain (compiler `xc` + REPL `xi`) for several
 # targets. Pushing a version tag (e.g. v0.1.0) creates a GitHub Release with a
 # tarball per platform. Manual runs (workflow_dispatch) just upload artifacts.
 
@@ -50,10 +50,10 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME:-dev}"
-          DIST="x-${VERSION}-${{ matrix.target }}"
+          DIST="xi-${VERSION}-${{ matrix.target }}"
           mkdir -p "$DIST/libexec"
           cp compiler/xc "$DIST/libexec/xc"
-          cp bin/x       "$DIST/libexec/x"
+          cp bin/xi      "$DIST/libexec/xi"
           art="$(scripts/package.sh "$DIST" "${{ matrix.target }}" "$VERSION")"
           echo "artifact=$art" >> "$GITHUB_OUTPUT"
 
@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME:-dev}"
-          DIST="x-${VERSION}-${{ matrix.target }}"
+          DIST="xi-${VERSION}-${{ matrix.target }}"
           tar -xzf "$DIST.tar.gz" -C "$RUNNER_TEMP"
           BUNDLE="$RUNNER_TEMP/$DIST"
 
@@ -77,7 +77,7 @@ jobs:
           test "$got" = "smoke ok" || { echo "::error::bundle smoke test failed: '$got'"; exit 1; }
 
           # REPL accepts input and evaluates
-          repl="$(printf 'system.stdout.writeln("repl ok")\n' | "$BUNDLE/bin/x")"
+          repl="$(printf 'system.stdout.writeln("repl ok")\n' | "$BUNDLE/bin/xi")"
           echo "$repl" | grep -q "repl ok" || { echo "::error::bundle REPL smoke test failed"; exit 1; }
           echo "bundle smoke test passed"
 
@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME:-dev}"
-          DIST="x-${VERSION}-macos-x86_64"
+          DIST="xi-${VERSION}-macos-x86_64"
           mkdir -p "$DIST/libexec"
           clang -arch x86_64 -mmacosx-version-min=11.0 -std=c99 -O2 -w \
             -Wno-implicit-int -Wno-implicit-function-declaration \
@@ -122,8 +122,8 @@ jobs:
           clang -arch x86_64 -mmacosx-version-min=11.0 -std=c99 -O2 -w \
             -Wno-implicit-int -Wno-implicit-function-declaration \
             -Wno-int-conversion -Wno-incompatible-pointer-types -I runtime \
-            build/repl.gen.c runtime/runtime.c -o "$DIST/libexec/x" -lm
-          file "$DIST/libexec/xc" "$DIST/libexec/x"
+            build/repl.gen.c runtime/runtime.c -o "$DIST/libexec/xi" -lm
+          file "$DIST/libexec/xc" "$DIST/libexec/xi"
           file "$DIST/libexec/xc" | grep -q "x86_64" \
             || { echo "::error::cross build did not produce an x86_64 binary"; exit 1; }
 
@@ -132,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME:-dev}"
-          art="$(scripts/package.sh "x-${VERSION}-macos-x86_64" macos-x86_64 "$VERSION")"
+          art="$(scripts/package.sh "xi-${VERSION}-macos-x86_64" macos-x86_64 "$VERSION")"
           echo "artifact=$art" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifact

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-X is pre-1.0 and experimental. Only the **latest release** receives fixes;
+Xi is pre-1.0 and experimental. Only the **latest release** receives fixes;
 older releases are not maintained.
 
 | Version        | Supported       |
@@ -24,7 +24,7 @@ guaranteed response time or fix timeline.
 
 ## Scope and disclaimer
 
-X compiles X source to C and invokes a C compiler. Compiling or running
-untrusted X source is equivalent to running untrusted code — do so only in a
+Xi compiles Xi source to C and invokes a C compiler. Compiling or running
+untrusted Xi source is equivalent to running untrusted code — do so only in a
 sandbox. The software is provided **as is, without warranty**, per the
 [LICENSE](LICENSE).

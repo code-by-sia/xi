@@ -1,7 +1,7 @@
-# X for Visual Studio Code
+# Xi for Visual Studio Code
 
 Syntax highlighting, snippets, and completion for the
-[X programming language](https://github.com/code-by-sia/x).
+[Xi programming language](https://github.com/code-by-sia/x).
 
 ## Features
 

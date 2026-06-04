@@ -1,4 +1,4 @@
-# Vim / Neovim support for X
+# Vim / Neovim support for Xi
 
 Syntax highlighting, filetype detection, comment settings, and brace-based
 indentation for `.x` files. Works in both Vim and Neovim (legacy Vim syntax).

@@ -73,6 +73,13 @@ predicate isDeclLine(s: String) {
 
 mapper stripExt(path: String) -> String {
     let n = string_len(path)
+    // ".xi"  (46='.', 120='x', 105='i')
+    if n > 3 {
+        if string_char_at(path, n - 3) == 46 and string_char_at(path, n - 2) == 120 and string_char_at(path, n - 1) == 105 {
+            return string_slice(path, 0, n - 3)
+        }
+    }
+    // ".x"
     if n > 2 {
         if string_char_at(path, n - 2) == 46 and string_char_at(path, n - 1) == 120 {
             return string_slice(path, 0, n - 2)
@@ -123,7 +130,7 @@ consumer runFile(xc: String, rt: String, path: String) {
 }
 
 consumer repl(xc: String, rt: String) {
-    system.stdout.writeln("X REPL — :help for commands, :quit to exit")
+    system.stdout.writeln("Xi REPL — :help for commands, :quit to exit")
     let decls = ""
     let stmts = ""
     let prevLen = 0

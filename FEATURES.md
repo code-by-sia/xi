@@ -1,4 +1,4 @@
-# X — language feature matrix
+# Xi — language feature matrix
 
 Status of language and toolchain features. See [`docs/`](docs/) for the full
 guide and [`README.md`](README.md) for a tour with examples.
@@ -80,7 +80,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 
 | Feature | Status |
 |---------|--------|
-| Self-hosting compiler (written in X, compiles its own source) | ✓ |
+| Self-hosting compiler (written in Xi, compiles its own source) | ✓ |
 | Native binaries via C99 backend (compiler invokes `cc`) | ✓ |
 | `file:line` diagnostics on lexer/parser errors | ✓ (initial) |
 | REPL / run tool (`x`) | ✓ |

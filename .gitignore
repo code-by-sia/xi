@@ -21,6 +21,7 @@ editors/zed/grammars/
 # Release artifacts
 *.tar.gz
 /x-*/
+/xi-*/
 
 # Docusaurus
 website/node_modules/

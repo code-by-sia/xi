@@ -29,7 +29,7 @@ $ ./compiler/bootstrap.sh
 ==> [stage1] seed compiler builds xc from compiler/xc.x ...
 ==> [stage2] xc rebuilds itself from compiler/xc.x ...
 ==> Building the REPL / run tool 'x' from compiler/repl.x ...
-Bootstrap complete. The compiler is built from current X source.
+Bootstrap complete. The compiler is built from current Xi source.
 ```
 
 Pin the seed with `XC_BOOTSTRAP_VERSION=v0.0.0`, or build offline by pointing
@@ -71,7 +71,7 @@ Hello, World!
 Or do both at once with the `x` tool:
 
 ```console
-$ ./bin/x hello.x
+$ ./bin/xi hello.x
 Hello, World!
 ```
 

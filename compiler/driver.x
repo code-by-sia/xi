@@ -305,7 +305,7 @@ mapper strArrIndexOf(arr: String[], s: String) -> Integer {
 
 async entry main(args: String[]) -> Integer {
     if args.len < 2 {
-        system.stdout.writeln("Usage: xc <source.x>")
+        system.stdout.writeln("Usage: xc <source.x|.xi>")
         return 1
     }
 
@@ -342,13 +342,20 @@ async entry main(args: String[]) -> Integer {
     return 1
 }
 
-// Base name of a path: drop the directory and a trailing ".x".
+// Base name of a path: drop the directory and a trailing ".x" or ".xi".
 mapper baseName(path: String) -> String {
     let ls = lastSlash(path)
     let start = ls + 1
     let n = string_len(path)
     let nm = string_slice(path, start, n)
     let m = string_len(nm)
+    // ".xi"  (46='.', 120='x', 105='i')
+    if m > 3 {
+        if string_char_at(nm, m - 3) == 46 and string_char_at(nm, m - 2) == 120 and string_char_at(nm, m - 1) == 105 {
+            return string_slice(nm, 0, m - 3)
+        }
+    }
+    // ".x"
     if m > 2 {
         if string_char_at(nm, m - 2) == 46 and string_char_at(nm, m - 1) == 120 {
             return string_slice(nm, 0, m - 2)

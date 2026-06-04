@@ -33,7 +33,7 @@ via the `XC` env var (default `compiler/xc`) and the runtime via `XC_RUNTIME`.
 ### Run a file
 
 ```console
-$ ./bin/x examples/hello.x
+$ ./bin/xi examples/hello.x
 Hello, World!
 ```
 
@@ -42,8 +42,8 @@ This compiles the file and runs the resulting binary.
 ### Interactive REPL
 
 ```console
-$ ./bin/x
-X REPL — :help for commands, :quit to exit
+$ ./bin/xi
+Xi REPL — :help for commands, :quit to exit
 x> let n = 21
 x> print("n = " + n)
 n = 21

@@ -1,6 +1,6 @@
 # Support
 
-X is an **experimental personal project**, provided **as is**, with **no
+Xi is an **experimental personal project**, provided **as is**, with **no
 warranty and no obligation of support or maintenance** (see the
 [LICENSE](LICENSE), sections 7 and 8, and [NOTICE](NOTICE)).
 
@@ -13,4 +13,4 @@ That said, here's where to look:
 - **Bugs** — use the bug-report issue template.
 - **Security** — do **not** open a public issue; follow [SECURITY.md](SECURITY.md).
 
-If you need a dependable, supported toolchain, X is not currently it.
+If you need a dependable, supported toolchain, Xi is not currently it.

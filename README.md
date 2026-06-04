@@ -79,7 +79,7 @@ Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:
 ```sh
 # Build the compiler. bootstrap.sh downloads the matching released `xc` binary
 # (the seed), compiles compiler/xc.x with it, then rebuilds from source with
-# itself. Produces ./compiler/xc and ./bin/x (the REPL / run tool).
+# itself. Produces ./compiler/xc and ./bin/xi (the REPL / run tool).
 # Needs curl + a C compiler. Build offline with XC_SEED=/path/to/xc.
 ./compiler/bootstrap.sh
 
@@ -89,8 +89,8 @@ export XC_RUNTIME="$PWD/runtime"
 
 # Or compile-and-run, or start the REPL, with `x`:
 export XC="$PWD/compiler/xc"
-./bin/x examples/greeting.x          # compile + run
-./bin/x                              # interactive REPL
+./bin/xi examples/greeting.x          # compile + run
+./bin/xi                              # interactive REPL
 ```
 
 Runs on **Linux** (x86_64/arm64) and **macOS** (arm64/x86_64). On **Windows**,

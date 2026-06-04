@@ -51,21 +51,28 @@ candidates="$candidates $tags"
 cache="${XC_OUT:-build}/.seed"
 mkdir -p "$cache"
 
+# Release artifacts are "<prefix>-<ver>-<target>.tar.gz" with the seed compiler
+# at "<prefix>-<ver>-<target>/libexec/xc". The toolchain was renamed X -> Xi, so
+# newer releases use the "xi" prefix; try that first and fall back to the legacy
+# "x" prefix so the bootstrap chain across the rename keeps working.
 for ver in $candidates; do
     [ -n "$ver" ] || continue
-    seedxc="$cache/$ver-$target/x-$ver-$target/libexec/xc"
-    if [ -x "$seedxc" ]; then echo "$seedxc"; exit 0; fi          # cached
+    for prefix in xi x; do
+        bundle="$prefix-$ver-$target"
+        seedxc="$cache/$ver-$target/$bundle/libexec/xc"
+        if [ -x "$seedxc" ]; then echo "$seedxc"; exit 0; fi      # cached
 
-    dst="$cache/$ver-$target"
-    url="https://github.com/$REPO/releases/download/$ver/x-$ver-$target.tar.gz"
-    rm -rf "$dst"; mkdir -p "$dst"
-    if curl -fsSL ${auth[@]+"${auth[@]}"} "$url" -o "$dst/x.tgz" 2>/dev/null \
-       && tar -xzf "$dst/x.tgz" -C "$dst" 2>/dev/null \
-       && [ -x "$seedxc" ]; then
-        echo "fetch-seed: using bootstrap seed $ver ($target)" >&2
-        echo "$seedxc"; exit 0
-    fi
-    rm -rf "$dst"                                                 # no asset for $target; try older
+        dst="$cache/$ver-$target"
+        url="https://github.com/$REPO/releases/download/$ver/$bundle.tar.gz"
+        rm -rf "$dst"; mkdir -p "$dst"
+        if curl -fsSL ${auth[@]+"${auth[@]}"} "$url" -o "$dst/x.tgz" 2>/dev/null \
+           && tar -xzf "$dst/x.tgz" -C "$dst" 2>/dev/null \
+           && [ -x "$seedxc" ]; then
+            echo "fetch-seed: using bootstrap seed $ver ($bundle)" >&2
+            echo "$seedxc"; exit 0
+        fi
+        rm -rf "$dst"                                             # no $prefix asset; try next
+    done
 done
 
 echo "fetch-seed: no release with a '$target' asset found in $REPO" >&2
