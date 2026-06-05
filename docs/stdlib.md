@@ -167,6 +167,7 @@ auto-(de)serialize via a `WebTransport` (JSON by default). See [Web](web.md).
 | `res.sendStatus(code, msg)` / `res.sendText(code, body)` | plain-text reply |
 | `web.serve` | `(Integer)` — run a blocking HTTP/1.1 server |
 | `web.serveTLS` | `(Integer, String, String)` — HTTPS (cert, key); build with `XC_TLS=1` |
+| `web.serveHttp2` | `(Integer, String, String)` — HTTP/2 over TLS (ALPN h2); build with `XC_HTTP2=1` |
 
 ### `thread` — `std/thread.xi`
 
@@ -261,7 +262,7 @@ helpers). Listen on port `0` for an OS-assigned port, then read it with `port`.
 
 ### `http` — `std/http.xi`
 
-A minimal HTTP/1.1 client over `net` (plain `http://` only — no TLS). A
+A minimal HTTP/1.1 client over `net`. `http://` always works; `https://` needs the toolchain built with `XC_TLS=1`. A
 `Response` is `{ status: Integer, headers: String, body: String }`, where
 `headers` is the raw CRLF-separated header block; look one up with `header`.
 
@@ -271,7 +272,7 @@ A minimal HTTP/1.1 client over `net` (plain `http://` only — no TLS). A
 | `post` | `(String, String, String) -> Response!` (url, body, contentType) |
 | `request` | `(String, String, String, String) -> Response!` (method, url, body, contentType) |
 | `header` | `(Response, String) -> String` (case-insensitive; `""` if absent) |
-| `parseUrl` | `(String) -> Url!` (`{host, port, path}`; rejects `https://`) |
+| `parseUrl` | `(String) -> Url!` (`{host, port, path, tls}`; supports http:// and https://) |
 | `parseResponse` | `(String) -> Response!` |
 
 ```x

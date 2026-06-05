@@ -209,9 +209,10 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
     /* Optional TLS (std/web HTTPS): opt-in via XC_TLS so default builds stay
        dependency-light. When set, enable XC_HAVE_TLS and link OpenSSL — flags
        from pkg-config when available, else a portable fallback (incl. Homebrew). */
-    char tls[1024]; tls[0] = '\0';
-    const char* want_tls = getenv("XC_TLS");
-    if (want_tls && want_tls[0]) {
+    char tls[2048]; tls[0] = '\0';
+    const char* want_tls   = getenv("XC_TLS");
+    const char* want_http2 = getenv("XC_HTTP2");   /* implies TLS */
+    if ((want_tls && want_tls[0]) || (want_http2 && want_http2[0])) {
         char pkg[768] = "";
         if (system("pkg-config --exists openssl 2>/dev/null") == 0) {
             FILE* pf = popen("pkg-config --cflags --libs openssl 2>/dev/null", "r");
@@ -226,6 +227,19 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
                      "-I/opt/homebrew/opt/openssl@3/include -L/opt/homebrew/opt/openssl@3/lib "
                      "-I/usr/local/opt/openssl@3/include -L/usr/local/opt/openssl@3/lib "
                      "-lssl -lcrypto");
+        }
+        if (want_http2 && want_http2[0]) {
+            char h2[768] = "";
+            if (system("pkg-config --exists libnghttp2 2>/dev/null") == 0) {
+                FILE* pf = popen("pkg-config --cflags --libs libnghttp2 2>/dev/null", "r");
+                if (pf) { if (fgets(h2, sizeof(h2), pf)) { h2[strcspn(h2, "\n")] = '\0'; } pclose(pf); }
+            }
+            size_t tl = strlen(tls);
+            if (h2[0]) snprintf(tls + tl, sizeof(tls) - tl, " -DXC_HAVE_HTTP2 %s", h2);
+            else       snprintf(tls + tl, sizeof(tls) - tl,
+                                " -DXC_HAVE_HTTP2 "
+                                "-I/opt/homebrew/opt/nghttp2/include -L/opt/homebrew/opt/nghttp2/lib "
+                                "-lnghttp2");
         }
     }
 

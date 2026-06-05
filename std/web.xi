@@ -31,6 +31,7 @@ import "web_core.xi"
 extern "C" {
     producer xstd_web_serve(port: Integer)
     producer xstd_web_serve_tls(port: Integer, cert: String, key: String)
+    producer xstd_web_serve_http2(port: Integer, cert: String, key: String)
 }
 
 // ── Server ──────────────────────────────────────────────────────────
@@ -40,4 +41,10 @@ producer serve(port: Integer) { xstd_web_serve(port) }
 // (needs OpenSSL). Without it, this prints a notice and serves nothing.
 producer serveTLS(port: Integer, cert: String, key: String) {
     xstd_web_serve_tls(port, cert, key)
+}
+
+// HTTP/2 over TLS (ALPN `h2`, falling back to HTTP/1.1). Build with `XC_HTTP2=1`
+// (needs OpenSSL + nghttp2). Same handler stack as plaintext.
+producer serveHttp2(port: Integer, cert: String, key: String) {
+    xstd_web_serve_http2(port, cert, key)
 }

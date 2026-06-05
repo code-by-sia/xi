@@ -1761,10 +1761,236 @@ void xstd_web_serve_tls(xc_integer_t port, xc_string_t certPath, xc_string_t key
         close(c);
     }
 }
+/* HTTPS client: TCP-connect, TLS handshake (with SNI), send the request, read
+   the whole response, return it as a string. "" on failure. */
+xc_string_t xstd_https_fetch(xc_string_t host, xc_integer_t port, xc_string_t request) {
+    int fd = (int)xstd_tcp_connect(host, port);
+    if (fd < 0) return xc_str_copy("", 0);
+    SSL_load_error_strings();
+    SSL_library_init();
+    SSL_CTX* ctx = SSL_CTX_new(TLS_client_method());
+    if (!ctx) { close(fd); return xc_str_copy("", 0); }
+    SSL* ssl = SSL_new(ctx);
+    SSL_set_fd(ssl, fd);
+    char* hn = xc_string_to_cstr(host);
+    SSL_set_tlsext_host_name(ssl, hn);   /* SNI */
+    if (SSL_connect(ssl) <= 0) { free(hn); SSL_free(ssl); SSL_CTX_free(ctx); close(fd); return xc_str_copy("", 0); }
+    free(hn);
+    SSL_write(ssl, request.data, (int)request.len);
+    size_t cap = 8192, len = 0; char* buf = (char*)malloc(cap);
+    for (;;) {
+        if (len + 4096 > cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
+        int n = SSL_read(ssl, buf + len, 4096);
+        if (n <= 0) break;
+        len += (size_t)n;
+    }
+    xc_string_t out = xc_str_copy(buf, len);
+    free(buf);
+    SSL_shutdown(ssl); SSL_free(ssl); SSL_CTX_free(ctx); close(fd);
+    return out;
+}
 #else
 void xstd_web_serve_tls(xc_integer_t port, xc_string_t certPath, xc_string_t keyPath) {
     (void)port; (void)certPath; (void)keyPath;
     fprintf(stderr, "web: TLS not built in — recompile with XC_TLS=1 (needs OpenSSL)\n");
+}
+xc_string_t xstd_https_fetch(xc_string_t host, xc_integer_t port, xc_string_t request) {
+    (void)host; (void)port; (void)request;
+    fprintf(stderr, "http: TLS not built in — recompile with XC_TLS=1 for https\n");
+    return xc_str_copy("", 0);
+}
+#endif
+
+/* ─── HTTP/2 server (opt-in: XC_HTTP2=1, needs OpenSSL + nghttp2) ────────────── */
+#if defined(XC_HAVE_TLS) && defined(XC_HAVE_HTTP2)
+#include <nghttp2/nghttp2.h>
+
+struct h2_stream {
+    int32_t id;
+    char* method; char* path; char* query;
+    char* headers; size_t hlen, hcap;     /* "k: v\r\n" block */
+    char* body;    size_t blen, bcap;
+    char* resp;    size_t rlen, roff;     /* response body to stream out */
+};
+static struct h2_stream* h2_stream_new(int32_t id) {
+    struct h2_stream* s = (struct h2_stream*)calloc(1, sizeof(*s)); if (!s) abort();
+    s->id = id; return s;
+}
+static void h2_stream_free(struct h2_stream* s) {
+    if (!s) return;
+    free(s->method); free(s->path); free(s->query); free(s->headers);
+    free(s->body); free(s->resp); free(s);
+}
+static void h2_append(char** buf, size_t* len, size_t* cap, const char* d, size_t n) {
+    if (*len + n + 1 > *cap) { *cap = (*cap ? *cap * 2 : 256); if (*cap < *len + n + 1) *cap = *len + n + 1; *buf = (char*)realloc(*buf, *cap); }
+    memcpy(*buf + *len, d, n); *len += n; (*buf)[*len] = '\0';
+}
+
+static ssize_t h2_send_cb(nghttp2_session* s, const uint8_t* data, size_t len, int flags, void* user) {
+    (void)s; (void)flags;
+    int n = SSL_write((SSL*)user, data, (int)len);
+    if (n <= 0) return NGHTTP2_ERR_CALLBACK_FAILURE;
+    return (ssize_t)n;
+}
+static int h2_on_begin_headers(nghttp2_session* s, const nghttp2_frame* frame, void* user) {
+    (void)user;
+    if (frame->hd.type == NGHTTP2_HEADERS && frame->headers.cat == NGHTTP2_HCAT_REQUEST) {
+        struct h2_stream* st = h2_stream_new(frame->hd.stream_id);
+        nghttp2_session_set_stream_user_data(s, frame->hd.stream_id, st);
+    }
+    return 0;
+}
+static int h2_on_header(nghttp2_session* s, const nghttp2_frame* frame,
+                        const uint8_t* name, size_t namelen,
+                        const uint8_t* value, size_t valuelen, uint8_t flags, void* user) {
+    (void)flags; (void)user;
+    struct h2_stream* st = (struct h2_stream*)nghttp2_session_get_stream_user_data(s, frame->hd.stream_id);
+    if (!st) return 0;
+    if (namelen == 7 && memcmp(name, ":method", 7) == 0) {
+        st->method = xj_strdup_n((const char*)value, valuelen);
+    } else if (namelen == 5 && memcmp(name, ":path", 5) == 0) {
+        const char* q = (const char*)memchr(value, '?', valuelen);
+        if (q) {
+            st->path  = xj_strdup_n((const char*)value, (size_t)(q - (const char*)value));
+            st->query = xj_strdup_n(q + 1, valuelen - (size_t)(q - (const char*)value) - 1);
+        } else {
+            st->path = xj_strdup_n((const char*)value, valuelen);
+            st->query = xj_strdup_n("", 0);
+        }
+    } else if (namelen > 0 && name[0] != ':') {
+        h2_append(&st->headers, &st->hlen, &st->hcap, (const char*)name, namelen);
+        h2_append(&st->headers, &st->hlen, &st->hcap, ": ", 2);
+        h2_append(&st->headers, &st->hlen, &st->hcap, (const char*)value, valuelen);
+        h2_append(&st->headers, &st->hlen, &st->hcap, "\r\n", 2);
+    }
+    return 0;
+}
+static int h2_on_data_chunk(nghttp2_session* s, uint8_t flags, int32_t sid,
+                            const uint8_t* data, size_t len, void* user) {
+    (void)flags; (void)user;
+    struct h2_stream* st = (struct h2_stream*)nghttp2_session_get_stream_user_data(s, sid);
+    if (st) h2_append(&st->body, &st->blen, &st->bcap, (const char*)data, len);
+    return 0;
+}
+static ssize_t h2_data_read(nghttp2_session* s, int32_t sid, uint8_t* buf, size_t length,
+                            uint32_t* data_flags, nghttp2_data_source* source, void* user) {
+    (void)s; (void)sid; (void)user;
+    struct h2_stream* st = (struct h2_stream*)source->ptr;
+    size_t remain = st->rlen - st->roff;
+    size_t n = remain < length ? remain : length;
+    if (n) memcpy(buf, st->resp + st->roff, n);
+    st->roff += n;
+    if (st->roff >= st->rlen) *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    return (ssize_t)n;
+}
+static void h2_respond(nghttp2_session* s, struct h2_stream* st) {
+    struct xc_web_request req; memset(&req, 0, sizeof(req));
+    req.method  = st->method  ? st->method  : (char*)"GET";
+    req.path    = st->path    ? st->path    : (char*)"/";
+    req.query   = st->query   ? st->query   : (char*)"";
+    req.headers = st->headers ? st->headers : (char*)"";
+    req.body    = st->body; req.blen = st->blen;
+    struct xc_web_response rs; memset(&rs, 0, sizeof(rs));
+    if (xc_web_handler_fn) xc_web_handler_fn(&req, &rs);
+    int has = rs.status != 0;
+    int status = has ? rs.status : 404;
+    const char* body = has ? rs.body : "Not Found";
+    size_t blen = has ? rs.blen : 9;
+    const char* ctype = (has && rs.ctype) ? rs.ctype : "text/plain";
+    st->resp = (char*)malloc(blen ? blen : 1); if (blen) memcpy(st->resp, body, blen);
+    st->rlen = blen; st->roff = 0;
+    char sstr[8]; snprintf(sstr, sizeof(sstr), "%d", status);
+    char clen[24]; snprintf(clen, sizeof(clen), "%zu", blen);
+    nghttp2_nv nv[3];
+    nv[0].name = (uint8_t*)":status";        nv[0].value = (uint8_t*)sstr;  nv[0].namelen = 7;  nv[0].valuelen = strlen(sstr);  nv[0].flags = NGHTTP2_NV_FLAG_NONE;
+    nv[1].name = (uint8_t*)"content-type";   nv[1].value = (uint8_t*)ctype; nv[1].namelen = 12; nv[1].valuelen = strlen(ctype); nv[1].flags = NGHTTP2_NV_FLAG_NONE;
+    nv[2].name = (uint8_t*)"content-length"; nv[2].value = (uint8_t*)clen;  nv[2].namelen = 14; nv[2].valuelen = strlen(clen);  nv[2].flags = NGHTTP2_NV_FLAG_NONE;
+    nghttp2_data_provider prd; prd.source.ptr = st; prd.read_callback = h2_data_read;
+    nghttp2_submit_response(s, st->id, nv, 3, &prd);
+}
+static int h2_on_frame_recv(nghttp2_session* s, const nghttp2_frame* frame, void* user) {
+    (void)user;
+    if ((frame->hd.type == NGHTTP2_DATA || frame->hd.type == NGHTTP2_HEADERS) &&
+        (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+        struct h2_stream* st = (struct h2_stream*)nghttp2_session_get_stream_user_data(s, frame->hd.stream_id);
+        if (st) h2_respond(s, st);
+    }
+    return 0;
+}
+static int h2_on_stream_close(nghttp2_session* s, int32_t sid, uint32_t ec, void* user) {
+    (void)ec; (void)user;
+    h2_stream_free((struct h2_stream*)nghttp2_session_get_stream_user_data(s, sid));
+    return 0;
+}
+static int h2_alpn_cb(SSL* ssl, const unsigned char** out, unsigned char* outlen,
+                      const unsigned char* in, unsigned int inlen, void* arg) {
+    (void)ssl; (void)arg;
+    if (nghttp2_select_next_protocol((unsigned char**)out, outlen, in, inlen) != 1)
+        return SSL_TLSEXT_ERR_NOACK;
+    return SSL_TLSEXT_ERR_OK;
+}
+static void h2_serve_conn(SSL* ssl) {
+    nghttp2_session_callbacks* cbs;
+    nghttp2_session_callbacks_new(&cbs);
+    nghttp2_session_callbacks_set_send_callback(cbs, h2_send_cb);
+    nghttp2_session_callbacks_set_on_begin_headers_callback(cbs, h2_on_begin_headers);
+    nghttp2_session_callbacks_set_on_header_callback(cbs, h2_on_header);
+    nghttp2_session_callbacks_set_on_data_chunk_recv_callback(cbs, h2_on_data_chunk);
+    nghttp2_session_callbacks_set_on_frame_recv_callback(cbs, h2_on_frame_recv);
+    nghttp2_session_callbacks_set_on_stream_close_callback(cbs, h2_on_stream_close);
+    nghttp2_session* session;
+    nghttp2_session_server_new(&session, cbs, ssl);
+    nghttp2_session_callbacks_del(cbs);
+    nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, NULL, 0);
+    if (nghttp2_session_send(session) != 0) { nghttp2_session_del(session); return; }
+    for (;;) {
+        char buf[16384];
+        int n = SSL_read(ssl, buf, sizeof(buf));
+        if (n <= 0) break;
+        ssize_t rv = nghttp2_session_mem_recv(session, (const uint8_t*)buf, (size_t)n);
+        if (rv < 0) break;
+        if (nghttp2_session_send(session) != 0) break;
+        if (nghttp2_session_want_read(session) == 0 && nghttp2_session_want_write(session) == 0) break;
+    }
+    nghttp2_session_del(session);
+}
+void xstd_web_serve_http2(xc_integer_t port, xc_string_t certPath, xc_string_t keyPath) {
+    SSL_load_error_strings(); SSL_library_init();
+    SSL_CTX* ctx = SSL_CTX_new(TLS_server_method());
+    if (!ctx) { fprintf(stderr, "web: TLS context init failed\n"); return; }
+    char* cert = xc_string_to_cstr(certPath);
+    char* key  = xc_string_to_cstr(keyPath);
+    if (SSL_CTX_use_certificate_file(ctx, cert, SSL_FILETYPE_PEM) <= 0 ||
+        SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) <= 0) {
+        fprintf(stderr, "web: cannot load cert/key (%s, %s)\n", cert, key);
+        SSL_CTX_free(ctx); free(cert); free(key); return;
+    }
+    free(cert); free(key);
+    SSL_CTX_set_alpn_select_cb(ctx, h2_alpn_cb, NULL);
+    int fd = (int)xstd_tcp_listen(port, 64);
+    if (fd < 0) { fprintf(stderr, "web: cannot listen on port %lld\n", (long long)port); SSL_CTX_free(ctx); return; }
+    fprintf(stderr, "web: serving HTTP/2 on https://0.0.0.0:%lld\n", (long long)port);
+    for (;;) {
+        int c = accept(fd, NULL, NULL);
+        if (c < 0) continue;
+        SSL* ssl = SSL_new(ctx);
+        SSL_set_fd(ssl, c);
+        if (SSL_accept(ssl) > 0) {
+            const unsigned char* alpn = NULL; unsigned int alpnlen = 0;
+            SSL_get0_alpn_selected(ssl, &alpn, &alpnlen);
+            if (alpn && alpnlen == 2 && memcmp(alpn, "h2", 2) == 0) {
+                h2_serve_conn(ssl);
+            } else {
+                xw_serve_conn(ssl, xw_ssl_rd, xw_ssl_wr);   /* HTTP/1.1 fallback over TLS */
+            }
+        }
+        SSL_shutdown(ssl); SSL_free(ssl); close(c);
+    }
+}
+#else
+void xstd_web_serve_http2(xc_integer_t port, xc_string_t certPath, xc_string_t keyPath) {
+    (void)port; (void)certPath; (void)keyPath;
+    fprintf(stderr, "web: HTTP/2 not built in — recompile with XC_HTTP2=1 (needs OpenSSL + nghttp2)\n");
 }
 #endif
 
