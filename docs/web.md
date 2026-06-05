@@ -1,68 +1,92 @@
-# Web (`route` & `std/web`)
+# Web (`WebRequestHandler` & `std/web`)
 
-`std/web` is a small REST framework over HTTP/1.1. You write request handlers as
-**`route`** methods — a function kind, auto-discovered and dependency-injected
-like any service — and run a server with `web.serve`.
+`std/web` is a small REST framework over HTTP/1.1. You implement the
+**`WebRequestHandler`** interface and route by overloading its `handle` method
+with `where` guards. Payloads are (de)serialized automatically — there is no
+manual JSON.
 
 ```x
 import "std/web.xi"
-import "std/json.xi"
 ```
 
 ## A handler
 
-A `route` lives in a class (so it can declare `deps`). It names its HTTP method
-and path with `on <method> "<path>"`, takes a `Request`, and returns a `Response`:
+A handler is any class that `implements WebRequestHandler`. The contract is one
+`action` method — `action` is an impure function kind: it may mutate, and is not
+a pure function. Route by writing several `handle` overloads, each guarded with
+`where`; the first matching overload wins, and the un-guarded overload is the
+default.
 
 ```x
-interface Repo { mapper name(id: String) -> String }
+event Health { ok: Bool }
+event User   { name: String, active: Bool }
 
-class Api {
-    deps { repo: Repo }                                  // injected, as usual
+class Api implements WebRequestHandler {
+    deps { repo: Repo }                                   // injected, as usual
 
-    route user(req: Request) -> Response on get "/users/:id" {
-        let o = json.object()
-        o = json.set(o, "id",   json.str(web.param(req, "id")))   // :id path param
-        o = json.set(o, "name", json.str(repo.name(web.param(req, "id"))))
-        return web.json(200, o)
+    action handle(req: HttpRequest, res: HttpResponse) where req.path == "/health" {
+        res.send(Health { ok: true })
+    }
+    action handle(req: HttpRequest, res: HttpResponse) where req.path == "/user" {
+        let name = req.query("name")
+        res.send(User { name: name, active: repo.active(name) })
+    }
+    action handle(req: HttpRequest, res: HttpResponse) {  // default
+        res.sendStatus(404, "Not Found")
     }
 }
+
+module App { bind WebRequestHandler -> Api }
 ```
 
-Routes are discovered automatically (the same machinery as event `listener`s); a
-generated router matches each request's method + path and calls the handler on a
-freshly DI-resolved instance.
+The server resolves the bound `WebRequestHandler` (via DI) and calls
+`handle(req, res)` once per request.
 
-## The `Request`
+## The `HttpRequest`
 
 | Accessor | Returns |
 |----------|---------|
-| `web.method(req)` | the HTTP method (`"GET"`, …) |
-| `web.path(req)` | the request path |
-| `web.param(req, "id")` | a `:id` **path** segment |
-| `web.query(req, "q")` | a `?q=…` **query** value (`""` if absent) |
-| `web.header(req, "X")` | a request header (case-insensitive; `""` if absent) |
-| `web.body(req)` | the raw body as a `String` |
-| `web.bodyJson(req)` | the body parsed as a [`Json`](serialization.md) value |
+| `req.path` | the request path |
+| `req.method` | the HTTP method (`"GET"`, …) |
+| `req.body` | the raw body as a `String` |
+| `req.query("q")` | a `?q=…` query value (`""` if absent) |
+| `req.header("X")` | a request header (case-insensitive; `""` if absent) |
+| `req.parse(T)` | the body **deserialized** into a `T` via the `WebTransport` |
 
-Path patterns use `/literal/:param` segments; `:param` captures into `web.param`.
+## The `HttpResponse`
 
-## The `Response`
+The response is *mutable* — fill it in, don't return it.
 
-| Builder | Result |
-|---------|--------|
-| `web.text(status, body)` | `text/plain` |
-| `web.json(status, value)` | `application/json` (a `Json` value, serialized) |
-| `web.respond(status, body, contentType)` | anything |
+| Method | Effect |
+|--------|--------|
+| `res.send(dto)` | serialize `dto` via the `WebTransport` and reply `200` |
+| `res.sendStatus(code, msg)` | reply `code` with a plain-text `msg` |
+| `res.sendText(code, body)` | reply `code` with a plain-text body |
+
+`res.send` / `req.parse` work for any `event` or compound `type`; the compiler
+derives the codec automatically. Unmatched requests fall through to the default
+overload (typically a `404`).
+
+## The `WebTransport`
+
+`res.send(dto)` and `req.parse(T)` route through the bound `WebTransport`, which
+maps a value to/from the wire body. The default is JSON:
 
 ```x
-route create(req: Request) -> Response on post "/users" {
-    let u = web.bodyJson(req)
-    return web.json(201, u)
+interface WebTransport {
+    mapper serialize(payload: Json) -> String
+    mapper deserialize(body: String) -> Json
 }
 ```
 
-Unmatched requests get a `404 Not Found`.
+Bind your own implementor (e.g. a different wire format) to replace it:
+
+```x
+module App {
+    bind WebRequestHandler -> Api
+    bind WebTransport      -> MsgPackTransport   // overrides the JSON default
+}
+```
 
 ## Running
 
@@ -71,7 +95,6 @@ async entry main(args: String[]) -> Integer {
     web.serve(8080)        // blocking HTTP/1.1 server
     return 0
 }
-module App {}              // default DI wiring
 ```
 
 ```console
@@ -83,6 +106,8 @@ web: serving on http://0.0.0.0:8080
 
 - HTTP/1.1, blocking, one request per connection (no keep-alive) — fine for an
   API behind a reverse proxy; concurrency and keep-alive are future work.
+- Routing is by exact `req.path` match in `where` guards. There is no path-pattern
+  capture (`/users/:id`); read sub-paths from `req.path` or use query parameters.
 - **HTTPS / HTTP-2 / HTTP-3** are planned; they need a TLS/QUIC dependency — see
   the [web-stack proposal](proposals/web-stack.md). Today `web.serve` is plaintext
   HTTP, so put it behind a TLS-terminating proxy for production.

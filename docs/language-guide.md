@@ -79,6 +79,7 @@ Intent is part of the syntax. Each kind documents purity and effect:
 | `producer` | `() -> T` (often I/O) |
 | `reducer` | `(Acc, T) -> Acc` |
 | `creator` | constructs instances |
+| `action` | impure; may mutate; not a pure function (e.g. a web `handle`) |
 
 ```x
 mapper fullName(p: Person) -> String { return p.name }
@@ -121,6 +122,11 @@ static xc_string_t xc_mapResponse(xc_ApiResponse_t res) {
     return xc_mapResponse__ovl3(res);
 }
 ```
+
+The same applies to **methods**: a class may declare a method several times with
+`where` guards (each can use `self`/deps), and the compiler builds a per-method
+dispatcher behind its interface slot. `std/web` routing is exactly this — several
+`action handle(req, res) where req.path == "…"` overloads plus a default.
 
 ## Classes, deps, and dependency injection
 

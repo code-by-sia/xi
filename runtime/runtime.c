@@ -1576,6 +1576,19 @@ xc_bool_t xstd_web_match(xc_Request_t req, xc_string_t method, xc_string_t patte
 static xc_Response_t (*xc_web_dispatch_fn)(xc_Request_t) = NULL;
 void xstd_web_set_dispatch(xc_Response_t (*fn)(xc_Request_t)) { xc_web_dispatch_fn = fn; }
 
+/* Handler-interface model: a mutable response the handler fills in. */
+void xstd_resp_set(xc_HttpResponse_t r, xc_integer_t status, xc_string_t body, xc_string_t ctype) {
+    r->status = (int)status; r->blen = body.len;
+    r->body = (char*)malloc(body.len ? body.len : 1); if (!r->body) abort();
+    if (body.len) memcpy(r->body, body.data, body.len);
+    if (r->ctype) free(r->ctype);
+    r->ctype = xc_string_to_cstr(ctype);
+}
+xc_integer_t xstd_resp_status(xc_HttpResponse_t r) { return (xc_integer_t)r->status; }
+
+static void (*xc_web_handler_fn)(xc_HttpRequest_t, xc_HttpResponse_t) = NULL;
+void xstd_web_set_handler(void (*fn)(xc_HttpRequest_t, xc_HttpResponse_t)) { xc_web_handler_fn = fn; }
+
 /* Content-Length from a complete header block (case-insensitive, portable). */
 static long xw_content_length(const char* hdr) {
     const char* p = hdr;
@@ -1641,12 +1654,19 @@ void xstd_web_serve(xc_integer_t port) {
             req.body = xj_strdup_n(buf + hdr_end, len - hdr_end);
             req.blen = len - hdr_end;
         }
+        struct xc_web_response rs; memset(&rs, 0, sizeof(rs));
         struct xc_web_response* resp = NULL;
-        if (xc_web_dispatch_fn && req.method) resp = xc_web_dispatch_fn(&req);
-        int status = resp ? resp->status : 404;
-        const char* body = resp ? resp->body : "Not Found";
-        size_t blen = resp ? resp->blen : 9;
-        const char* ctype = (resp && resp->ctype) ? resp->ctype : "text/plain";
+        if (xc_web_handler_fn && req.method) {
+            xc_web_handler_fn(&req, &rs);   /* handler fills rs via xstd_resp_set */
+            resp = &rs;
+        } else if (xc_web_dispatch_fn && req.method) {
+            resp = xc_web_dispatch_fn(&req);
+        }
+        int has = resp && resp->status != 0;
+        int status = has ? resp->status : 404;
+        const char* body = has ? resp->body : "Not Found";
+        size_t blen = has ? resp->blen : 9;
+        const char* ctype = (has && resp->ctype) ? resp->ctype : "text/plain";
         char head[512];
         int hl = snprintf(head, sizeof(head),
             "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",

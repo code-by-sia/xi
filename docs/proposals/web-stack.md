@@ -54,41 +54,45 @@ dependency, QUIC). Each is opt-in via its `import`.
   Highest dependency weight; last in line.
 - Negotiation is transparent (ALPN); callers keep one API.
 
-## Phase 4 — `std/web` (REST framework)
+## Phase 4 — `std/web` (REST framework) — **shipped**
 
-A small framework so a server is declarative and DI-wired:
+A small framework so a server is declarative and DI-wired. Implement
+`WebRequestHandler` and route by overloading `handle` with `where` guards;
+payloads auto-(de)serialize via a `WebTransport`:
 
 ```x
 import "std/web.xi"
-import "std/json.xi"
 
-// A route handler is a function kind; the body uses DI like any class.
-class Users {
+event User { name: String, active: Bool }
+
+class Users implements WebRequestHandler {
     deps { db: Repo }
-    route get "/users/:id" (req: Request) -> Response {
-        let u = db.find(req.param("id"))
-        return web.json(200, userToJson(u))
+    action handle(req: HttpRequest, res: HttpResponse) where req.path == "/user" {
+        res.send(db.find(req.query("name")))    // res.send serializes via WebTransport
     }
-    route post "/users" (req: Request) -> Response {
-        let u = userFromJson(req.body())     // req.body() : Json
-        return web.json(201, userToJson(db.add(u)))
+    action handle(req: HttpRequest, res: HttpResponse) {
+        res.sendStatus(404, "Not Found")
     }
 }
 
 async entry main(args: String[]) -> Integer {
-    web.serveTLS(8443, "cert.pem", "key.pem")   // discovers routes via DI, like listeners
+    web.serve(8080)
     return 0
 }
-module App {}
+module App { bind WebRequestHandler -> Users }
 ```
 
-- **`route <method> "/path"`** — a new function kind (like `listener`): the
-  compiler discovers routes and builds the router, mirroring event listeners.
-- **`Request`** — method, path, params (`:id`), query, headers, and `body()` as a
-  `Json` (via `std/json`). **`Response`** — status + headers + body; `web.json(...)`
-  / `web.text(...)` helpers.
-- **`web.serve(port)`** (HTTP) and **`web.serveTLS(port, cert, key)`** (HTTPS),
-  with HTTP/2-3 negotiated transparently once those land.
+- **`action`** — an impure function kind (may mutate; not pure). The handler
+  contract `WebRequestHandler.handle` is an `action`.
+- **`where`-overloaded methods** — routing is method overloading on `handle`:
+  the first overload whose guard holds runs; the un-guarded one is the default.
+- **`HttpRequest`** — `path`, `method`, `body`, `query`, `header`, and
+  `parse(T)` (typed body). **`HttpResponse`** is mutable: `send(dto)`,
+  `sendStatus(code, msg)`, `sendText(code, body)`.
+- **`WebTransport`** — pluggable (de)serialization; JSON by default, replaceable
+  by binding another implementor.
+- **`web.serve(port)`** (HTTP) ships today; **`web.serveTLS(port, cert, key)`**
+  (HTTPS) with HTTP/2-3 negotiated transparently is still future work.
 - Middleware (auth via `std/crypto` HMAC/JWT, logging) as ordinary DI-wired
   components.
 

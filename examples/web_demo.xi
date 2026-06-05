@@ -1,43 +1,45 @@
-// std/web — a REST API in a few lines. Handlers are `route` methods (DI-wired,
-// auto-discovered); web.serve runs a blocking HTTP/1.1 server.
+// std/web — a REST API in a few lines. Implement WebRequestHandler and route by
+// overloading `handle` with `where` guards on the request. Replies use
+// res.send(dto) (auto-serialized to JSON) — no manual JSON. web.serve runs a
+// blocking HTTP/1.1 server.
 //
 //   xc examples/web_demo.xi && ./build/web_demo
 //   curl localhost:8080/health
-//   curl 'localhost:8080/users/1?greet=hi'
+//   curl 'localhost:8080/user?name=Ada'
 //   curl -X POST -d '{"msg":"hello"}' localhost:8080/echo
 import "std/web.xi"
-import "std/json.xi"
 
-interface Repo { mapper name(id: String) -> String }
+event Health { ok: Bool, service: String }
+event User   { name: String, active: Bool }
+type  Echo = { msg: String }
+
+interface Repo { mapper active(name: String) -> Bool }
 class Names implements Repo {
     deps {}
-    mapper name(id: String) -> String {
-        if id == "1" { return "Ada" }
-        if id == "2" { return "Grace" }
-        return "unknown"
+    mapper active(name: String) -> Bool { return name == "Ada" }
+}
+
+class Api implements WebRequestHandler {
+    deps { repo: Repo }                                  // injected like any service
+
+    action handle(req: HttpRequest, res: HttpResponse) where req.path == "/health" {
+        res.send(Health { ok: true, service: "demo" })
+    }
+    action handle(req: HttpRequest, res: HttpResponse) where req.path == "/user" {
+        let name = req.query("name")                     // ?name=...
+        res.send(User { name: name, active: repo.active(name) })
+    }
+    action handle(req: HttpRequest, res: HttpResponse) where req.path == "/echo" {
+        res.send(req.parse(Echo))                        // typed body round-trip
+    }
+    action handle(req: HttpRequest, res: HttpResponse) {
+        res.sendStatus(404, "Not Found")                 // default overload
     }
 }
 
-class Api {
-    deps { repo: Repo }                                   // injected like any service
-
-    route health(req: Request) -> Response on get "/health" {
-        return web.text(200, "ok")
-    }
-    route user(req: Request) -> Response on get "/users/:id" {
-        let o = json.object()
-        o = json.set(o, "id",    json.str(web.param(req, "id")))      // :id path param
-        o = json.set(o, "name",  json.str(repo.name(web.param(req, "id"))))
-        o = json.set(o, "greet", json.str(web.query(req, "greet")))   // ?greet=...
-        return web.json(200, o)
-    }
-    route echo(req: Request) -> Response on post "/echo" {
-        return web.json(200, web.bodyJson(req))                       // echo the JSON body
-    }
-}
+module App { bind WebRequestHandler -> Api }
 
 async entry main(args: String[]) -> Integer {
     web.serve(8080)
     return 0
 }
-module App {}

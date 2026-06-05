@@ -115,7 +115,7 @@ module.exports = grammar({
 
     // ── functions / creators / entry ────────────────────────────
     function_kind: _ => choice(
-      'mapper', 'projector', 'predicate', 'consumer', 'producer', 'reducer',
+      'mapper', 'projector', 'predicate', 'consumer', 'producer', 'reducer', 'action',
     ),
     function_decl: $ => seq(
       optional('async'), $.function_kind,

@@ -176,12 +176,14 @@ type ParamSpec = { name: String, ctype: String }
 // A function method signature
 type MethodSpec = {
     isAsync:   Bool,
-    kind:      String,  // "mapper","consumer","predicate","producer","reducer","projector","listener"
+    kind:      String,  // "mapper",...,"listener","action"
     name:      String,
     params:    String,  // comma-separated "ctype name" pairs
     retCtype:  String,
     bodyTokens: Token[],
-    topic:     String   // for `listener` methods: the subscribed topic ("" otherwise)
+    topic:     String,  // for `listener` methods: the subscribed topic ("" otherwise)
+    hasWhere:  Bool,    // `where`-guarded overload (routing / dispatch by guard)
+    whereTokens: Token[]
 }
 
 // A type declaration (refined or compound)
@@ -359,7 +361,7 @@ decision parseFuncKind(ps: PState) -> KindResult {
     when peek(ps).kind == 218 => KindResult { kind: "reducer",   ps: advance(ps), ok: true }
     when peek(ps).kind == 256 => KindResult { kind: "decision",  ps: advance(ps), ok: true }
     when peek(ps).kind == 295 => KindResult { kind: "listener",  ps: advance(ps), ok: true }
-    when peek(ps).kind == 297 => KindResult { kind: "route",     ps: advance(ps), ok: true }
+    when peek(ps).kind == 298 => KindResult { kind: "action",    ps: advance(ps), ok: true }
     else                      => KindResult { kind: "", ps: ps, ok: false }
 }
 
@@ -368,6 +370,7 @@ decision retCtypeFor(kind: String, declaredRet: String) -> String {
     when kind == "predicate"          => "xc_bool_t"
     when kind == "consumer"           => "void"
     when kind == "listener"           => "void"
+    when kind == "action"             => "void"
     when string_len(declaredRet) > 0  => declaredRet
     else                              => "void"
 }
@@ -929,24 +932,12 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
     }
 
     // `listener` subscription clause:  on "topic.name"
-    // `route` clause:                  on <method> "/path"   (topic = "method /path")
     let topic = ""
     if kindStr == "listener" {
         if peek(ps2).kind == 1 and peek(ps2).text == "on" {
             ps2 = advance(ps2)
             if peek(ps2).kind == 4 {   // string literal
                 topic = peek(ps2).text
-                ps2 = advance(ps2)
-            }
-        }
-    }
-    if kindStr == "route" {
-        if peek(ps2).kind == 1 and peek(ps2).text == "on" {
-            ps2 = advance(ps2)
-            let method = peek(ps2).text     // get / post / put / delete / ...
-            ps2 = advance(ps2)
-            if peek(ps2).kind == 4 {        // "/path" string literal
-                topic = method + " " + peek(ps2).text
                 ps2 = advance(ps2)
             }
         }
@@ -1023,7 +1014,7 @@ mapper parseSig(ps: PState, isAsync: Bool) -> SigResult {
     let spec = MethodSpec {
         isAsync: isAsync, kind: kr.kind,
         name: nameTok.text, params: pr.params, retCtype: retCtype,
-        bodyTokens: [], topic: ""
+        bodyTokens: [], topic: "", hasWhere: false, whereTokens: []
     }
     return SigResult { spec: spec, ps: ps2 }
 }
@@ -1272,7 +1263,7 @@ mapper parseClass(ps: PState) -> ClassResult {
                 isAsync: isAsync, kind: "creator",
                 name: fr.spec.name, params: fr.spec.params,
                 retCtype: fr.spec.retCtype, bodyTokens: fr.spec.bodyTokens,
-                topic: ""
+                topic: "", hasWhere: false, whereTokens: []
             }
             methList = appendMethodSpec(methList, ms)
         } else {
@@ -1284,7 +1275,8 @@ mapper parseClass(ps: PState) -> ClassResult {
                     isAsync: isAsync, kind: fr.spec.kind,
                     name: fr.spec.name, params: fr.spec.params,
                     retCtype: fr.spec.retCtype, bodyTokens: fr.spec.bodyTokens,
-                    topic: fr.spec.topic
+                    topic: fr.spec.topic,
+                    hasWhere: fr.spec.hasWhere, whereTokens: fr.spec.whereTokens
                 }
                 methList = appendMethodSpec(methList, ms)
             } else {
