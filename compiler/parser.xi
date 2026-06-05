@@ -1143,8 +1143,21 @@ mapper parseIface(ps: PState) -> IfaceResult {
         let kr = parseFuncKind(ps2)
         if kr.ok {
             let sr = parseSig(ps2, isAsync)
-            methList = appendMethodSpec(methList, sr.spec)
             ps2 = sr.ps
+            // Optional default implementation: a `{ ... }` body after the
+            // signature. Classes that don't override the method use it.
+            let ms = sr.spec
+            if peek(ps2).kind == 102 {
+                let br = parseBody(ps2)
+                ms = MethodSpec {
+                    isAsync: ms.isAsync, kind: ms.kind, name: ms.name,
+                    params: ms.params, retCtype: ms.retCtype,
+                    bodyTokens: br.bodyTokens, topic: ms.topic,
+                    hasWhere: false, whereTokens: []
+                }
+                ps2 = br.ps
+            }
+            methList = appendMethodSpec(methList, ms)
         } else {
             ps2 = advance(ps2)  // skip unknown
         }

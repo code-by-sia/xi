@@ -48,6 +48,25 @@ A controller whose guards don't match simply leaves the response untouched, so
 the next controller gets a turn. (An un-guarded `handle` overload always matches,
 so use one only as a deliberate catch-all, and declare that controller last.)
 
+### Mount prefix — `getBaseUrl`
+
+`WebRequestHandler` also has a `getBaseUrl()` method with a **default
+implementation** returning `"/"`; the server only consults a controller when the
+request path starts with it. Override it to mount a controller under a prefix:
+
+```x
+class ApiController implements WebRequestHandler {
+    mapper getBaseUrl() -> String { return "/api/v1" }   // only sees /api/v1/*
+    action handle(req: HttpRequest, res: HttpResponse) where req.path == "/api/v1/stats" {
+        res.send(stats())
+    }
+}
+```
+
+(`where` guards still compare the full `req.path`.) `getBaseUrl` is an ordinary
+**interface default method** — any interface method may carry a `{ … }` body that
+implementors inherit unless they override it.
+
 ## The `HttpRequest`
 
 | Accessor | Returns |

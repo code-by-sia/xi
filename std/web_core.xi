@@ -10,10 +10,14 @@ extern "C" {
 
 // The request handler contract. `action` is an impure function kind (it mutates
 // the response and is not a pure function). Route by overloading `handle` with
-// `where` guards on the request — the first matching overload wins; the
-// un-guarded overload is the default.
+// `where` guards on the request — the first matching overload wins.
+//
+// `getBaseUrl` is the controller's mount prefix: the server only consults a
+// controller when the request path starts with it. It has a default ("/"), so a
+// controller serves all paths unless it overrides getBaseUrl.
 interface WebRequestHandler {
     action handle(req: HttpRequest, res: HttpResponse)
+    mapper getBaseUrl() -> String { return "/" }
 }
 
 // Payload (de)serialization. The default is JSON; bind your own `WebTransport`
