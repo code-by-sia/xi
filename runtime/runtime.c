@@ -190,6 +190,12 @@ void diag_error(xc_integer_t line, xc_string_t msg) {
     exit(1);
 }
 
+/* Non-fatal diagnostic (compile continues). */
+void diag_warn(xc_integer_t line, xc_string_t msg) {
+    fprintf(stderr, "xc: %s:%lld: warning: %.*s\n",
+            xc_diag_file, (long long)line, (int)msg.len, msg.data);
+}
+
 /* ─── Interrupts ─────────────────────────────────────────────────────────── */
 
 xc_handler_t* xc_handlers = NULL;

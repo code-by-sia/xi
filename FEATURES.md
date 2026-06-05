@@ -16,7 +16,8 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Type aliases incl. plural/array (`type People = Person[]`, `type Name = String`) | ✓ |
 | `empty T` — the zero value of any type (struct all-zero, array empty) | ✓ |
 | `atom` — active-state store: immutable `state` + `transition` reducers | ✓ |
-| `machine` — state machine on atoms (named states, guards, graph) | ✗ (proposed) |
+| `machine` — finite state machine (named states, machine-wide `data`, transition params, `where` guards, `update`, `.can()`, `IllegalTransition`) | ✓ |
+| Machine **static checks** (unknown-state errors; unreachable / dead-end warnings) | ✓ |
 | `Bytes` — raw binary buffer primitive (distinct from `String`) | ✓ |
 | Result type `T!` with `ok`/`err` and `?` propagation | ✓ |
 | Interfaces with vtable dispatch | ✓ |

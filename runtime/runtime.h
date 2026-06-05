@@ -363,6 +363,7 @@ xc_string_t file_read_all(xc_string_t path);
    exit(1) with `xc: <file>:<line>: error: <msg>`. */
 void diag_set_file(xc_string_t path);
 void diag_error(xc_integer_t line, xc_string_t msg);
+void diag_warn(xc_integer_t line, xc_string_t msg);
 
 /* ─── Interrupts (resumable conditions) ──────────────────────────────────────
    A dynamic stack of handlers. `try` pushes one and setjmp()s the skip target;

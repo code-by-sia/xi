@@ -379,6 +379,146 @@ mapper machineStateCond(m: MachineSpec, csv: String) -> String {
     return cond
 }
 
+// The C type of a machine `data` field ("" if absent), from "name:ctype" pairs.
+mapper dataFieldCtype(m: MachineSpec, fname: String) -> String {
+    let i = 0
+    let n = stringArrLen(m.dataFields)
+    while i < n {
+        let f = stringArrGet(m.dataFields, i)
+        let colon = findChar(f, 58)
+        if string_slice(f, 0, colon) == fname { return string_slice(f, colon + 1, string_len(f)) }
+        i = i + 1
+    }
+    return ""
+}
+
+// An empty array literal `[]` lowers to an untyped `{0}`; in a typed assignment
+// (machine data init/update) cast it to the field's type so C accepts it.
+mapper castEmptyArr(m: MachineSpec, fname: String, e: ExprRes) -> String {
+    if e.xtyp == "emptyarr" {
+        let fct = dataFieldCtype(m, fname)
+        if string_len(fct) > 0 { return "(" + fct + "){0}" }
+    }
+    return e.code
+}
+
+// True if `name` appears in a comma-joined list of state names.
+predicate csvHasState(csv: String, name: String) {
+    let start = 0
+    let i = 0
+    let n = string_len(csv)
+    while i <= n {
+        let isSep = i == n
+        if not isSep { if string_char_at(csv, i) == 44 { isSep = true } }
+        if isSep {
+            if string_slice(csv, start, i) == name { return true }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// Static validation of every `machine` graph. Unknown state references are
+// errors; unreachable states and dead ends (a non-terminal state with no
+// outgoing transition) are warnings.
+consumer checkMachines(prog: Program) {
+    let mi = 0
+    let mn = machineSpecLen(prog.machines)
+    while mi < mn {
+        let m = machineSpecGet(prog.machines, mi)
+        let trn = machineTransLen(m.transitions)
+        if machineStateIndex(m, m.initial) < 0 {
+            diag_error(0, "machine " + m.name + ": initial state '" + m.initial + "' is not declared")
+        }
+        let ti = 0
+        while ti < stringArrLen(m.terminals) {
+            let tnm = stringArrGet(m.terminals, ti)
+            if machineStateIndex(m, tnm) < 0 {
+                diag_error(0, "machine " + m.name + ": terminal '" + tnm + "' is not declared")
+            }
+            ti = ti + 1
+        }
+        // transition source/target states must exist
+        let k = 0
+        while k < trn {
+            let tr = machineTransGet(m.transitions, k)
+            if machineStateIndex(m, tr.toState) < 0 {
+                diag_error(0, "machine " + m.name + ": transition '" + tr.name + "' targets unknown state '" + tr.toState + "'")
+            }
+            let fcsv = tr.froms
+            let start = 0
+            let i = 0
+            let n = string_len(fcsv)
+            while i <= n {
+                let isSep = i == n
+                if not isSep { if string_char_at(fcsv, i) == 44 { isSep = true } }
+                if isSep {
+                    let nm = string_slice(fcsv, start, i)
+                    if string_len(nm) > 0 and machineStateIndex(m, nm) < 0 {
+                        diag_error(0, "machine " + m.name + ": transition '" + tr.name + "' from unknown state '" + nm + "'")
+                    }
+                    start = i + 1
+                }
+                i = i + 1
+            }
+            k = k + 1
+        }
+        // reachability from the initial state (fixpoint over transitions)
+        let reached: String[] = []
+        reached = appendString(reached, m.initial)
+        let changed = true
+        while changed {
+            changed = false
+            let t = 0
+            while t < trn {
+                let tr = machineTransGet(m.transitions, t)
+                if not strArrContains(reached, tr.toState) {
+                    let fcsv = tr.froms
+                    let start = 0
+                    let i = 0
+                    let n = string_len(fcsv)
+                    let anyReached = false
+                    while i <= n {
+                        let isSep = i == n
+                        if not isSep { if string_char_at(fcsv, i) == 44 { isSep = true } }
+                        if isSep {
+                            let nm = string_slice(fcsv, start, i)
+                            if string_len(nm) > 0 and strArrContains(reached, nm) { anyReached = true }
+                            start = i + 1
+                        }
+                        i = i + 1
+                    }
+                    if anyReached { reached = appendString(reached, tr.toState)  changed = true }
+                }
+                t = t + 1
+            }
+        }
+        // warnings
+        let si = 0
+        let ns = stringArrLen(m.states)
+        while si < ns {
+            let st = stringArrGet(m.states, si)
+            if not strArrContains(reached, st) {
+                diag_warn(0, "machine " + m.name + ": state '" + st + "' is unreachable from '" + m.initial + "'")
+            }
+            if not strArrContains(m.terminals, st) {
+                let hasOut = false
+                let t2 = 0
+                while t2 < trn {
+                    if csvHasState(machineTransGet(m.transitions, t2).froms, st) { hasOut = true }
+                    t2 = t2 + 1
+                }
+                if not hasOut {
+                    diag_warn(0, "machine " + m.name + ": non-terminal state '" + st + "' has no outgoing transition (dead end)")
+                }
+            }
+            si = si + 1
+        }
+        mi = mi + 1
+    }
+}
+
 mapper funcRetXType(prog: Program, name: String) -> String {
     let i = 0
     let n = funcSpecLen(prog.functions)
@@ -3549,7 +3689,7 @@ mapper genMachineDefs(prog: Program) -> String {
                 if gkind(di, dp) == 111 { dp = dp + 1 }   // =
                 let e = genExpr(di, dp, ictx)
                 dp = e.pos
-                out = out + "    __r.data." + fname + " = " + e.code + ";\n"
+                out = out + "    __r.data." + fname + " = " + castEmptyArr(m, fname, e) + ";\n"
                 if gkind(di, dp) == 106 { dp = dp + 1 }   // ,
             }
         }
@@ -3598,7 +3738,7 @@ mapper genMachineDefs(prog: Program) -> String {
                     if gkind(ut, up) == 108 { up = up + 1 }   // :
                     let e = genExpr(ut, up, uctx)
                     up = e.pos
-                    upd = upd + "        __r.data." + fname + " = " + e.code + ";\n"
+                    upd = upd + "        __r.data." + fname + " = " + castEmptyArr(m, fname, e) + ";\n"
                     if gkind(ut, up) == 106 { up = up + 1 }   // ,
                 }
             }
