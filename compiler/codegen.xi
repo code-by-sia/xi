@@ -243,10 +243,11 @@ predicate isCompoundTypeC(prog: Program, name: String) {
     return false
 }
 
-// std/web's handler model is active when WebRequestHandler is implemented.
+// std/web's handler model is active when at least one class implements
+// WebRequestHandler (controllers are auto-registered — no explicit bind needed).
 predicate webEnabled(prog: Program) {
     if not isInterface(prog, "WebRequestHandler") { return false }
-    return string_len(chosenImpl(prog, "WebRequestHandler")) > 0
+    return stringArrLen(implementorsOf(prog, "WebRequestHandler")) > 0
 }
 
 // A JSON codec (xc_tojson_/xc_fromjson_) is emitted for this X type: every
@@ -1615,6 +1616,38 @@ mapper genIfaceDecls(prog: Program) -> String {
     return out + "\n"
 }
 
+// Default implementations for interface methods declared with a `{ ... }` body.
+// A class that doesn't override the method gets this in its vtable slot. `self`
+// is opaque here (the concrete type is unknown), so a default body cannot touch
+// instance fields — it works over its parameters (and may return a constant).
+mapper genIfaceDefaults(prog: Program) -> String {
+    let out = "/* === Interface default methods === */\n"
+    let i = 0
+    let n = ifaceSpecLen(prog.ifaces)
+    while i < n {
+        let is2 = ifaceSpecGet(prog.ifaces, i)
+        let mi = 0
+        let mn = methodSpecLen(is2.methList)
+        while mi < mn {
+            let ms = methodSpecGet(is2.methList, mi)
+            if tokenArrLen(ms.bodyTokens) > 0 {
+                let pstr = ms.params
+                if string_len(pstr) > 0 { pstr = ", " + pstr }
+                let tag = is2.name + "_" + ms.name
+                out = out + hoistCatches(prog, ms.bodyTokens, tag)
+                out = out + "static " + ms.retCtype + " xc_" + is2.name + "_" + ms.name + "_default_impl(void* self_ptr" + pstr + ") {\n"
+                out = out + "    (void)self_ptr;\n"
+                let ctx = withTag(withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype), tag)
+                out = out + genBody2(ms.bodyTokens, ctx)
+                out = out + "}\n\n"
+            }
+            mi = mi + 1
+        }
+        i = i + 1
+    }
+    return out + "\n"
+}
+
 mapper genClassStructs(prog: Program) -> String {
     let out = "/* === Class structs === */\n"
     let i = 0
@@ -1870,7 +1903,13 @@ mapper genVtablesAndCasters(prog: Program) -> String {
             let mn = methodSpecLen(ifSpec.methList)
             while mi < mn {
                 let ms = methodSpecGet(ifSpec.methList, mi)
-                out = out + "    ." + ms.name + " = (void*)xc_" + cs.name + "_" + ms.name + "_impl,\n"
+                // The class's own impl if it overrides the method; otherwise the
+                // interface's default impl (for methods with a default body).
+                let target = "xc_" + cs.name + "_" + ms.name + "_impl"
+                if countMethodName(cs, ms.name) == 0 and tokenArrLen(ms.bodyTokens) > 0 {
+                    target = "xc_" + ifname + "_" + ms.name + "_default_impl"
+                }
+                out = out + "    ." + ms.name + " = (void*)" + target + ",\n"
                 mi = mi + 1
             }
             out = out + "};\n"
@@ -2915,14 +2954,25 @@ mapper genEventDispatch(prog: Program) -> String {
 }
 
 // std/web (handler model): the runtime hands each request a fresh mutable
-// response; we resolve the bound WebRequestHandler and call handle(req, res).
-// Routing is just `where`-overloaded handle methods inside the handler class.
+// response. Every class implementing WebRequestHandler is a controller and is
+// auto-registered (DI-wired) — no explicit bind. Controllers are tried in
+// declaration order; the first whose handle sets the response wins. Routing is
+// the `where`-overloaded handle methods inside each controller.
 mapper genWebDispatch(prog: Program) -> String {
     if not webEnabled(prog) { return "" }
-    let out = "/* === Web (WebRequestHandler dispatch) === */\n"
+    let out = "/* === Web (WebRequestHandler controllers) === */\n"
     out = out + "static void xc_web_handle(xc_HttpRequest_t __req, xc_HttpResponse_t __res) {\n"
-    out = out + "    xc_WebRequestHandler_t __h = xc_resolve_WebRequestHandler();\n"
-    out = out + "    __h.vtable->handle(__h.self, __req, __res);\n"
+    let impls = implementorsOf(prog, "WebRequestHandler")
+    let n = stringArrLen(impls)
+    let i = 0
+    while i < n {
+        let c = stringArrGet(impls, i)
+        out = out + "    { xc_WebRequestHandler_t __h = xc_" + c + "_as_WebRequestHandler(xc_new_" + c + "());\n"
+        out = out + "      if (xstd_starts_with(xstd_req_path(__req), __h.vtable->getBaseUrl(__h.self))) {\n"
+        out = out + "        __h.vtable->handle(__h.self, __req, __res);\n"
+        out = out + "        if (xstd_resp_status(__res) != 0) return; } }\n"
+        i = i + 1
+    }
     out = out + "}\n"
     out = out + "static void xc_web_init(void) { xstd_web_set_handler(xc_web_handle); }\n\n"
     return out
@@ -3257,6 +3307,7 @@ mapper genAll(prog: Program) -> String {
          + genExternDecls(prog)
          + genIfaceDecls(prog)
          + genClassStructs(prog)
+         + genIfaceDefaults(prog)
          + genVtablesAndCasters(prog)
          + genCheckFns(prog)
          + genSingletons(prog)

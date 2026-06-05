@@ -70,22 +70,22 @@ class Users implements WebRequestHandler {
     action handle(req: HttpRequest, res: HttpResponse) where req.path == "/user" {
         res.send(db.find(req.query("name")))    // res.send serializes via WebTransport
     }
-    action handle(req: HttpRequest, res: HttpResponse) {
-        res.sendStatus(404, "Not Found")
-    }
 }
 
 async entry main(args: String[]) -> Integer {
     web.serve(8080)
     return 0
 }
-module App { bind WebRequestHandler -> Users }
+module App {}                                   // controllers auto-register — no bind
 ```
 
 - **`action`** — an impure function kind (may mutate; not pure). The handler
   contract `WebRequestHandler.handle` is an `action`.
+- **Auto-registered controllers** — every class implementing `WebRequestHandler`
+  is discovered and DI-wired automatically (no `bind`); the server tries each in
+  order and the first matching overload wins.
 - **`where`-overloaded methods** — routing is method overloading on `handle`:
-  the first overload whose guard holds runs; the un-guarded one is the default.
+  the first overload whose guard holds runs.
 - **`HttpRequest`** — `path`, `method`, `body`, `query`, `header`, and
   `parse(T)` (typed body). **`HttpResponse`** is mutable: `send(dto)`,
   `sendStatus(code, msg)`, `sendText(code, body)`.

@@ -19,6 +19,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `Bytes` — raw binary buffer primitive (distinct from `String`) | ✓ |
 | Result type `T!` with `ok`/`err` and `?` propagation | ✓ |
 | Interfaces with vtable dispatch | ✓ |
+| Interface **default methods** (method bodies inherited unless overridden) | ✓ |
 | Generics | ✗ (planned) |
 | Sum types / enums with exhaustive `match` | ✗ (planned) |
 

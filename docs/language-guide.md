@@ -151,6 +151,17 @@ async entry main(args: String[]) -> Integer {
 module App {}   // empty — present only so `App.resolve` has a name to call
 ```
 
+An interface method may carry a **default implementation** — a `{ … }` body that
+implementors inherit unless they override it. The default runs over the method's
+parameters (it can't touch instance fields, since the concrete type is unknown):
+
+```x
+interface WebRequestHandler {
+    action handle(req: HttpRequest, res: HttpResponse)
+    mapper getBaseUrl() -> String { return "/" }   // default; override to mount elsewhere
+}
+```
+
 ### Steering with `bind` (optional)
 
 A `module` may `bind` an interface to a specific class, or mark a class as a
