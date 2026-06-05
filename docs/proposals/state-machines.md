@@ -12,8 +12,10 @@
 ## Open items
 
 - **Per-state data.** `data` is machine-wide context shared by every state.
-  Distinct fields per state (e.g. `Running { startedAt }` vs `Idle {}`) need real
-  sum / algebraic types and are out of scope until those exist.
+  Distinct fields per state (e.g. `Running { startedAt }` vs `Idle {}`) can now be
+  modelled with [sum types](../language-guide.md#sum-algebraic-types) (make a
+  `data` field a sum over the states); wiring the machine syntax to attach a
+  per-state payload automatically is the remaining work.
 
 - **Atoms via DI.** An `atom` is currently a single program-global holder accessed
   by name (`cart.addItem()`, `cart.current`). Exposing it as an injectable shared

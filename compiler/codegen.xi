@@ -243,6 +243,84 @@ predicate isCompoundTypeC(prog: Program, name: String) {
     return false
 }
 
+// ── Sum / algebraic types ─────────────────────────────────────────
+predicate isSumTypeC(prog: Program, name: String) {
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.name == name and ts.isSum { return true }
+        i = i + 1
+    }
+    return false
+}
+
+// The sum type that owns variant `vname` (or "" if none). Variant names must be
+// globally unique across sum types.
+mapper sumOfVariant(prog: Program, vname: String) -> String {
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.isSum {
+            let vi = 0
+            let vn = stringArrLen(ts.variants)
+            while vi < vn {
+                let v = stringArrGet(ts.variants, vi)
+                let bar = findChar(v, 124)            // '|'
+                if string_slice(v, 0, bar) == vname { return ts.name }
+                vi = vi + 1
+            }
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+predicate isVariantNameC(prog: Program, vname: String) {
+    return string_len(sumOfVariant(prog, vname)) > 0
+}
+
+// The "f1:ct1,f2:ct2" field string for a variant ("" if it carries no payload).
+mapper variantFieldsC(prog: Program, sumName: String, vname: String) -> String {
+    let ts = findTypeSpec(prog, sumName)
+    let vi = 0
+    let vn = stringArrLen(ts.variants)
+    while vi < vn {
+        let v = stringArrGet(ts.variants, vi)
+        let bar = findChar(v, 124)
+        if string_slice(v, 0, bar) == vname { return string_slice(v, bar + 1, string_len(v)) }
+        vi = vi + 1
+    }
+    return ""
+}
+
+// "f1:ct1,f2:ct2" -> "ct1 f1; ct2 f2; " for a C struct body.
+mapper sumFieldsToC(fstr: String) -> String {
+    let out = ""
+    let n = string_len(fstr)
+    if n == 0 { return out }
+    let start = 0
+    let i = 0
+    let cont = true
+    while cont {
+        let atEnd = i == n
+        let c = 0
+        if not atEnd { c = string_char_at(fstr, i) }
+        if atEnd or c == 44 {                          // ','
+            let seg = string_slice(fstr, start, i)
+            let colon = findChar(seg, 58)              // ':'
+            let fname = string_slice(seg, 0, colon)
+            let fct = string_slice(seg, colon + 1, string_len(seg))
+            out = out + fct + " " + fname + "; "
+            start = i + 1
+        }
+        if atEnd { cont = false }
+        i = i + 1
+    }
+    return out
+}
+
 // std/web's handler model is active when at least one class implements
 // WebRequestHandler (controllers are auto-registered — no explicit bind needed).
 predicate webEnabled(prog: Program) {
@@ -623,6 +701,37 @@ mapper genTypeLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     return ExprRes { code: out, pos: p, xtyp: typeName }
 }
 
+// Construct a sum-type value:  Variant { f: v, ... }  or a bare  Variant.
+mapper genVariantLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let vname = gtext(toks, pos)
+    let sum = sumOfVariant(ctx.prog, vname)
+    if gkind(toks, pos + 1) != 102 {                      // no payload
+        return ExprRes {
+            code: "(xc_" + sum + "_t){ .tag = xc_" + sum + "_" + vname + " }",
+            pos: pos + 1, xtyp: sum
+        }
+    }
+    let p = pos + 2
+    let inner = ""
+    let first = true
+    while gkind(toks, p) != 103 and gkind(toks, p) != 0 {
+        let fname = gtext(toks, p)
+        p = p + 1
+        if gkind(toks, p) == 108 { p = p + 1 }           // :
+        let e = genExpr(toks, p, ctx)
+        p = e.pos
+        if not first { inner = inner + ", " }
+        inner = inner + "." + fname + " = " + e.code
+        first = false
+        if gkind(toks, p) == 106 { p = p + 1 }           // ,
+    }
+    if gkind(toks, p) == 103 { p = p + 1 }               // }
+    return ExprRes {
+        code: "(xc_" + sum + "_t){ .tag = xc_" + sum + "_" + vname + ", .u." + vname + " = { " + inner + " } }",
+        pos: p, xtyp: sum
+    }
+}
+
 // ── primary ───────────────────────────────────────────────────────
 mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let k = gkind(toks, pos)
@@ -706,6 +815,10 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if txt == "thread" {
             // built-in thread facility: thread.channel() / thread.stopped()
             return ExprRes { code: "", pos: pos + 1, xtyp: "thread:" }
+        }
+        if isVariantNameC(ctx.prog, txt) {
+            // sum-type constructor: Variant { ... } or a bare nullary Variant
+            return genVariantLiteral(toks, pos, ctx)
         }
         if gkind(toks, pos + 1) == 102 and isTypeNameC(ctx.prog, txt) {
             return genTypeLiteral(toks, pos, ctx)
@@ -1380,6 +1493,18 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let isWild = false
         let cond = ""
         let bindName = ""
+        let bindExpr = subj
+        if pt.kind == 1 and isVariantNameC(ctx.prog, pt.text) {
+            // sum-type variant pattern:  Variant [binding] -> body
+            let sumN = sumOfVariant(ctx.prog, pt.text)
+            cond = subj + ".tag == xc_" + sumN + "_" + pt.text
+            bindExpr = subj + ".u." + pt.text
+            p = p + 1
+            if gkind(toks, p) == 1 and gtext(toks, p) != "_" {
+                bindName = gtext(toks, p)
+                p = p + 1
+            }
+        } else {
         if pt.kind == 2 {
             cond = subj + " == " + pt.text + "LL"
             p = p + 1
@@ -1405,13 +1530,13 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
                 if pt.text == "_" { bindName = "" } else { bindName = pt.text }
             }
             p = p + 1
-        } } } } }
+        } } } } } }
         if gkind(toks, p) == 109 { p = p + 1 }   // ->
         let bctx = ctx
         if string_len(bindName) > 0 { bctx = addSym(ctx, bindName, "") }
         let bindLine = ""
         if string_len(bindName) > 0 {
-            bindLine = "        __auto_type " + bindName + " = " + subj + ";\n"
+            bindLine = "        __auto_type " + bindName + " = " + bindExpr + ";\n"
         }
         let bodyCode = ""
         if gkind(toks, p) == 102 {
@@ -1433,9 +1558,9 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             cont = false
         } else {
             if first {
-                out = out + "    if (" + cond + ") {\n" + bodyCode + "    }\n"
+                out = out + "    if (" + cond + ") {\n" + bindLine + bodyCode + "    }\n"
             } else {
-                out = out + "    else if (" + cond + ") {\n" + bodyCode + "    }\n"
+                out = out + "    else if (" + cond + ") {\n" + bindLine + bodyCode + "    }\n"
             }
         }
         first = false
@@ -1649,7 +1774,7 @@ mapper genRefinedTypedefs(prog: Program) -> String {
     let n = typeSpecLen(prog.types)
     while i < n {
         let ts = typeSpecGet(prog.types, i)
-        if not ts.isCompound and not isCompositeAlias(ts) {
+        if not ts.isCompound and not ts.isSum and not isCompositeAlias(ts) {
             out = out + "typedef " + ts.baseCtype + " xc_" + ts.name + "_t;\n"
         }
         i = i + 1
@@ -1673,9 +1798,10 @@ mapper genAliasTypedefs(prog: Program) -> String {
     return out + "\n"
 }
 
-// Full compound struct bodies (named structs, matching forward declarations).
+// Full compound struct bodies + sum-type tagged unions, emitted in declaration
+// order so a type may embed any earlier-declared type by value.
 mapper genCompoundBodies(prog: Program) -> String {
-    let out = "/* === Compound struct bodies === */\n"
+    let out = "/* === Compound + sum type bodies === */\n"
     let i = 0
     let n = typeSpecLen(prog.types)
     while i < n {
@@ -1694,11 +1820,52 @@ mapper genCompoundBodies(prog: Program) -> String {
             }
             out = out + "};\n"
         }
+        if ts.isSum { out = out + sumBody(ts) }
         i = i + 1
     }
     return out + "\n"
 }
 
+// One sum type's tag #defines + tagged-union struct body.
+mapper sumBody(ts: TypeSpec) -> String {
+    let out = ""
+    let vn = stringArrLen(ts.variants)
+    let vi = 0
+    while vi < vn {
+        let v = stringArrGet(ts.variants, vi)
+        let bar = findChar(v, 124)
+        out = out + "#define xc_" + ts.name + "_" + string_slice(v, 0, bar) + " " + int_to_string(vi) + "\n"
+        vi = vi + 1
+    }
+    out = out + "struct xc_" + ts.name + "_s {\n    int tag;\n"
+    let anyFields = false
+    vi = 0
+    while vi < vn {
+        let v = stringArrGet(ts.variants, vi)
+        let bar = findChar(v, 124)
+        if string_len(string_slice(v, bar + 1, string_len(v))) > 0 { anyFields = true }
+        vi = vi + 1
+    }
+    if anyFields {
+        out = out + "    union {\n"
+        vi = 0
+        while vi < vn {
+            let v = stringArrGet(ts.variants, vi)
+            let bar = findChar(v, 124)
+            let vname = string_slice(v, 0, bar)
+            let fstr = string_slice(v, bar + 1, string_len(v))
+            if string_len(fstr) > 0 {
+                out = out + "        struct { " + sumFieldsToC(fstr) + "} " + vname + ";\n"
+            }
+            vi = vi + 1
+        }
+        out = out + "    } u;\n"
+    }
+    return out + "};\n"
+}
+
+// Tagged-union bodies for sum types: an int tag plus a union of the payload
+// structs (only variants that carry fields), and a #define per variant tag.
 extern "C" {
     mapper findChar(s: String, c: Integer) -> Integer
     producer compile_c(cpath: String, binpath: String) -> Integer
@@ -1712,6 +1879,9 @@ mapper genForwardDecls(prog: Program) -> String {
     while t < tn {
         let ts = typeSpecGet(prog.types, t)
         if ts.isCompound {
+            out = out + "typedef struct xc_" + ts.name + "_s xc_" + ts.name + "_t;\n"
+        }
+        if ts.isSum {
             out = out + "typedef struct xc_" + ts.name + "_s xc_" + ts.name + "_t;\n"
         }
         t = t + 1
@@ -2847,7 +3017,7 @@ mapper findTypeSpec(prog: Program, name: String) -> TypeSpec {
         if ts.name == name { return ts }
         i = i + 1
     }
-    return TypeSpec { name: "", isCompound: false, baseCtype: "", fields: empty, hasWhere: false, whereSrc: "", whereTokens: none }
+    return TypeSpec { name: "", isCompound: false, baseCtype: "", fields: empty, hasWhere: false, whereSrc: "", whereTokens: none, isSum: false, variants: [] }
 }
 
 // True if the app binds a non-default (non-LocalBus) PublisherService — i.e. an

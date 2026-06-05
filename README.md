@@ -65,6 +65,8 @@ module App {}                             // resolution is automatic
   channels. See [Threading](https://code-by-sia.github.io/x/threading).
 - **Refined types** carry constraints (`type Age = Number where value >= 0`)
   that are **checked at construction**.
+- **Sum / algebraic types** (`type Shape = | Circle { r: Number } | Empty`) with
+  payload-binding `match` — lowered to tagged unions.
 - **Result-based error handling** (`T!`, `ok`/`err`, `?` propagation) — no
   exceptions.
 - **`where`-guarded overloading**, `match`, optionals (`T?`), arrays (`T[]`),

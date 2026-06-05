@@ -38,6 +38,39 @@ type Team   = { lead: Person, members: Person[] }
 
 `T?` is an optional, `T[]` an array, `T!` a [result](error-handling.md).
 
+## Sum (algebraic) types
+
+A sum type's value is exactly **one of several variants**, each optionally
+carrying its own fields. Declare the variants with `|`:
+
+```x
+type Shape =
+    | Circle { radius: Number }
+    | Rect   { w: Number, h: Number }
+    | Empty                              // a nullary variant
+
+type Color = | Red | Green | Blue        // no payloads == a plain enum
+```
+
+Construct a variant by name (`Circle { radius: 2.0 }`, or just `Empty`).
+Deconstruct with `match` — a variant pattern may bind the payload:
+
+```x
+mapper area(s: Shape) -> Number {
+    match s {
+        Circle c -> { return 3.14159 * c.radius * c.radius }   // c is the payload
+        Rect r   -> { return r.w * r.h }
+        Empty    -> { return 0.0 }
+    }
+    return 0.0
+}
+```
+
+A sum type is an ordinary type: use it in fields (`type Light = { color: Color }`),
+arrays (`Shape[]`), parameters, and returns. It lowers to a tagged union — an
+`int` tag plus a union of the variant payloads. Variant names must be unique
+across all sum types in the program.
+
 ## Type aliases
 
 A `type` can alias another type — handy for readable *plural* names for arrays:

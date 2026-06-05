@@ -10,6 +10,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Refined types (`type Age = Number where value >= 0 and value <= 130`) | ✓ |
 | Constraint **enforcement** at construction (gated; aborts on violation) | ✓ |
 | Compound types (`type Person = { name: Name, age: Age }`) | ✓ |
+| Sum / algebraic types (`type Shape = \| Circle { r: Number } \| Empty`), matched with `match` | ✓ |
 | Optional types (`T?`) and `if let` unwrapping | ✓ |
 | Array types (`T[]`) | ✓ |
 | Type aliases incl. plural/array (`type People = Person[]`, `type Name = String`) | ✓ |
