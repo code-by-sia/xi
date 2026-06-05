@@ -35,14 +35,13 @@ module App {}                             // resolution is automatic
 
 - **Dependency injection & IoC are part of the language**, not a framework.
   Implementations are discovered and wired automatically; `bind` is an optional
-  override. See [below](#dependency-injection--ioc).
+  override.
 - **Seven function kinds** name a function's role and intent —
   `mapper`, `projector`, `predicate`, `consumer`, `producer`, `reducer`,
   `creator` — and the compiler enforces purity for the pure ones.
 - **Decision tables** (`decision` kind) express business rules as
-  `when <cond> => <result>` arms — and, being a function kind, they're
-  DI-injectable and can call predicates. See
-  [decision tables](#decision-tables-dxt).
+  `when <cond> => <result>` arms (or a tabular `in`/`out` grid) — and, being a
+  function kind, they're DI-injectable and can call predicates.
 - **Interrupts** — resumable conditions: a function `signal`s and **suspends**;
   an enclosing `try`/`catch` decides to `recover` (resume) or `skip` (abandon).
   See [Interrupts](https://code-by-sia.github.io/x/interrupts).
@@ -107,171 +106,13 @@ docker run --rm -it -v "${PWD}:/work" xi xi        # REPL
 The image downloads a published release; pin one with
 `--build-arg XI_VERSION=v0.0.14`. See the [`Dockerfile`](Dockerfile).
 
-## Dependency injection & IoC
+## Documentation
 
-DI is built into the language. A class declares what it needs in a `deps { }`
-block; at a use site `App.resolve(Interface)` returns a fully-wired instance.
-The compiler **discovers implementations automatically** — a `bind` is only
-needed to *steer* resolution. When an interface has several implementations, a
-dependency disambiguates with a `where` guard, a list type `I[]`, or an `or`
-fallback.
-
-```x
-interface Logger { consumer log(msg: String) }
-class ConsoleLogger implements Logger {
-    deps {}
-    consumer log(msg: String) { system.stdout.writeln(msg) }
-}
-
-interface Calculator { predicate precise() }
-class BasicCalc   implements Calculator { deps {} predicate precise() { return false } }
-class PreciseCalc implements Calculator { deps {} predicate precise() { return true } }
-
-interface TaxRule { mapper rate() -> Number }
-class Vat implements TaxRule { deps {} mapper rate() -> Number { return 20 } }
-class Gst implements TaxRule { deps {} mapper rate() -> Number { return 5 } }
-
-interface Repository { mapper name() -> String }
-class EmptyRepository implements Repository { deps {} mapper name() -> String { return "empty" } }
-
-interface Service { consumer run() }
-class Checkout implements Service {
-    deps {
-        log:   Logger
-        calc:  Calculator where calc.precise()   // pick the impl whose guard holds
-        rules: TaxRule[]                          // inject ALL implementations
-        repo:  Repository or EmptyRepository      // fall back if none found
-    }
-    consumer run() {
-        log.log("precise? " + calc.precise())
-        log.log("rules   = " + rules.len)
-        log.log("repo    = " + repo.name())
-    }
-}
-
-// Functions can declare dependencies too.
-mapper { log: Logger } describe(name: String) -> String {
-    log.log("describing " + name)
-    return "<" + name + ">"
-}
-
-async entry main(args: String[]) -> Integer {
-    let svc = App.resolve(Service)   // auto-wired; no bind needed
-    svc.run()
-    system.stdout.writeln(describe("widget"))
-    return 0
-}
-
-module App {}   // empty: resolution is automatic. Add `bind`s here only to steer,
-                // e.g.  bind Logger -> ConsoleLogger as singleton
-```
-
-Runnable as [`examples/di_auto.xi`](examples/di_auto.xi). `singleton` / `transient`
-scopes are selected with `bind I -> Impl as singleton`.
-
-## Decision tables (DxT)
-
-The `decision` function kind expresses rules as `when <condition> => <result>`
-arms with a final `else`. Conditions are ordinary expressions, so they can call
-predicates and use injected dependencies; `hit first` returns the first match.
-
-```x
-decision creditTier(score: Number, income: Number) -> String {
-    hit first
-    when score >= 750                      => "gold"
-    when score >= 650 and income >= 50000  => "gold"
-    when score >= 650                      => "silver"
-    else                                   => "bronze"
-}
-```
-
-Because it's a function kind, a `decision` can implement an interface method —
-making the whole policy DI-injectable:
-
-```x
-interface Pricing { decision quote(score: Number, base: Number) -> Number }
-class StdPricing implements Pricing {
-    deps { risk: RiskModel }
-    decision quote(score: Number, base: Number) -> Number {
-        hit first
-        when risk.risky(score) => base * 2      // condition uses an injected dep
-        when score >= 700      => base * 0.9
-        else                   => base
-    }
-}
-```
-
-For multi-dimensional rules there is also a **table form** — `in`/`out` columns
-and one `| … => … |` row per rule, with a small cell DSL (`-`, `>= n`, `[a .. b]`,
-`in {…}`, `not`, `?(expr)`):
-
-```x
-decision shipping {
-    in weight: Number   in zone: String   out cost: Number   hit first
-    |  <= 1     | "US"            =>  5 |
-    |  [1 .. 5] | -               => 15 |
-    |  -        | -               => 25 |   // default
-}
-```
-
-A decision desugars to an `if/return` chain (zero runtime overhead). See
-[decision tables](https://code-by-sia.github.io/x/decisions),
-[`examples/decision_demo.xi`](examples/decision_demo.xi), and
-[`examples/decision_table_demo.xi`](examples/decision_table_demo.xi).
-
-## A tour of the rest
-
-**Refined types** — constraints enforced when a value is constructed:
-
-```x
-type Age    = Number where value >= 0 and value <= 130
-type Person = { name: String, age: Age }
-predicate isAdult(p: Person) { return p.age >= 18 }   // pure: cannot mutate
-```
-
-**Error handling** with `T!`, `ok`/`err`, and `?`:
-
-```x
-mapper checkAge(n: Number) -> Age! {
-    if n < 0   { return err("age is negative") }
-    if n > 130 { return err("age too large") }
-    return ok(n)
-}
-mapper classify(n: Number) -> String! {
-    let a = checkAge(n)?              // propagate the Err, else unwrap
-    if a < 18 { return ok("minor") }
-    return ok("adult")
-}
-```
-
-**`where`-guarded overloading** — the compiler builds a dispatcher that picks the
-first overload whose guard holds:
-
-```x
-mapper mapResponse(r: ApiResponse) -> String where r.status == 200 { return "OK: " + r.body }
-mapper mapResponse(r: ApiResponse) -> String where r.status >= 500 { return "Server Error" }
-mapper mapResponse(r: ApiResponse) -> String { return "Unhandled " + r.status }   // default
-```
-
-**`match`**, **multi-file `import` / `namespace`**, the **standard library**, and
-more are covered in the [guide](https://code-by-sia.github.io/x/). See [`examples/`](examples/) for runnable
-programs (incl. [`fs_demo.x`](examples/fs_demo.xi) and a loopback TCP echo in
-[`net_demo.x`](examples/net_demo.xi)).
-
-## How it compiles
-
-```
-source.xi (+ imported files)
-  ↓ load     resolve `import`s, apply `namespace` prefixing   (compiler/driver.xi)
-  ↓ lex      tokeniser                                        (compiler/lexer.xi)
-  ↓ parse    recursive-descent parser                         (compiler/parser.xi)
-  ↓ codegen  C99: DI wiring, vtables, refined types, overloads, results, match
-  ↓ cc       C → native binary (invoked automatically)
-```
-
-The compiler is itself an Xi program (`compiler/*.xi`); `selfhost.sh` proves the
-fixpoint (successive self-compiles emit byte-identical C). See
-[internals](https://code-by-sia.github.io/x/internals).
+Full documentation — the language guide, dependency injection & IoC, decision
+tables, interrupts, atoms, state machines, events, serialization, the standard
+library, and the compiler internals — lives in the repository at
+**[github.com/code-by-sia/x](https://github.com/code-by-sia/x)**
+(rendered at [code-by-sia.github.io/x](https://code-by-sia.github.io/x/)).
 
 ## Project layout
 
@@ -281,7 +122,7 @@ compiler/   the compiler, written in Xi (lexer, parser, codegen, driver) + xc_he
 runtime/    the C runtime (runtime.h, runtime.c) — the Xi equivalent of libc/libcore
 std/        standard library (math, text, bytes, convert, json, yaml, xml, events, io, fs, path, net, process, time)
 examples/   runnable programs, incl. proj/ (multi-file) and showcase/ (full project)
-docs/       MkDocs documentation
+docs/       documentation (Docusaurus site under website/)
 editors/    Tree-sitter grammar, Zed extension, Vim plugin
 ```
 
