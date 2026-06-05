@@ -34,6 +34,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <setjmp.h>
+#include <pthread.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -179,6 +180,22 @@ typedef struct xc_web_response* xc_HttpResponse_t;
 void          xstd_resp_set(xc_HttpResponse_t, xc_integer_t status, xc_string_t body, xc_string_t ctype);
 xc_integer_t  xstd_resp_status(xc_HttpResponse_t);
 void          xstd_web_set_handler(void (*fn)(xc_HttpRequest_t, xc_HttpResponse_t));
+
+/* Threading (std/thread): share-nothing OS threads communicating over
+   thread-safe channels. A `parallel { }` block lifts to a thread function and is
+   started via xstd_thread_spawn, returning a Thread handle (stop/wait/running).
+   Channels carry copied string payloads (the only thing crossing the boundary). */
+typedef struct xc_chan*   xc_Channel_t;
+typedef struct xc_thread* xc_Thread_t;
+xc_Channel_t  xstd_chan_new(void);
+void          xstd_chan_send(xc_Channel_t, xc_string_t);
+xc_string_t   xstd_chan_recv(xc_Channel_t);
+void          xstd_chan_close(xc_Channel_t);
+xc_Thread_t   xstd_thread_spawn(void* (*fn)(void*), void* arg);
+void          xstd_thread_stop(xc_Thread_t);
+void          xstd_thread_wait(xc_Thread_t);
+xc_bool_t     xstd_thread_running(xc_Thread_t);
+xc_bool_t     xstd_thread_stopped(void);
 
 xc_Event_t   xstd_event_make(xc_string_t topic, xc_string_t type, void* payload);
 xc_string_t  xstd_event_topic(xc_Event_t);

@@ -689,6 +689,24 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         return ExprRes { code: code, pos: p, xtyp: arrSuffixOf(firstX) + "[]" }
     }
     if k == 1 {
+        if isParallelAt(toks, pos) {
+            // parallel [(cap,...)] { body } -> spawn a thread, yield a Thread
+            let pp = parseParallelAt(toks, pos)
+            let id = ctx.fnTag + "_" + int_to_string(pos)
+            let args = ""
+            let nc = stringArrLen(pp.caps)
+            let c = 0
+            while c < nc {
+                if c > 0 { args = args + ", " }
+                args = args + stringArrGet(pp.caps, c)
+                c = c + 1
+            }
+            return ExprRes { code: "xc_parspawn_" + id + "(" + args + ")", pos: pp.endPos, xtyp: "Thread" }
+        }
+        if txt == "thread" {
+            // built-in thread facility: thread.channel() / thread.stopped()
+            return ExprRes { code: "", pos: pos + 1, xtyp: "thread:" }
+        }
         if gkind(toks, pos + 1) == 102 and isTypeNameC(ctx.prog, txt) {
             return genTypeLiteral(toks, pos, ctx)
         }
@@ -738,6 +756,27 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "topic"    { code = "xstd_event_topic(" + al.code + ")"   typ = "String" }
                     if fld == "type"     { code = "xstd_event_type(" + al.code + ")"    typ = "String" }
                     if fld == "run"      { code = "xc_events_run()"  typ = "" }
+                    p = al.pos
+                } else {
+                if typ == "thread:" {
+                    // Built-in thread facility: thread.channel() / thread.stopped()
+                    let al = genArgs(toks, p + 2, ctx)
+                    if fld == "channel" { code = "xstd_chan_new()"        typ = "Channel" }
+                    if fld == "stopped" { code = "xstd_thread_stopped()"  typ = "Bool" }
+                    p = al.pos
+                } else {
+                if typ == "Channel" {
+                    let al = genArgs(toks, p + 2, ctx)
+                    if fld == "send"  { code = "xstd_chan_send("  + code + ", " + al.code + ")"  typ = "" }
+                    if fld == "recv"  { code = "xstd_chan_recv("  + code + ")"  typ = "String" }
+                    if fld == "close" { code = "xstd_chan_close(" + code + ")"  typ = "" }
+                    p = al.pos
+                } else {
+                if typ == "Thread" {
+                    let al = genArgs(toks, p + 2, ctx)
+                    if fld == "stop"    { code = "xstd_thread_stop("    + code + ")"  typ = "" }
+                    if fld == "wait"    { code = "xstd_thread_wait("    + code + ")"  typ = "" }
+                    if fld == "running" { code = "xstd_thread_running(" + code + ")"  typ = "Bool" }
                     p = al.pos
                 } else {
                 if typ == "HttpResponse" {
@@ -864,6 +903,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 }
                 }
                 p = al.pos
+                }
+                }
+                }
                 }
                 }
                 }
@@ -1483,6 +1525,105 @@ mapper hoistCatches(prog: Program, toks: Token[], tag: String) -> String {
     return out
 }
 
+// ── `parallel { }` blocks (std/thread) ────────────────────────────
+// A `parallel [(cap, ...)] { body }` expression spawns an OS thread running the
+// body and yields a Thread handle. Captures must be channels (the only thing
+// allowed to cross the share-nothing boundary); they are passed by value.
+type ParallelParse = { caps: String[], bodyStart: Integer, bodyEnd: Integer, endPos: Integer }
+
+// Parse the construct starting at `pos` (the `parallel` token).
+mapper parseParallelAt(toks: Token[], pos: Integer) -> ParallelParse {
+    let caps: String[] = []
+    let p = pos + 1                       // past `parallel`
+    if gkind(toks, p) == 100 {            // optional ( cap, ... )
+        p = p + 1
+        while gkind(toks, p) != 101 and gkind(toks, p) != 0 {
+            if gkind(toks, p) == 1 { caps = appendString(caps, gtext(toks, p)) }
+            p = p + 1
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }   // )
+    }
+    // p is now at the body `{`
+    let close = matchBrace(toks, p)
+    return ParallelParse { caps: caps, bodyStart: p + 1, bodyEnd: close, endPos: close + 1 }
+}
+
+// Does `pos` start a `parallel` construct (ident "parallel" followed by ( or {)?
+predicate isParallelAt(toks: Token[], pos: Integer) {
+    if gkind(toks, pos) != 1 { return false }
+    if gtext(toks, pos) != "parallel" { return false }
+    let nk = gkind(toks, pos + 1)
+    return nk == 100 or nk == 102
+}
+
+// Lift every `parallel` block in a function body to a top-level thread function
+// plus a spawn helper, keyed by the block's token position (so genPrimary, which
+// walks the same tokens, can name the same helper).
+mapper hoistParallel(prog: Program, toks: Token[], tag: String) -> String {
+    let out = ""
+    let n = tokenArrLen(toks)
+    let i = 0
+    while i < n {
+        if isParallelAt(toks, i) {
+            let pp = parseParallelAt(toks, i)
+            let id = tag + "_" + int_to_string(i)
+            let nc = stringArrLen(pp.caps)
+            if nc > 0 {
+                out = out + "typedef struct {"
+                let c = 0
+                while c < nc { out = out + " xc_Channel_t " + stringArrGet(pp.caps, c) + ";"  c = c + 1 }
+                out = out + " } xc_parenv_" + id + "_t;\n"
+            }
+            // thread body
+            out = out + "static void* xc_par_" + id + "(void* __a) {\n"
+            let bctx = withTag(withRet(mkGCtx(prog), "void"), id)
+            if nc > 0 {
+                out = out + "    xc_parenv_" + id + "_t* __e = (xc_parenv_" + id + "_t*)__a;\n"
+                let c = 0
+                while c < nc {
+                    let nm = stringArrGet(pp.caps, c)
+                    out = out + "    xc_Channel_t " + nm + " = __e->" + nm + ";\n"
+                    bctx = addSym(bctx, nm, "Channel")
+                    c = c + 1
+                }
+            } else {
+                out = out + "    (void)__a;\n"
+            }
+            out = out + genStmts(toks, pp.bodyStart, pp.bodyEnd, bctx)
+            out = out + "    return (void*)0;\n}\n"
+            // spawn helper
+            out = out + "static xc_Thread_t xc_parspawn_" + id + "("
+            if nc > 0 {
+                let c = 0
+                while c < nc {
+                    if c > 0 { out = out + ", " }
+                    out = out + "xc_Channel_t " + stringArrGet(pp.caps, c)
+                    c = c + 1
+                }
+            } else {
+                out = out + "void"
+            }
+            out = out + ") {\n"
+            if nc > 0 {
+                out = out + "    xc_parenv_" + id + "_t* __e = (xc_parenv_" + id + "_t*)malloc(sizeof(*__e));\n"
+                out = out + "    if (!__e) abort();\n"
+                let c = 0
+                while c < nc {
+                    let nm = stringArrGet(pp.caps, c)
+                    out = out + "    __e->" + nm + " = " + nm + ";\n"
+                    c = c + 1
+                }
+                out = out + "    return xstd_thread_spawn(xc_par_" + id + ", (void*)__e);\n"
+            } else {
+                out = out + "    return xstd_thread_spawn(xc_par_" + id + ", (void*)0);\n"
+            }
+            out = out + "}\n"
+        }
+        i = i + 1
+    }
+    return out
+}
+
 // ── Code generator ────────────────────────────────────────────────
 
 mapper mangle(name: String) -> String {
@@ -1635,6 +1776,7 @@ mapper genIfaceDefaults(prog: Program) -> String {
                 if string_len(pstr) > 0 { pstr = ", " + pstr }
                 let tag = is2.name + "_" + ms.name
                 out = out + hoistCatches(prog, ms.bodyTokens, tag)
+                out = out + hoistParallel(prog, ms.bodyTokens, tag)
                 out = out + "static " + ms.retCtype + " xc_" + is2.name + "_" + ms.name + "_default_impl(void* self_ptr" + pstr + ") {\n"
                 out = out + "    (void)self_ptr;\n"
                 let ctx = withTag(withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype), tag)
@@ -2005,6 +2147,7 @@ mapper seedFuncDeps(ctx: GCtx, dlist: DepSpec[]) -> GCtx {
 mapper emitOneFunc(prog: Program, fs: FuncSpec) -> String {
     let tag = fs.name
     let out = hoistCatches(prog, fs.bodyTokens, tag)
+    out = out + hoistParallel(prog, fs.bodyTokens, tag)
     out = out + "static " + fs.retCtype + " xc_" + fs.name + "(" + fs.params + ") {\n"
     out = out + funcDepPrologue(prog, fs.fnDeps)
     let ctx = withTag(seedFuncDeps(withRet(seedParams(mkGCtx(prog), fs.params), fs.retCtype), fs.fnDeps), tag)
@@ -2375,6 +2518,7 @@ mapper genClassMethods(prog: Program) -> String {
             let tag = cs.name + "_" + ms.name
             if ms.kind == "creator" {
                 out = out + hoistCatches(prog, ms.bodyTokens, tag)
+                out = out + hoistParallel(prog, ms.bodyTokens, tag)
                 out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "(" + ms.params + ") {\n"
                 let ctx = withTag(withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype), tag)
                 out = out + genBody2(ms.bodyTokens, ctx)
@@ -2383,6 +2527,7 @@ mapper genClassMethods(prog: Program) -> String {
                 let pstr = ms.params
                 if string_len(pstr) > 0 { pstr = ", " + pstr }
                 out = out + hoistCatches(prog, ms.bodyTokens, tag)
+                out = out + hoistParallel(prog, ms.bodyTokens, tag)
                 // Overloaded (multiple same-named, or `where`-guarded) methods emit
                 // per-overload bodies + a dispatcher; otherwise a single _impl.
                 let overloaded = countMethodName(cs, ms.name) > 1 or ms.hasWhere
@@ -2981,6 +3126,7 @@ mapper genWebDispatch(prog: Program) -> String {
 mapper genEntry(prog: Program) -> String {
     let es = prog.entrySpec
     let out = hoistCatches(prog, es.bodyTokens, "entry")
+    out = out + hoistParallel(prog, es.bodyTokens, "entry")
     out = out + "/* === Entry point === */\n"
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
