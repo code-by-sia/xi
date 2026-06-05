@@ -1,46 +1,52 @@
 # Web (`WebRequestHandler` & `std/web`)
 
-`std/web` is a small REST framework over HTTP/1.1. You implement the
-**`WebRequestHandler`** interface and route by overloading its `handle` method
-with `where` guards. Payloads are (de)serialized automatically — there is no
-manual JSON.
+`std/web` is a small REST framework over HTTP/1.1. You write **controllers** —
+classes that implement the **`WebRequestHandler`** interface — and route by
+overloading its `handle` method with `where` guards. Payloads are
+(de)serialized automatically — there is no manual JSON.
 
 ```x
 import "std/web.xi"
 ```
 
-## A handler
+## Controllers
 
-A handler is any class that `implements WebRequestHandler`. The contract is one
+A controller is any class that `implements WebRequestHandler`. The contract is one
 `action` method — `action` is an impure function kind: it may mutate, and is not
 a pure function. Route by writing several `handle` overloads, each guarded with
-`where`; the first matching overload wins, and the un-guarded overload is the
-default.
+`where`; the first matching overload wins.
+
+**Controllers are auto-registered** — every class implementing
+`WebRequestHandler` is discovered and DI-wired automatically, with no `bind`.
+Split routes across as many controllers as you like; the server tries each (in
+declaration order) and the first overload whose guard matches handles the
+request. An unmatched request falls through to a `404`.
 
 ```x
 event Health { ok: Bool }
 event User   { name: String, active: Bool }
 
-class Api implements WebRequestHandler {
-    deps { repo: Repo }                                   // injected, as usual
-
+class HealthController implements WebRequestHandler {
     action handle(req: HttpRequest, res: HttpResponse) where req.path == "/health" {
         res.send(Health { ok: true })
     }
+}
+
+class UserController implements WebRequestHandler {
+    deps { repo: Repo }                                   // injected, as usual
+
     action handle(req: HttpRequest, res: HttpResponse) where req.path == "/user" {
         let name = req.query("name")
         res.send(User { name: name, active: repo.active(name) })
     }
-    action handle(req: HttpRequest, res: HttpResponse) {  // default
-        res.sendStatus(404, "Not Found")
-    }
 }
 
-module App { bind WebRequestHandler -> Api }
+module App {}                                             // no bind needed
 ```
 
-The server resolves the bound `WebRequestHandler` (via DI) and calls
-`handle(req, res)` once per request.
+A controller whose guards don't match simply leaves the response untouched, so
+the next controller gets a turn. (An un-guarded `handle` overload always matches,
+so use one only as a deliberate catch-all, and declare that controller last.)
 
 ## The `HttpRequest`
 
@@ -64,8 +70,8 @@ The response is *mutable* — fill it in, don't return it.
 | `res.sendText(code, body)` | reply `code` with a plain-text body |
 
 `res.send` / `req.parse` work for any `event` or compound `type`; the compiler
-derives the codec automatically. Unmatched requests fall through to the default
-overload (typically a `404`).
+derives the codec automatically. A request that no controller matches gets a
+`404`.
 
 ## The `WebTransport`
 
@@ -83,8 +89,7 @@ Bind your own implementor (e.g. a different wire format) to replace it:
 
 ```x
 module App {
-    bind WebRequestHandler -> Api
-    bind WebTransport      -> MsgPackTransport   // overrides the JSON default
+    bind WebTransport -> MsgPackTransport   // overrides the JSON default
 }
 ```
 

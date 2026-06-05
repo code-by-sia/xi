@@ -243,10 +243,11 @@ predicate isCompoundTypeC(prog: Program, name: String) {
     return false
 }
 
-// std/web's handler model is active when WebRequestHandler is implemented.
+// std/web's handler model is active when at least one class implements
+// WebRequestHandler (controllers are auto-registered — no explicit bind needed).
 predicate webEnabled(prog: Program) {
     if not isInterface(prog, "WebRequestHandler") { return false }
-    return string_len(chosenImpl(prog, "WebRequestHandler")) > 0
+    return stringArrLen(implementorsOf(prog, "WebRequestHandler")) > 0
 }
 
 // A JSON codec (xc_tojson_/xc_fromjson_) is emitted for this X type: every
@@ -2915,14 +2916,24 @@ mapper genEventDispatch(prog: Program) -> String {
 }
 
 // std/web (handler model): the runtime hands each request a fresh mutable
-// response; we resolve the bound WebRequestHandler and call handle(req, res).
-// Routing is just `where`-overloaded handle methods inside the handler class.
+// response. Every class implementing WebRequestHandler is a controller and is
+// auto-registered (DI-wired) — no explicit bind. Controllers are tried in
+// declaration order; the first whose handle sets the response wins. Routing is
+// the `where`-overloaded handle methods inside each controller.
 mapper genWebDispatch(prog: Program) -> String {
     if not webEnabled(prog) { return "" }
-    let out = "/* === Web (WebRequestHandler dispatch) === */\n"
+    let out = "/* === Web (WebRequestHandler controllers) === */\n"
     out = out + "static void xc_web_handle(xc_HttpRequest_t __req, xc_HttpResponse_t __res) {\n"
-    out = out + "    xc_WebRequestHandler_t __h = xc_resolve_WebRequestHandler();\n"
-    out = out + "    __h.vtable->handle(__h.self, __req, __res);\n"
+    let impls = implementorsOf(prog, "WebRequestHandler")
+    let n = stringArrLen(impls)
+    let i = 0
+    while i < n {
+        let c = stringArrGet(impls, i)
+        out = out + "    { xc_WebRequestHandler_t __h = xc_" + c + "_as_WebRequestHandler(xc_new_" + c + "());\n"
+        out = out + "      __h.vtable->handle(__h.self, __req, __res);\n"
+        out = out + "      if (xstd_resp_status(__res) != 0) return; }\n"
+        i = i + 1
+    }
     out = out + "}\n"
     out = out + "static void xc_web_init(void) { xstd_web_set_handler(xc_web_handle); }\n\n"
     return out
