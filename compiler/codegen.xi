@@ -869,6 +869,8 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "topic"    { code = "xstd_event_topic(" + al.code + ")"   typ = "String" }
                     if fld == "type"     { code = "xstd_event_type(" + al.code + ")"    typ = "String" }
                     if fld == "run"      { code = "xc_events_run()"  typ = "" }
+                    if fld == "runAsync" { code = "xc_events_run_async()"  typ = "Thread" }
+                    if fld == "stop"     { code = "xstd_eventq_close()"    typ = "" }
                     p = al.pos
                 } else {
                 if typ == "thread:" {
@@ -3193,6 +3195,7 @@ mapper genEventFwd(prog: Program) -> String {
     if isInterface(prog, "ConsumerService") {
         out = out + "static void xc_events_run(void);\n"
     }
+    out = out + "static xc_Thread_t xc_events_run_async(void);\n"
     return out + "\n"
 }
 
@@ -3265,6 +3268,18 @@ mapper genEventDispatch(prog: Program) -> String {
         out = out + "    xc_ConsumerService_t __c = xc_resolve_ConsumerService();\n"
         out = out + "    __c.vtable->run(__c.self);\n}\n"
     }
+    // async pump: a worker thread that blocks on the queue and dispatches each
+    // event to its typed listeners, until Events.stop() closes the queue.
+    out = out + "static void* xc_events_pump(void* __a) {\n"
+    out = out + "    (void)__a;\n"
+    out = out + "    for (;;) {\n"
+    out = out + "        xc_Event_t __e = xstd_eventq_pop_blocking();\n"
+    out = out + "        if (!__e) break;\n"
+    out = out + "        xc_event_dispatch(__e);\n"
+    out = out + "    }\n"
+    out = out + "    return (void*)0;\n}\n"
+    out = out + "static xc_Thread_t xc_events_run_async(void) {\n"
+    out = out + "    return xstd_thread_spawn(xc_events_pump, (void*)0);\n}\n"
     return out + "\n"
 }
 

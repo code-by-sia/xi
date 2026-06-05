@@ -1004,11 +1004,16 @@ xc_string_t xstd_event_topic(xc_Event_t e)   { return xc_str_copy(e->topic, strl
 xc_string_t xstd_event_type(xc_Event_t e)    { return xc_str_copy(e->type, strlen(e->type)); }
 void*       xstd_event_payload(xc_Event_t e)  { return e->payload; }
 
-/* In-memory FIFO of envelopes (the default transport's queue). */
+/* In-memory FIFO of envelopes (the default transport's queue). Guarded by a
+   mutex+condvar so a worker thread (Events.runAsync) can drain it while other
+   threads publish; the sync path (Events.run) uses the same locks. */
 static xc_Event_t* xc_eq = NULL;
 static long xc_eq_head = 0, xc_eq_len = 0, xc_eq_cap = 0;
+static pthread_mutex_t xc_eq_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  xc_eq_cv  = PTHREAD_COND_INITIALIZER;
+static int xc_eq_closed = 0;
 
-void xstd_eventq_push(xc_Event_t e) {
+static void xc_eq_enq(xc_Event_t e) {            /* caller holds the lock */
     if (xc_eq_head + xc_eq_len >= xc_eq_cap) {
         if (xc_eq_head > 0) {                       /* compact toward the front */
             memmove(xc_eq, xc_eq + xc_eq_head, (size_t)xc_eq_len * sizeof(xc_Event_t));
@@ -1023,13 +1028,46 @@ void xstd_eventq_push(xc_Event_t e) {
     xc_eq[xc_eq_head + xc_eq_len] = e;
     xc_eq_len++;
 }
-xc_integer_t xstd_eventq_len(void) { return (xc_integer_t)xc_eq_len; }
-xc_Event_t xstd_eventq_shift(void) {
+static xc_Event_t xc_eq_deq(void) {              /* caller holds the lock */
     if (xc_eq_len == 0) return NULL;
     xc_Event_t e = xc_eq[xc_eq_head];
     xc_eq_head++; xc_eq_len--;
     if (xc_eq_len == 0) xc_eq_head = 0;
     return e;
+}
+
+void xstd_eventq_push(xc_Event_t e) {
+    pthread_mutex_lock(&xc_eq_mtx);
+    xc_eq_enq(e);
+    pthread_cond_signal(&xc_eq_cv);
+    pthread_mutex_unlock(&xc_eq_mtx);
+}
+xc_integer_t xstd_eventq_len(void) {
+    pthread_mutex_lock(&xc_eq_mtx);
+    long n = xc_eq_len;
+    pthread_mutex_unlock(&xc_eq_mtx);
+    return (xc_integer_t)n;
+}
+xc_Event_t xstd_eventq_shift(void) {             /* non-blocking */
+    pthread_mutex_lock(&xc_eq_mtx);
+    xc_Event_t e = xc_eq_deq();
+    pthread_mutex_unlock(&xc_eq_mtx);
+    return e;
+}
+/* Block until an event is available, or NULL once the queue is closed+drained. */
+xc_Event_t xstd_eventq_pop_blocking(void) {
+    pthread_mutex_lock(&xc_eq_mtx);
+    while (xc_eq_len == 0 && !xc_eq_closed) pthread_cond_wait(&xc_eq_cv, &xc_eq_mtx);
+    xc_Event_t e = xc_eq_deq();
+    pthread_mutex_unlock(&xc_eq_mtx);
+    return e;
+}
+/* Stop async pumps: mark closed and wake all waiters. */
+void xstd_eventq_close(void) {
+    pthread_mutex_lock(&xc_eq_mtx);
+    xc_eq_closed = 1;
+    pthread_cond_broadcast(&xc_eq_cv);
+    pthread_mutex_unlock(&xc_eq_mtx);
 }
 
 /* ─── YAML & XML (std/yaml, std/xml) ─────────────────────────────────────────

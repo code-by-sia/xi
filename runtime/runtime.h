@@ -205,6 +205,8 @@ void*        xstd_event_payload(xc_Event_t);
 void         xstd_eventq_push(xc_Event_t);
 xc_integer_t xstd_eventq_len(void);
 xc_Event_t   xstd_eventq_shift(void);
+xc_Event_t   xstd_eventq_pop_blocking(void);
+void         xstd_eventq_close(void);
 
 /* Number → string */
 static inline xc_string_t xc_number_to_string(xc_number_t n) {
