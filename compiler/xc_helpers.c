@@ -77,6 +77,8 @@ DEFINE_TYPED_ARR(xc_FuncSpec_t,    xc_arr_FuncSpec_t,    appendFuncSpec)
 DEFINE_TYPED_ARR(xc_AtomSpec_t,    xc_arr_AtomSpec_t,    appendAtomSpec)
 DEFINE_TYPED_ARR(xc_MachineSpec_t, xc_arr_MachineSpec_t, appendMachineSpec)
 DEFINE_TYPED_ARR(xc_MachineTransition_t, xc_arr_MachineTransition_t, appendMachineTransition)
+DEFINE_TYPED_ARR(xc_DecisionRow_t,   xc_arr_DecisionRow_t,   appendDecisionRow)
+DEFINE_TYPED_ARR(xc_DecisionTable_t, xc_arr_DecisionTable_t, appendDecisionTable)
 
 /* ─── Token array ────────────────────────────────────────────────────────── */
 
@@ -157,6 +159,11 @@ xc_MachineSpec_t machineSpecGet(xc_arr_MachineSpec_t a, xc_integer_t i) { return
 
 xc_integer_t machineTransLen(xc_arr_MachineTransition_t a) { return appendMachineTransition_len(a); }
 xc_MachineTransition_t machineTransGet(xc_arr_MachineTransition_t a, xc_integer_t i) { return appendMachineTransition_get(a, i); }
+
+xc_integer_t decisionRowLen(xc_arr_DecisionRow_t a) { return appendDecisionRow_len(a); }
+xc_DecisionRow_t decisionRowGet(xc_arr_DecisionRow_t a, xc_integer_t i) { return appendDecisionRow_get(a, i); }
+xc_integer_t decisionTableLen(xc_arr_DecisionTable_t a) { return appendDecisionTable_len(a); }
+xc_DecisionTable_t decisionTableGet(xc_arr_DecisionTable_t a, xc_integer_t i) { return appendDecisionTable_get(a, i); }
 
 /* ─── String utility ─────────────────────────────────────────────────────── */
 

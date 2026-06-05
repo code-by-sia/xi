@@ -296,7 +296,8 @@ type Program = {
     interrupts: String[],     // names of declared `interrupt` types (for type ids)
     atoms:      AtomSpec[],   // declared `atom`s
     machines:   MachineSpec[], // declared `machine`s
-    eventTypes: String[]      // names of declared `event` types (typed payloads)
+    eventTypes: String[],     // names of declared `event` types (typed payloads)
+    tables:     DecisionTable[] // table-form `decision`s (emitted by codegen)
 }
 
 // C helpers for building typed arrays used by Program
@@ -319,6 +320,12 @@ extern "C" {
     mapper appendMachineTransition(arr: MachineTransition[], s: MachineTransition) -> MachineTransition[]
     mapper machineTransLen(arr: MachineTransition[]) -> Integer
     mapper machineTransGet(arr: MachineTransition[], i: Integer) -> MachineTransition
+    mapper appendDecisionRow(arr: DecisionRow[], s: DecisionRow) -> DecisionRow[]
+    mapper decisionRowLen(arr: DecisionRow[]) -> Integer
+    mapper decisionRowGet(arr: DecisionRow[], i: Integer) -> DecisionRow
+    mapper appendDecisionTable(arr: DecisionTable[], s: DecisionTable) -> DecisionTable[]
+    mapper decisionTableLen(arr: DecisionTable[]) -> Integer
+    mapper decisionTableGet(arr: DecisionTable[], i: Integer) -> DecisionTable
 
     mapper methodSpecLen(arr: MethodSpec[]) -> Integer
     mapper methodSpecGet(arr: MethodSpec[], i: Integer) -> MethodSpec
@@ -543,11 +550,36 @@ mapper collectArmResult(ps: PState) -> BodyResult {
 }
 
 // ── decision table-form ──────────────────────────────────────────────────
-// Lowers a grid `decision` to the same if/return chain as the when-form, with
-// `in` columns synthesized into params and a single `out` column as the result.
-// Core subset: in/out (single out), the cell DSL, and `hit first`.
+// A grid `decision`: `in` columns become parameters, `out` columns the result
+// (a scalar for one out, a synthesized `<Name>Out` record for several), each
+// `| cell… => out… |` row a rule, with a hit policy (first / unique / collect
+// [+ sum|min|max|count]) and the cell DSL. Table decisions are kept structurally
+// (here) and emitted directly by codegen (genDecisionTables).
 
-type DecisionResult = { bodyTokens: Token[], ps: PState, params: String, retCtype: String, isTable: Bool }
+// One rule: the AND-of-cells condition tokens ([] = always), and the output
+// expression tokens (one per out column, separated by `|` (kind 125)).
+type DecisionRow = { cond: Token[], outs: Token[] }
+
+type DecisionTable = {
+    name:      String,
+    params:    String,        // C params from `in`
+    policy:    String,        // "first" | "unique" | "collect"
+    agg:       String,        // "" | "sum" | "min" | "max" | "count"
+    outNames:  String[],      // out column names (record field names when multi)
+    outCtypes: String[],      // out column ctypes (parallel)
+    retElem:   String,        // one row's value ctype: single out ctype, or xc_<Name>Out_t
+    retCtype:  String,        // the decision's C return type (by policy/aggregator)
+    isMulti:   Bool,          // more than one out -> record
+    rows:      DecisionRow[]
+}
+
+// Result of parsing a `decision` body. For table-form, `table` is filled and (for
+// multi-out) `outType` carries the synthesized record TypeSpec.
+type DecisionResult = {
+    bodyTokens: Token[], ps: PState, params: String, retCtype: String, isTable: Bool,
+    table: DecisionTable, outType: TypeSpec, hasOutType: Bool
+}
+type RowResult = { cond: Token[], outs: Token[], ps: PState }
 
 // Build a boolean test for one input cell, with `col` as the implicit subject.
 // Returns synthesized tokens ([] = wildcard, contributes no condition).
@@ -644,7 +676,9 @@ mapper buildCellCond(colName: String, cell: Token[], line: Integer) -> Token[] {
 }
 
 // Parse one `| c1 | c2 => out |` row into an if/return (or a default return).
-mapper parseDecisionRow(ps: PState, inNames: String[]) -> BodyResult {
+// Parse one rule: AND-of-cells condition tokens, then `outCount` output exprs
+// (kept with `|` separators between them so codegen can split).
+mapper parseDecisionRow(ps: PState, inNames: String[], outCount: Integer) -> RowResult {
     let ps2 = ps
     let line = peek(ps2).line
     if peek(ps2).kind == 125 { ps2 = advance(ps2) }       // leading |
@@ -685,42 +719,39 @@ mapper parseDecisionRow(ps: PState, inNames: String[]) -> BodyResult {
         else { if peek(ps2).kind == 110 { ps2 = advance(ps2) collecting = false }  // =>
                else { collecting = false } }
     }
-    // single output expression, up to | or }
-    let outExpr: Token[] = []
-    let d2 = 0
-    let od = false
-    while not od {
-        let c = peek(ps2)
-        if c.kind == 0 or c.kind == 103 { od = true }
-        else {
-            if d2 == 0 and c.kind == 125 { od = true }
+    // outputs: outCount expressions, recorded with `|` separators between them
+    let outs: Token[] = []
+    let oi = 0
+    while oi < outCount {
+        if oi > 0 { outs = appendToken(outs, mkTok(125, "|", line)) }
+        let d2 = 0
+        let od = false
+        while not od {
+            let c = peek(ps2)
+            if c.kind == 0 or c.kind == 103 { od = true }
             else {
-                if c.kind == 100 or c.kind == 104 or c.kind == 102 { d2 = d2 + 1 }
-                if c.kind == 101 or c.kind == 105 or c.kind == 103 { d2 = d2 - 1 }
-                outExpr = appendToken(outExpr, c)
-                ps2 = advance(ps2)
+                if d2 == 0 and c.kind == 125 { od = true }
+                else {
+                    if c.kind == 100 or c.kind == 104 or c.kind == 102 { d2 = d2 + 1 }
+                    if c.kind == 101 or c.kind == 105 or c.kind == 103 { d2 = d2 - 1 }
+                    outs = appendToken(outs, c)
+                    ps2 = advance(ps2)
+                }
             }
         }
+        oi = oi + 1
+        if peek(ps2).kind == 125 { ps2 = advance(ps2) }   // consume separator / trailing |
     }
-    if peek(ps2).kind == 125 { ps2 = advance(ps2) }       // trailing |
-    let body: Token[] = []
-    if condStarted {
-        body = appendToken(body, mkTok(222, "if", line))
-        body = concatTokens(body, cond)
-        body = appendToken(body, mkTok(102, "{", line))
-        body = appendToken(body, mkTok(221, "return", line))
-        body = concatTokens(body, outExpr)
-        body = appendToken(body, mkTok(103, "}", line))
-    } else {
-        body = appendToken(body, mkTok(221, "return", line))
-        body = concatTokens(body, outExpr)
-    }
-    return BodyResult { bodyTokens: body, ps: ps2 }
+    return RowResult { cond: cond, outs: outs, ps: ps2 }
 }
 
 // Dispatch a `decision` body: table-form (in/out grid) or the shipped when-form.
 mapper parseDecision(name: String, ps: PState) -> DecisionResult {
-    let empty: Token[] = []
+    let emptyToks: Token[] = []
+    let emptyStrs: String[] = []
+    let emptyRows: DecisionRow[] = []
+    let emptyTable = DecisionTable { name: "", params: "", policy: "first", agg: "", outNames: emptyStrs, outCtypes: emptyStrs, retElem: "", retCtype: "", isMulti: false, rows: emptyRows }
+    let emptyType = TypeSpec { name: "", isCompound: false, baseCtype: "", fields: emptyStrs, hasWhere: false, whereSrc: "", whereTokens: emptyToks }
     // probe past `{` and an optional `hit <policy>` to detect the form
     let probe = 1
     if peekAt(ps, probe).kind == 257 { probe = probe + 2 }
@@ -728,23 +759,46 @@ mapper parseDecision(name: String, ps: PState) -> DecisionResult {
     let isTable = det.kind == 229 or (det.kind == 1 and det.text == "out")
     if not isTable {
         let br = parseDecisionBody(ps)
-        return DecisionResult { bodyTokens: br.bodyTokens, ps: br.ps, params: "", retCtype: "", isTable: false }
+        return DecisionResult { bodyTokens: br.bodyTokens, ps: br.ps, params: "", retCtype: "", isTable: false, table: emptyTable, outType: emptyType, hasOutType: false }
     }
     let ps2 = advance(ps)   // {
-    if peek(ps2).kind == 257 {                            // hit <policy>
+    let policy = "first"
+    let agg = ""
+    if peek(ps2).kind == 257 {                            // hit <policy> [agg]
         ps2 = advance(ps2)
         let pol = peek(ps2)
-        if pol.text != "first" { diag_error(pol.line, "decision table: only 'hit first' is supported in this version (got '" + pol.text + "')") }
+        if pol.text == "first" or pol.text == "unique" or pol.text == "collect" { policy = pol.text }
+        else { diag_error(pol.line, "decision table: unknown hit policy '" + pol.text + "' (use first | unique | collect)") }
         ps2 = advance(ps2)
+        if policy == "collect" {
+            let a = peek(ps2)
+            if a.kind == 1 and (a.text == "sum" or a.text == "min" or a.text == "max" or a.text == "count") {
+                agg = a.text
+                ps2 = advance(ps2)
+            }
+        }
     }
     let inNames: String[] = []
     let params = ""
-    let outCtype = ""
-    let outCount = 0
+    let outNames: String[] = []
+    let outCtypes: String[] = []
     let cols = true
     while cols {
         let t = peek(ps2)
-        if t.kind == 257 { ps2 = advance(ps2) ps2 = advance(ps2) }      // stray hit
+        if t.kind == 257 {                                             // hit <policy> [agg]
+            ps2 = advance(ps2)
+            let pol = peek(ps2)
+            if pol.text == "first" or pol.text == "unique" or pol.text == "collect" { policy = pol.text }
+            else { diag_error(pol.line, "decision table: unknown hit policy '" + pol.text + "' (use first | unique | collect)") }
+            ps2 = advance(ps2)
+            if policy == "collect" {
+                let a = peek(ps2)
+                if a.kind == 1 and (a.text == "sum" or a.text == "min" or a.text == "max" or a.text == "count") {
+                    agg = a.text
+                    ps2 = advance(ps2)
+                }
+            }
+        }
         else {
         if t.kind == 229 {                                              // in name : Type
             ps2 = advance(ps2)
@@ -759,32 +813,67 @@ mapper parseDecision(name: String, ps: PState) -> DecisionResult {
         } else {
         if t.kind == 1 and t.text == "out" {                            // out name : Type
             ps2 = advance(ps2)
-            ps2 = advance(ps2)                                          // name (unused for single out)
+            let on = peek(ps2).text
+            ps2 = advance(ps2)
             if peek(ps2).kind == 108 { ps2 = advance(ps2) }
             let tr = parseTypeExpr(ps2)
             ps2 = tr.ps
-            outCount = outCount + 1
-            if outCount == 1 { outCtype = tr.ctype }
-            else { diag_error(t.line, "decision table: multiple 'out' columns are not yet supported (single out only)") }
+            outNames = appendString(outNames, on)
+            outCtypes = appendString(outCtypes, tr.ctype)
         } else { cols = false }
         }
         }
     }
-    let body: Token[] = []
-    let rows = true
-    while rows {
+    let outCount = stringArrLen(outNames)
+    if outCount == 0 { diag_error(peek(ps2).line, "decision table: needs at least one 'out' column") }
+    let isMulti = outCount > 1
+    if isMulti and (agg == "sum" or agg == "min" or agg == "max") {
+        diag_error(peek(ps2).line, "decision table: collect " + agg + " needs a single numeric 'out' column")
+    }
+    let retElem = ""
+    let hasOutType = false
+    let outType = emptyType
+    if isMulti {
+        let fields: String[] = []
+        let fi = 0
+        while fi < outCount {
+            fields = appendString(fields, stringArrGet(outNames, fi) + ":" + stringArrGet(outCtypes, fi))
+            fi = fi + 1
+        }
+        outType = TypeSpec { name: name + "Out", isCompound: true, baseCtype: "", fields: fields, hasWhere: false, whereSrc: "", whereTokens: emptyToks }
+        hasOutType = true
+        retElem = "xc_" + name + "Out_t"
+    } else {
+        retElem = stringArrGet(outCtypes, 0)
+    }
+    // function return type: by policy + aggregator
+    let retCtype = retElem
+    if policy == "collect" {
+        if agg == "count" { retCtype = "xc_integer_t" }
+        else { if agg == "sum" or agg == "min" or agg == "max" { retCtype = retElem }
+               else { retCtype = "xc_arr_" + ctypeSuffix(retElem) + "_t" } }
+    }
+    // rows
+    let rows: DecisionRow[] = []
+    let more = true
+    while more {
         if peek(ps2).kind == 125 {
-            let rr = parseDecisionRow(ps2, inNames)
+            let rr = parseDecisionRow(ps2, inNames, outCount)
             ps2 = rr.ps
-            body = concatTokens(body, rr.bodyTokens)
-        } else { rows = false }
+            rows = appendDecisionRow(rows, DecisionRow { cond: rr.cond, outs: rr.outs })
+        } else { more = false }
     }
     if peek(ps2).kind == 103 { ps2 = advance(ps2) }       // }
-    return DecisionResult { bodyTokens: body, ps: ps2, params: params, retCtype: outCtype, isTable: true }
+    let table = DecisionTable {
+        name: name, params: params, policy: policy, agg: agg,
+        outNames: outNames, outCtypes: outCtypes, retElem: retElem,
+        retCtype: retCtype, isMulti: isMulti, rows: rows
+    }
+    return DecisionResult { bodyTokens: emptyToks, ps: ps2, params: params, retCtype: retCtype, isTable: true, table: table, outType: outType, hasOutType: hasOutType }
 }
 
 // Parse one function/method signature + body → FuncSpec
-type FuncResult = { spec: FuncSpec, ps: PState }
+type FuncResult = { spec: FuncSpec, ps: PState, table: DecisionTable, hasTable: Bool, outType: TypeSpec, hasOutType: Bool }
 
 mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
     let kindStr = ""
@@ -863,14 +952,26 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         }
     }
 
-    // body { ... }  (decisions desugar to an if/return chain — when- or table-form)
+    // body { ... }  (decisions: when-form desugars to if/return tokens; table-form
+    // is kept structurally and emitted directly by codegen)
+    let emptyStrs0: String[] = []
+    let emptyToks0: Token[] = []
+    let emptyRows0: DecisionRow[] = []
+    let dTable = DecisionTable { name: "", params: "", policy: "first", agg: "", outNames: emptyStrs0, outCtypes: emptyStrs0, retElem: "", retCtype: "", isMulti: false, rows: emptyRows0 }
+    let dOutType = TypeSpec { name: "", isCompound: false, baseCtype: "", fields: emptyStrs0, hasWhere: false, whereSrc: "", whereTokens: emptyToks0 }
+    let hasTable = false
+    let hasOutType = false
     let br = parseBody(ps2)
     if kindStr == "decision" {
         let dr = parseDecision(nameTok.text, ps2)
         br = BodyResult { bodyTokens: dr.bodyTokens, ps: dr.ps }
         if dr.isTable {
             pr = ParamResult { params: dr.params, ps: pr.ps }   // in-columns become params
-            retCtype = dr.retCtype                              // single out-column is the result
+            retCtype = dr.retCtype                              // result type by policy/out
+            dTable = dr.table
+            hasTable = true
+            dOutType = dr.outType
+            hasOutType = dr.hasOutType
         }
     }
     ps2 = br.ps
@@ -888,7 +989,7 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         fnDeps: fdeps,
         topic: topic
     }
-    return FuncResult { spec: spec, ps: ps2 }
+    return FuncResult { spec: spec, ps: ps2, table: dTable, hasTable: hasTable, outType: dOutType, hasOutType: hasOutType }
 }
 
 // Parse one method spec from an interface (no body)
@@ -1505,6 +1606,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     let atoms: AtomSpec[] = []
     let machines: MachineSpec[] = []
     let eventTypes: String[] = []
+    let tables: DecisionTable[] = []
     let entrySpec = FuncSpec {
         isCreator: false, isAsync: false,
         kind: "entry", name: "main",
@@ -1664,6 +1766,8 @@ creator parseProgram(tokens: Token[]) -> Program {
                                     if parseFuncKindCheck(ps) {
                                         let fr = parseFunc(ps, isAsync, false)
                                         functions = appendFuncSpec(functions, fr.spec)
+                                        if fr.hasTable { tables = appendDecisionTable(tables, fr.table) }
+                                        if fr.hasOutType { types = appendTypeSpec(types, fr.outType) }
                                         ps = fr.ps
                                     } else {
                                         ps = advance(ps)
@@ -1683,7 +1787,7 @@ creator parseProgram(tokens: Token[]) -> Program {
         types: types, ifaces: ifaces, classes: classes,
         modules: modules, functions: functions, externs: externs,
         entrySpec: entrySpec, interrupts: interrupts, atoms: atoms,
-        machines: machines, eventTypes: eventTypes
+        machines: machines, eventTypes: eventTypes, tables: tables
     }
 }
 

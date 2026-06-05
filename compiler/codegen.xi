@@ -1964,6 +1964,17 @@ mapper emitOverloadSet(prog: Program, name: String) -> String {
     return out
 }
 
+// Is `name` a table-form `decision`? (Its body is emitted by genDecisionTables.)
+predicate isTableDecision(prog: Program, name: String) {
+    let i = 0
+    let n = decisionTableLen(prog.tables)
+    while i < n {
+        if decisionTableGet(prog.tables, i).name == name { return true }
+        i = i + 1
+    }
+    return false
+}
+
 mapper genFreeFunctions(prog: Program) -> String {
     let out = "/* === Free functions === */\n"
     let done: String[] = []
@@ -1973,16 +1984,153 @@ mapper genFreeFunctions(prog: Program) -> String {
         let fs = funcSpecGet(prog.functions, i)
         if not strArrContains(done, fs.name) {
             done = appendString(done, fs.name)
-            let cnt = countFuncs(prog, fs.name)
-            if cnt == 1 and not fs.hasWhere {
-                out = out + emitOneFunc(prog, fs)
+            if isTableDecision(prog, fs.name) {
+                // emitted directly by genDecisionTables
             } else {
-                out = out + emitOverloadSet(prog, fs.name)
+                let cnt = countFuncs(prog, fs.name)
+                if cnt == 1 and not fs.hasWhere {
+                    out = out + emitOneFunc(prog, fs)
+                } else {
+                    out = out + emitOverloadSet(prog, fs.name)
+                }
             }
         }
         i = i + 1
     }
     return out + "\n"
+}
+
+// One row's value as a C expression: the single output, or a `<Name>Out` record.
+mapper decRowValue(prog: Program, t: DecisionTable, outs: Token[], ctx: GCtx) -> String {
+    if not t.isMulti {
+        return genExpr(outs, 0, ctx).code
+    }
+    let code = "(xc_" + t.name + "Out_t){ "
+    let nseg = stringArrLen(t.outNames)
+    let pos = 0
+    let seg = 0
+    while seg < nseg {
+        let sub: Token[] = []
+        let d = 0
+        let go = true
+        while go {
+            let k = gkind(outs, pos)
+            if k == 0 { go = false }
+            else {
+                if d == 0 and k == 125 { go = false }
+                else {
+                    if k == 100 or k == 104 or k == 102 { d = d + 1 }
+                    if k == 101 or k == 105 or k == 103 { d = d - 1 }
+                    sub = appendToken(sub, tokenArrGet(outs, pos))
+                    pos = pos + 1
+                }
+            }
+        }
+        if gkind(outs, pos) == 125 { pos = pos + 1 }
+        if seg > 0 { code = code + ", " }
+        code = code + "." + stringArrGet(t.outNames, seg) + " = " + genExpr(sub, 0, ctx).code
+        seg = seg + 1
+    }
+    return code + " }"
+}
+
+// Direct codegen for table-form decisions (first / unique / collect [+ agg]).
+mapper genDecisionTables(prog: Program) -> String {
+    let out = "/* === Decision tables === */\n"
+    let ti = 0
+    let tn = decisionTableLen(prog.tables)
+    while ti < tn {
+        let t = decisionTableGet(prog.tables, ti)
+        let ctx = seedParams(mkGCtx(prog), t.params)
+        out = out + "static " + t.retCtype + " xc_" + t.name + "(" + t.params + ") {\n"
+        let nr = decisionRowLen(t.rows)
+        if t.policy == "first" {
+            let r = 0
+            while r < nr {
+                let row = decisionRowGet(t.rows, r)
+                let cond = "1"
+                if tokenArrLen(row.cond) > 0 { cond = genExpr(row.cond, 0, ctx).code }
+                out = out + "    if (" + cond + ") return " + decRowValue(prog, t, row.outs, ctx) + ";\n"
+                r = r + 1
+            }
+            out = out + "    XC_PANIC(\"decision '" + t.name + "': no matching rule\");\n"
+            out = out + "    { " + t.retCtype + " __z; memset(&__z, 0, sizeof(__z)); return __z; }\n"
+        } else {
+        if t.policy == "unique" {
+            out = out + "    " + t.retElem + " __r; memset(&__r, 0, sizeof(__r)); xc_integer_t __m = 0;\n"
+            let r = 0
+            while r < nr {
+                let row = decisionRowGet(t.rows, r)
+                let cond = "1"
+                if tokenArrLen(row.cond) > 0 { cond = genExpr(row.cond, 0, ctx).code }
+                out = out + "    if (" + cond + ") { __m++; __r = " + decRowValue(prog, t, row.outs, ctx) + "; }\n"
+                r = r + 1
+            }
+            out = out + "    if (__m != 1) XC_PANIC(\"decision '" + t.name + "': expected exactly one matching rule\");\n"
+            out = out + "    return __r;\n"
+        } else {
+            // collect (+ optional aggregator)
+            if t.agg == "count" {
+                out = out + "    xc_integer_t __c = 0;\n"
+                let r = 0
+                while r < nr {
+                    let row = decisionRowGet(t.rows, r)
+                    let cond = "1"
+                    if tokenArrLen(row.cond) > 0 { cond = genExpr(row.cond, 0, ctx).code }
+                    out = out + "    if (" + cond + ") __c++;\n"
+                    r = r + 1
+                }
+                out = out + "    return __c;\n"
+            } else {
+            if t.agg == "sum" {
+                out = out + "    " + t.retElem + " __s; memset(&__s, 0, sizeof(__s));\n"
+                let r = 0
+                while r < nr {
+                    let row = decisionRowGet(t.rows, r)
+                    let cond = "1"
+                    if tokenArrLen(row.cond) > 0 { cond = genExpr(row.cond, 0, ctx).code }
+                    out = out + "    if (" + cond + ") __s = __s + (" + decRowValue(prog, t, row.outs, ctx) + ");\n"
+                    r = r + 1
+                }
+                out = out + "    return __s;\n"
+            } else {
+            if t.agg == "min" or t.agg == "max" {
+                let op = "<"
+                if t.agg == "max" { op = ">" }
+                out = out + "    " + t.retElem + " __b; memset(&__b, 0, sizeof(__b)); int __seen = 0;\n"
+                let r = 0
+                while r < nr {
+                    let row = decisionRowGet(t.rows, r)
+                    let cond = "1"
+                    if tokenArrLen(row.cond) > 0 { cond = genExpr(row.cond, 0, ctx).code }
+                    let v = decRowValue(prog, t, row.outs, ctx)
+                    out = out + "    if (" + cond + ") { " + t.retElem + " __v = " + v + "; if (!__seen || __v " + op + " __b) __b = __v; __seen = 1; }\n"
+                    r = r + 1
+                }
+                out = out + "    return __b;\n"
+            } else {
+                // raw collect -> fixed-capacity list of element values
+                out = out + "    long __M = " + int_to_string(nr) + ";\n"
+                out = out + "    " + t.retElem + "* __buf = __M > 0 ? (" + t.retElem + "*)malloc((xc_size_t)__M * sizeof(" + t.retElem + ")) : (" + t.retElem + "*)0;\n"
+                out = out + "    xc_size_t __n = 0;\n"
+                let r = 0
+                while r < nr {
+                    let row = decisionRowGet(t.rows, r)
+                    let cond = "1"
+                    if tokenArrLen(row.cond) > 0 { cond = genExpr(row.cond, 0, ctx).code }
+                    out = out + "    if (" + cond + ") { __buf[__n] = " + decRowValue(prog, t, row.outs, ctx) + "; __n++; }\n"
+                    r = r + 1
+                }
+                out = out + "    { " + t.retCtype + " __res; __res.data = __buf; __res.len = __n; __res.cap = (xc_size_t)__M; return __res; }\n"
+            }
+            }
+            }
+        }
+        }
+        out = out + "}\n\n"
+        ti = ti + 1
+    }
+    return out
 }
 
 // Seed a class's deps as dep-symbols (accessed via self->)
@@ -2899,6 +3047,7 @@ mapper genAll(prog: Program) -> String {
          + genAtomDecls(prog)
          + genMachineDecls(prog)
          + genFreeFunctions(prog)
+         + genDecisionTables(prog)
          + genAtomDefs(prog)
          + genMachineDefs(prog)
          + genClassMethods(prog)

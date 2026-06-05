@@ -94,9 +94,8 @@ module App {}
 ## The tabular form
 
 For genuinely multi-dimensional rules there is a **table form**: declare `in`
-columns (which become the parameters) and a single `out` column (the result),
-then write one rule per `| … => … |` row. The first matching row wins
-(`hit first`):
+columns (which become the parameters) and one or more `out` columns (the result),
+then write one rule per `| … => … |` row:
 
 ```x
 decision shipping {
@@ -128,19 +127,68 @@ Each input **cell** is a unary test on its column:
 | `not <test>` | negation |
 | `?( <expr> )` | escape hatch: any boolean over the inputs (may call predicates) |
 
-A row whose cells are all `-` is the default. The table desugars to the same
-`if/return` chain as the when-form — zero runtime overhead — and a table
-`decision` is equally DI-injectable.
+A row whose cells are all `-` is the default. The table compiles to a flat
+`if/return` chain over the cells — zero runtime overhead — and, being a function
+kind, a table `decision` is equally DI-injectable.
+
+### Multiple outputs
+
+List several `out` columns to return a **record**. The compiler synthesizes
+`<Decision>Out` (e.g. `ShippingOut { cost, express }`); each row supplies one
+expression per output, in order:
+
+```x
+decision shipping {
+    in weight: Number   in zone: String
+    out cost: Number    out express: Bool
+    hit first
+    |  <= 1     | "US"  =>  5 | true  |
+    |  [1 .. 5] | -     => 15 | true  |
+    |  -        | -     => 25 | false |
+}
+let s = shipping(3.0, "DE")     // s.cost == 15, s.express == true
+```
+
+### Hit policies
+
+```
+hit first     // top-to-bottom; the first matching row wins (the default)
+hit unique    // exactly one row must match, else a runtime panic naming the table
+hit collect   // every matching row contributes; returns a list of the outputs
+```
+
+`collect` may take an **aggregator** for a single numeric `out`:
+
+```
+hit collect sum | min | max     // fold the matching outputs -> one number
+hit collect count               // how many rows matched -> Integer
+```
+
+```x
+decision discount {
+    in spend: Number
+    out pct:   Number
+    hit collect sum
+    |  >= 100  => 5 |
+    |  >= 500  => 5 |
+    |  >= 1000 => 10 |
+}
+discount(1200.0)     // 5 + 5 + 10 = 20
+```
+
+Plain `collect` returns `<out>[]` (or `<Decision>Out[]` for several outs); the row
+count is known at compile time, so it fills a fixed-capacity buffer.
 
 ## Limitations (current)
 
-- **`hit first`** only. `unique` (exactly one match) and `collect` (all matches /
-  aggregators) are [planned](proposals/decision-tables.md).
-- **Single `out`** column (multiple outputs / synthesized records are planned).
 - Arm/output results are expressions, not blocks.
-- Conditions are arbitrary expressions, so the compiler does not prove
-  completeness/overlap statically (a future analysis over the constrained cell
-  DSL).
+- Plain `collect` (no aggregator) over a single **numeric/bool** out needs the
+  language's general primitive-array support; `String` outs and record (`<Decision>Out`)
+  outs collect fine today.
+- No static completeness/overlap analysis, `priority`/`any` policies, or per-rule
+  metadata — these are deliberate non-goals for now (the `?( … )` escape hatch
+  makes general static analysis undecidable anyway).
 
-See `examples/decision_demo.xi` (when-form) and
-`examples/decision_table_demo.xi` (table form).
+See `examples/decision_demo.xi` (when-form), `examples/decision_table_demo.xi`
+(table form), and `examples/decision_table_advanced.xi` (multi-out, `unique`,
+`collect`).
