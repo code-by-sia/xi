@@ -75,22 +75,26 @@ Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:
 
 ## Quick start
 
+Download a prebuilt toolchain for your platform from the
+**[releases page](https://github.com/code-by-sia/x/releases)**, unpack it, and
+put its `bin/` on your `PATH`:
+
 ```sh
-# Build the compiler. bootstrap.sh downloads the matching released `xc` binary
-# (the seed), compiles compiler/xc.xi with it, then rebuilds from source with
-# itself. Produces ./compiler/xc and ./bin/xi (the REPL / run tool).
-# Needs curl + a C compiler. Build offline with XC_SEED=/path/to/xc.
-./compiler/bootstrap.sh
+# grab the asset for your platform, e.g. xi-<version>-macos-arm64.tar.gz
+tar -xzf xi-<version>-<os>-<arch>.tar.gz
+export PATH="$PWD/xi-<version>-<os>-<arch>/bin:$PATH"
 
-export XC_RUNTIME="$PWD/runtime"
-./compiler/xc examples/greeting.xi   # -> build/greeting
-./build/greeting
-
-# Or compile-and-run, or start the REPL, with `x`:
-export XC="$PWD/compiler/xc"
-./bin/xi examples/greeting.xi          # compile + run
-./bin/xi                              # interactive REPL
+xc hello.xi        # compile  -> build/hello
+xi hello.xi        # compile and run
+xi                 # interactive REPL
 ```
+
+The bundle ships the `xc` compiler, the `xi` REPL / run tool, the runtime, and
+the standard library; the `bin/` wrappers set `XC_RUNTIME` / `XC_STD` for you.
+You need a C compiler (`cc` / `clang` / `gcc`) on `PATH`, since `xc` produces
+native binaries via C. (To build from source instead, run
+`./compiler/bootstrap.sh` — see
+[github.com/code-by-sia/x](https://github.com/code-by-sia/x).)
 
 Runs on **Linux** (x86_64/arm64) and **macOS** (arm64/x86_64). On **Windows**,
 use **WSL2** and follow the Linux steps, or run the toolchain in **Docker** (no
