@@ -1,5 +1,6 @@
-// std/http — a minimal HTTP/1.1 client over std/net (plain http:// only, no TLS).
-//   let r = http.get("http://example.com/")
+// std/http — a minimal HTTP/1.1 client over std/net. Plain http:// always works;
+// https:// requires the toolchain built with XC_TLS=1 (OpenSSL).
+//   let r = http.get("https://example.com/")
 //   if isOk(r) { system.stdout.writeln(r.value.body) }
 namespace http
 
@@ -7,19 +8,27 @@ import "std/net.xi"
 import "std/text.xi"
 import "std/convert.xi"
 
-type Url      = { host: String, port: Integer, path: String }
+extern "C" {
+    mapper xstd_https_fetch(host: String, port: Integer, request: String) -> String
+}
+
+type Url      = { host: String, port: Integer, path: String, tls: Bool }
 // `headers` is the raw header block (CRLF-separated "Key: Value" lines);
 // use http.header(resp, name) to look one up.
 type Response = { status: Integer, headers: String, body: String }
 
-// Parse "http://host[:port]/path".  https:// is rejected (no TLS support).
+// Parse "http(s)://host[:port]/path".
 mapper parseUrl(u: String) -> Url! {
     let rest = u
+    let tls = false
+    let port = 80
     if text.startsWith(rest, "http://") {
         rest = text.substring(rest, 7, text.length(rest))
     } else {
         if text.startsWith(rest, "https://") {
-            return err("https is not supported (http only): " + u)
+            rest = text.substring(rest, 8, text.length(rest))
+            tls = true
+            port = 443
         }
     }
     let slash = text.indexOf(rest, "/")
@@ -30,7 +39,6 @@ mapper parseUrl(u: String) -> Url! {
         path = text.substring(rest, slash, text.length(rest))
     }
     let host = authority
-    let port = 80
     let colon = text.indexOf(authority, ":")
     if colon >= 0 {
         host = text.substring(authority, 0, colon)
@@ -40,7 +48,7 @@ mapper parseUrl(u: String) -> Url! {
         port = pr.value
     }
     if text.length(host) == 0 { return err("missing host in url: " + u) }
-    return ok(Url { host: host, port: port, path: path })
+    return ok(Url { host: host, port: port, path: path, tls: tls })
 }
 
 // Parse a raw HTTP response into status / headers / body.
@@ -93,10 +101,6 @@ producer request(method: String, url: String, body: String, contentType: String)
     if isErr(ur) { return err(ur.err) }
     let u = ur.value
 
-    let cr = net.dial(u.host, u.port)
-    if isErr(cr) { return err(cr.err) }
-    let c = cr.value
-
     let req = method + " " + u.path + " HTTP/1.1\r\n"
             + "Host: " + u.host + "\r\n"
             + "User-Agent: x-http/0.1\r\n"
@@ -107,15 +111,23 @@ producer request(method: String, url: String, body: String, contentType: String)
     }
     req = req + "\r\n" + body
 
-    net.sendText(c, req)
-
     let raw = ""
-    let chunk = net.recvText(c, 8192)
-    while text.length(chunk) > 0 {
-        raw = raw + chunk
-        chunk = net.recvText(c, 8192)
+    if u.tls {
+        // HTTPS: the runtime does the TLS round-trip in one call.
+        raw = xstd_https_fetch(u.host, u.port, req)
+        if text.length(raw) == 0 { return err("https request failed (TLS built in? XC_TLS=1)") }
+    } else {
+        let cr = net.dial(u.host, u.port)
+        if isErr(cr) { return err(cr.err) }
+        let c = cr.value
+        net.sendText(c, req)
+        let chunk = net.recvText(c, 8192)
+        while text.length(chunk) > 0 {
+            raw = raw + chunk
+            chunk = net.recvText(c, 8192)
+        }
+        net.close(c)
     }
-    net.close(c)
     return parseResponse(raw)
 }
 

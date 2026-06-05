@@ -148,6 +148,21 @@ Built without `XC_TLS`, `serveTLS` prints a notice and serves nothing (so the
 program still compiles everywhere). Everything else — controllers, `res.send`,
 `WebTransport` — is identical to plaintext.
 
+### HTTP/2
+
+`web.serveHttp2(port, cert, key)` runs the same handlers over HTTP/2 (ALPN `h2`,
+falling back to HTTP/1.1 for clients that don't negotiate it). Build with
+`XC_HTTP2=1`, which links OpenSSL **and** nghttp2:
+
+```console
+$ XC_HTTP2=1 xc app.xi && ./build/app
+web: serving HTTP/2 on https://0.0.0.0:8443
+$ curl --http2 -k https://localhost:8443/health    # negotiates h2 via ALPN
+```
+
+HTTP/3 (QUIC) is not yet available — it needs a QUIC stack; see the
+[web-stack proposal](proposals/web-stack.md).
+
 ## Notes & limits
 
 - HTTP/1.1, blocking, one request per connection (no keep-alive) — fine for an

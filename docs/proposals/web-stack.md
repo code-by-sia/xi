@@ -1,9 +1,10 @@
 # Proposal: Web stack — crypto → HTTPS → HTTP/2-3 → `std/web`
 
-> **Status: phased.** Phase 1 (**`std/crypto`**), Phase 4 (**`std/web`**), and
-> **HTTPS** (`web.serveTLS`, opt-in `XC_TLS=1` linking OpenSSL) are **implemented**
-> — see [crypto](../stdlib.md) and [Web](../web.md). The external-dependency policy
-> was resolved as **Option A, optional system libs**. **HTTP/2 and HTTP/3** remain.
+> **Status: nearly done.** Shipped: Phase 1 (**`std/crypto`**), Phase 4
+> (**`std/web`**), **HTTPS** server + client (`XC_TLS=1`), and **HTTP/2**
+> (`web.serveHttp2`, `XC_HTTP2=1`) — see [crypto](../stdlib.md) and [Web](../web.md).
+> External deps follow **Option A, optional system libs**. **Only HTTP/3 (QUIC)
+> remains** — deferred to a dedicated effort (see Phase 3).
 
 ## Goal
 
@@ -38,22 +39,26 @@ Writing a correct, *secure* TLS 1.3 or a QUIC stack from scratch is not advisabl
 of "REST API" needs), then HTTP/2, then HTTP/3 (which carries the heaviest
 dependency, QUIC). Each is opt-in via its `import`.
 
-## Phase 2 — HTTPS ✅ (server shipped)
+## Phase 2 — HTTPS ✅ (shipped)
 
 - **Server:** ✅ `web.serveTLS(port, cert, key)` wraps each accepted socket in an
   OpenSSL TLS session and runs the existing handler stack. Opt-in via `XC_TLS=1`
   at compile time (links `libssl`/`libcrypto`); default builds stay
   dependency-light and `serveTLS` degrades to a notice.
-- **Client:** extending `std/http` so `https://` URLs work (wrap the `net` socket
-  in a TLS session) is the remaining HTTPS piece.
+- **Client:** ✅ `std/http` now handles `https://` URLs — the runtime does the
+  TLS round-trip (connect, SNI handshake, request, read) via `xstd_https_fetch`,
+  also gated on `XC_TLS=1`.
 
-## Phase 3 — HTTP/2, then HTTP/3
+## Phase 3 — HTTP/2 ✅, then HTTP/3 (remaining)
 
-- **HTTP/2** over TLS (ALPN `h2`): framing + HPACK via `nghttp2`, exposed behind
-  the same request/response types.
-- **HTTP/3** over QUIC (UDP): a QUIC library (`ngtcp2`+`nghttp3` or `quiche`).
-  Highest dependency weight; last in line.
-- Negotiation is transparent (ALPN); callers keep one API.
+- **HTTP/2** ✅ `web.serveHttp2(port, cert, key)` — framing + HPACK via `nghttp2`
+  over TLS, ALPN `h2`, falling back to HTTP/1.1. Same handler stack and
+  request/response types. Opt-in via `XC_HTTP2=1` (links OpenSSL + nghttp2).
+- **HTTP/3** over QUIC (UDP) — **remaining.** Needs a QUIC library
+  (`ngtcp2`+`nghttp3` or `quiche`); highest dependency weight and security
+  surface, and not yet broadly available (no system QUIC lib / HTTP/3 client on
+  common dev setups), so it's deferred to a dedicated effort rather than shipped
+  untested. This is the one open item in the web stack.
 
 ## Phase 4 — `std/web` (REST framework) — **shipped**
 
