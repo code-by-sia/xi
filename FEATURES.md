@@ -26,10 +26,10 @@ guide and [`README.md`](README.md) for a tour with examples.
 
 | Feature | Status |
 |---------|--------|
-| Seven function kinds (`mapper`, `projector`, `predicate`, `consumer`, `producer`, `reducer`, `creator`) | ✓ |
+| Eight function kinds (`mapper`, `projector`, `predicate`, `consumer`, `producer`, `reducer`, `creator`, `action`) | ✓ |
 | Decision tables — `decision` kind (`when <cond> => <result>`, `hit first`) | ✓ (MVP) |
 | Purity enforcement (pure kinds cannot mutate or be `async`) | ✓ (reference checks) |
-| `where`-guarded overloading (runtime overload selection by guard) | ✓ |
+| `where`-guarded overloading — free functions **and methods** (runtime overload selection by guard) | ✓ |
 | `match` (literal / string / bool / bound-ident / `_` patterns) | ✓ |
 | Interrupts — resumable conditions (`interrupt`/`signal`/`try`/`catch`, `skip`+`recover`) | ✓ (MVP) |
 | `for` loops over arrays | ✓ |
@@ -68,6 +68,10 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `text` | length/substring/trim/case/contains/indexOf/replace/repeat, **split/join** |
 | `bytes` | length/at/slice/concat/fromString/toString for `Bytes` |
 | `convert` | string ↔ number/integer parsing |
+| `json` / `yaml` / `xml` | **serialization** — build/parse/stringify; derived codecs for events & compounds |
+| `crypto` | **SHA-256/SHA-1/MD5, HMAC-SHA256, hex/base64, CSPRNG** (`randomBytes`/`randomHex`) |
+| `events` | **typed publish/subscribe** — `publish(topic, dto)` + `listener … on "topic"`, in-memory default bus |
+| `web` | **REST framework** — `WebRequestHandler` + `where`-overloaded `handle`, `res.send`/`req.parse` via `WebTransport`, blocking HTTP/1.1 server |
 | `io` | console `println`/`print`/`eprintln`, `readLine`/`eof` |
 | `fs` | read/write text & **bytes**, exists/isDir/isFile, size/mtime, remove/rename/copy, mkdir/mkdirAll, cwd, listDir |
 | `path` | join/dirname/basename/ext/stripExt (pure) |

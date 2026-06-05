@@ -171,6 +171,15 @@ xc_bool_t     xstd_web_match(xc_Request_t, xc_string_t method, xc_string_t patte
 void          xstd_web_set_dispatch(xc_Response_t (*fn)(xc_Request_t));
 void          xstd_web_serve(xc_integer_t port);
 
+/* Handler-interface model (std/web v2): the request and a *mutable* response are
+   handed to a WebRequestHandler.handle(req,res); the handler fills the response
+   via xstd_resp_set. The generated dispatch is registered via xstd_web_set_handler. */
+typedef struct xc_web_request*  xc_HttpRequest_t;
+typedef struct xc_web_response* xc_HttpResponse_t;
+void          xstd_resp_set(xc_HttpResponse_t, xc_integer_t status, xc_string_t body, xc_string_t ctype);
+xc_integer_t  xstd_resp_status(xc_HttpResponse_t);
+void          xstd_web_set_handler(void (*fn)(xc_HttpRequest_t, xc_HttpResponse_t));
+
 xc_Event_t   xstd_event_make(xc_string_t topic, xc_string_t type, void* payload);
 xc_string_t  xstd_event_topic(xc_Event_t);
 xc_string_t  xstd_event_type(xc_Event_t);

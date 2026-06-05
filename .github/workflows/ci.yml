@@ -41,5 +41,9 @@ jobs:
             echo "== $f =="
             ./compiler/xc "$f" >/dev/null
             bin="build/$(basename "${f%.xi}")"
-            if [ -x "$bin" ]; then "$bin" | head -3 || true; fi
+            case "$(basename "$f")" in
+              # Long-running server demos block forever on web.serve — compile only.
+              web_demo.xi) echo "  (server example — compile-only)" ;;
+              *) if [ -x "$bin" ]; then "$bin" | head -3 || true; fi ;;
+            esac
           done

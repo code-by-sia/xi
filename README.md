@@ -36,9 +36,9 @@ module App {}                             // resolution is automatic
 - **Dependency injection & IoC are part of the language**, not a framework.
   Implementations are discovered and wired automatically; `bind` is an optional
   override.
-- **Seven function kinds** name a function's role and intent —
+- **Eight function kinds** name a function's role and intent —
   `mapper`, `projector`, `predicate`, `consumer`, `producer`, `reducer`,
-  `creator` — and the compiler enforces purity for the pure ones.
+  `creator`, `action` — and the compiler enforces purity for the pure ones.
 - **Decision tables** (`decision` kind) express business rules as
   `when <cond> => <result>` arms (or a tabular `in`/`out` grid) — and, being a
   function kind, they're DI-injectable and can call predicates.
@@ -56,6 +56,10 @@ module App {}                             // resolution is automatic
   value (no JSON). The default transport queues in memory with zero serialization;
   bind your own `PublisherService`/`ConsumerService` to go external — producers and
   listeners are unchanged. See [Events](https://code-by-sia.github.io/x/events).
+- **Web framework** — implement `WebRequestHandler` and route by overloading
+  `action handle(req, res)` with `where` guards; `res.send(dto)` / `req.parse(T)`
+  auto-(de)serialize via a pluggable `WebTransport` (JSON by default). No manual
+  JSON. See [Web](https://code-by-sia.github.io/x/web).
 - **Refined types** carry constraints (`type Age = Number where value >= 0`)
   that are **checked at construction**.
 - **Result-based error handling** (`T!`, `ok`/`err`, `?` propagation) — no
@@ -64,8 +68,9 @@ module App {}                             // resolution is automatic
   and a `Bytes` type for binary data.
 - **Multi-file projects** with `import` and `namespace`.
 - **A growing standard library** — math, text, bytes, convert, **serialization
-  (json / yaml / xml)**, fs, path, **net (TCP sockets)**, **http (HTTP/1.1
-  client)**, process, time — see
+  (json / yaml / xml)**, **crypto (SHA/HMAC/base64/CSPRNG)**, fs, path,
+  **net (TCP sockets)**, **http (HTTP/1.1 client)**, **web (REST framework)**,
+  process, time — see
   [the standard library](https://code-by-sia.github.io/x/stdlib) and
   [serialization](https://code-by-sia.github.io/x/serialization).
 - **Native, dependency-light output**: Xi → C99 → a native binary via your `cc`.

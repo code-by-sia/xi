@@ -231,6 +231,32 @@ predicate isEventTypeC(prog: Program, name: String) {
     return false
 }
 
+// Is `name` a declared compound (struct-like) type?
+predicate isCompoundTypeC(prog: Program, name: String) {
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.name == name and ts.isCompound { return true }
+        i = i + 1
+    }
+    return false
+}
+
+// std/web's handler model is active when WebRequestHandler is implemented.
+predicate webEnabled(prog: Program) {
+    if not isInterface(prog, "WebRequestHandler") { return false }
+    return string_len(chosenImpl(prog, "WebRequestHandler")) > 0
+}
+
+// A JSON codec (xc_tojson_/xc_fromjson_) is emitted for this X type: every
+// event type, plus (when web is in use) every compound type.
+predicate hasCodec(prog: Program, xn: String) {
+    if isEventTypeC(prog, xn) { return true }
+    if webEnabled(prog) and isCompoundTypeC(prog, xn) { return true }
+    return false
+}
+
 // The X type name of a listener method's first parameter (the event it handles),
 // extracted from the C param string "xc_OrderPaid_t e[, ...]".
 mapper firstParamXType(params: String) -> String {
@@ -713,6 +739,42 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "run"      { code = "xc_events_run()"  typ = "" }
                     p = al.pos
                 } else {
+                if typ == "HttpResponse" {
+                    // res.send(dto): serialize via the DI-resolved WebTransport.
+                    // res.sendStatus(code, msg) / res.sendText(code, body): plain text.
+                    let recv = code
+                    if fld == "send" {
+                        let dtoE = genExpr(toks, p + 3, ctx)
+                        code = "xstd_resp_set(" + recv + ", 200, xc_resolve_WebTransport().vtable->serialize(xc_resolve_WebTransport().self, xc_tojson_" + dtoE.xtyp + "(" + dtoE.code + ")), xc_string_from_cstr(\"application/json\"))"
+                        p = dtoE.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }   // ')'
+                    } else {
+                        let al = genArgs(toks, p + 2, ctx)
+                        code = "xstd_resp_set(" + recv + ", " + al.code + ", xc_string_from_cstr(\"text/plain; charset=utf-8\"))"
+                        p = al.pos
+                    }
+                    typ = ""
+                } else {
+                if typ == "HttpRequest" {
+                    if fld == "parse" {
+                        // req.parse(T): deserialize the body via WebTransport into a T.
+                        let tn = gtext(toks, p + 3)
+                        code = "xc_fromjson_" + tn + "(xc_resolve_WebTransport().vtable->deserialize(xc_resolve_WebTransport().self, xstd_req_body(" + code + ")))"
+                        typ = tn
+                        p = p + 4
+                        if gkind(toks, p) == 101 { p = p + 1 }   // ')'
+                    } else {
+                        let al = genArgs(toks, p + 2, ctx)
+                        let recv = code
+                        if fld == "query"  { code = "xstd_req_query("  + recv + ", " + al.code + ")" }
+                        if fld == "header" { code = "xstd_req_header(" + recv + ", " + al.code + ")" }
+                        if fld == "body"   { code = "xstd_req_body("   + recv + ")" }
+                        if fld == "method" { code = "xstd_req_method(" + recv + ")" }
+                        if fld == "path"   { code = "xstd_req_path("   + recv + ")" }
+                        typ = "String"
+                        p = al.pos
+                    }
+                } else {
                 if typ == "PublisherService" and fld == "publish" {
                     // publish(topic, dto): wrap the typed DTO into an Event envelope.
                     let recv = code
@@ -803,7 +865,16 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 p = al.pos
                 }
                 }
+                }
+                }
             } else {
+                if typ == "HttpRequest" {
+                    // bare request accessors: req.path / req.method / req.body
+                    if fld == "path"   { code = "xstd_req_path("   + code + ")" }
+                    if fld == "method" { code = "xstd_req_method(" + code + ")" }
+                    if fld == "body"   { code = "xstd_req_body("   + code + ")" }
+                    typ = "String"
+                } else {
                 if startsWith2(typ, "atom:") {
                     // atom.current (or any field) -> the holder value
                     let an = string_slice(typ, 5, string_len(typ))
@@ -832,6 +903,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                             typ = ft
                         }
                     }
+                }
                 }
                 }
                 }
@@ -2146,6 +2218,111 @@ mapper seedDeps(ctx: GCtx, cs: ClassSpec) -> GCtx {
     return result
 }
 
+// How many non-creator methods of `cs` share this name (overload-set size).
+mapper countMethodName(cs: ClassSpec, name: String) -> Integer {
+    let c = 0
+    let mi = 0
+    let mn = methodSpecLen(cs.methList)
+    while mi < mn {
+        let ms = methodSpecGet(cs.methList, mi)
+        if ms.kind != "creator" and ms.name == name { c = c + 1 }
+        mi = mi + 1
+    }
+    return c
+}
+
+// 0-based ordinal of method `idx` among same-named non-creator methods.
+mapper methodOrdinal(cs: ClassSpec, idx: Integer) -> Integer {
+    let target = methodSpecGet(cs.methList, idx).name
+    let c = 0
+    let mi = 0
+    while mi < idx {
+        let ms = methodSpecGet(cs.methList, mi)
+        if ms.kind != "creator" and ms.name == target { c = c + 1 }
+        mi = mi + 1
+    }
+    return c
+}
+
+// Is method `idx` the last one carrying its name?
+predicate isLastOfName(cs: ClassSpec, idx: Integer) {
+    let target = methodSpecGet(cs.methList, idx).name
+    let mi = idx + 1
+    let mn = methodSpecLen(cs.methList)
+    while mi < mn {
+        let ms = methodSpecGet(cs.methList, mi)
+        if ms.kind != "creator" and ms.name == target { return false }
+        mi = mi + 1
+    }
+    return true
+}
+
+// Comma-separated parameter *names* from a C param string ("ctype a, ctype b" -> "a, b").
+mapper paramNames(params: String) -> String {
+    let out = ""
+    let n = string_len(params)
+    if n == 0 { return "" }
+    let start = 0
+    let i = 0
+    let first = true
+    let cont = true
+    while cont {
+        let atEnd = i == n
+        let c = 0
+        if not atEnd { c = string_char_at(params, i) }
+        if atEnd or c == 44 {
+            let nm = lastWord(string_slice(params, start, i))
+            if not first { out = out + ", " }
+            out = out + nm
+            first = false
+            start = i + 1
+        }
+        if atEnd { cont = false }
+        i = i + 1
+    }
+    return out
+}
+
+// A `where`-overloaded method becomes N per-overload bodies plus a dispatcher
+// (named like the un-overloaded impl, so vtables/casters need no change) that
+// runs each guard in order and falls through to the un-guarded default.
+mapper genMethodDispatcher(prog: Program, cs: ClassSpec, name: String, ret: String, params: String) -> String {
+    let pstr = params
+    if string_len(pstr) > 0 { pstr = ", " + pstr }
+    let argfwd = "self_ptr"
+    let names = paramNames(params)
+    if string_len(names) > 0 { argfwd = argfwd + ", " + names }
+    let out = "static " + ret + " xc_" + cs.name + "_" + name + "_impl(void* self_ptr" + pstr + ") {\n"
+    out = out + "    xc_" + cs.name + "_t* self = (xc_" + cs.name + "_t*)self_ptr; (void)self;\n"
+    let defaultOrd = 0 - 1
+    let mi = 0
+    let mn = methodSpecLen(cs.methList)
+    while mi < mn {
+        let ms = methodSpecGet(cs.methList, mi)
+        if ms.kind != "creator" and ms.name == name {
+            let k = methodOrdinal(cs, mi)
+            if ms.hasWhere {
+                let ctx = withTag(withRet(seedParams(seedDeps(mkGCtx(prog), cs), params), ret), cs.name + "_" + name)
+                let g = genExpr(ms.whereTokens, 0, ctx)
+                out = out + "    if (" + g.code + ") { return xc_" + cs.name + "_" + name + "_ovl" + int_to_string(k) + "_impl(" + argfwd + "); }\n"
+            } else {
+                defaultOrd = k
+            }
+        }
+        mi = mi + 1
+    }
+    if defaultOrd >= 0 {
+        out = out + "    return xc_" + cs.name + "_" + name + "_ovl" + int_to_string(defaultOrd) + "_impl(" + argfwd + ");\n"
+    } else {
+        if ret == "void" {
+            out = out + "    return;\n"
+        } else {
+            out = out + "    { " + ret + " _z; memset(&_z, 0, sizeof(_z)); return _z; }\n"
+        }
+    }
+    return out + "}\n\n"
+}
+
 mapper genClassMethods(prog: Program) -> String {
     let out = "/* === Class method implementations === */\n"
     let i = 0
@@ -2167,11 +2344,21 @@ mapper genClassMethods(prog: Program) -> String {
                 let pstr = ms.params
                 if string_len(pstr) > 0 { pstr = ", " + pstr }
                 out = out + hoistCatches(prog, ms.bodyTokens, tag)
-                out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "_impl(void* self_ptr" + pstr + ") {\n"
+                // Overloaded (multiple same-named, or `where`-guarded) methods emit
+                // per-overload bodies + a dispatcher; otherwise a single _impl.
+                let overloaded = countMethodName(cs, ms.name) > 1 or ms.hasWhere
+                let implName = "xc_" + cs.name + "_" + ms.name + "_impl"
+                if overloaded {
+                    implName = "xc_" + cs.name + "_" + ms.name + "_ovl" + int_to_string(methodOrdinal(cs, mi)) + "_impl"
+                }
+                out = out + "static " + ms.retCtype + " " + implName + "(void* self_ptr" + pstr + ") {\n"
                 out = out + "    xc_" + cs.name + "_t* self = (xc_" + cs.name + "_t*)self_ptr;\n"
                 let ctx = withTag(withRet(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.retCtype), tag)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
+                if overloaded and isLastOfName(cs, mi) {
+                    out = out + genMethodDispatcher(prog, cs, ms.name, ms.retCtype, ms.params)
+                }
             }
             mi = mi + 1
         }
@@ -2517,7 +2704,7 @@ mapper jsonEncodeExpr(prog: Program, fct: String, expr: String) -> String {
     if fct == "xc_bool_t"    { return "xstd_json_bool(" + expr + ")" }
     if fct == "xc_Json_t"    { return expr }
     let xn = ctypeToXName(fct)
-    if isEventTypeC(prog, xn) { return "xc_tojson_" + xn + "(" + expr + ")" }
+    if hasCodec(prog, xn) { return "xc_tojson_" + xn + "(" + expr + ")" }
     return ""
 }
 mapper jsonDecodeExpr(prog: Program, fct: String, getexpr: String) -> String {
@@ -2527,7 +2714,7 @@ mapper jsonDecodeExpr(prog: Program, fct: String, getexpr: String) -> String {
     if fct == "xc_bool_t"    { return "xstd_json_as_bool(" + getexpr + ")" }
     if fct == "xc_Json_t"    { return getexpr }
     let xn = ctypeToXName(fct)
-    if isEventTypeC(prog, xn) { return "xc_fromjson_" + xn + "(" + getexpr + ")" }
+    if hasCodec(prog, xn) { return "xc_fromjson_" + xn + "(" + getexpr + ")" }
     return ""
 }
 
@@ -2581,9 +2768,29 @@ mapper genOneCodec(prog: Program, t: String) -> String {
 // toJson/fromJson for every event type. Emitted but invoked only by external
 // transports (in-process dispatch never serializes).
 mapper genEventCodecs(prog: Program) -> String {
+    // Codecs are derived for every event type, and — when std/web is in use — for
+    // every compound type as well (so res.send(dto) / req.parse(T) auto-serialize).
+    let types: String[] = []
+    let ei = 0
     let ne = stringArrLen(prog.eventTypes)
-    if ne == 0 { return "" }
-    let out = "/* === Event codecs (toJson/fromJson — boundary only) === */\n"
+    while ei < ne {
+        types = appendString(types, stringArrGet(prog.eventTypes, ei))
+        ei = ei + 1
+    }
+    if webEnabled(prog) {
+        let ti = 0
+        let tn = typeSpecLen(prog.types)
+        while ti < tn {
+            let ts = typeSpecGet(prog.types, ti)
+            if ts.isCompound and not strArrContains(types, ts.name) {
+                types = appendString(types, ts.name)
+            }
+            ti = ti + 1
+        }
+    }
+    let nc = stringArrLen(types)
+    if nc == 0 { return "" }
+    let out = "/* === Derived JSON codecs (toJson/fromJson) === */\n"
     out = out + "extern xc_Json_t xstd_json_object(void);\n"
     out = out + "extern xc_Json_t xstd_json_set(xc_Json_t, xc_string_t, xc_Json_t);\n"
     out = out + "extern xc_Json_t xstd_json_string(xc_string_t);\n"
@@ -2598,15 +2805,15 @@ mapper genEventCodecs(prog: Program) -> String {
     out = out + "extern xc_integer_t xstd_json_length(xc_Json_t);\n"
     out = out + "extern xc_Json_t xstd_json_at(xc_Json_t, xc_integer_t);\n"
     let i = 0
-    while i < ne {
-        let t = stringArrGet(prog.eventTypes, i)
+    while i < nc {
+        let t = stringArrGet(types, i)
         out = out + "static xc_Json_t xc_tojson_" + t + "(xc_" + t + "_t);\n"
         out = out + "static xc_" + t + "_t xc_fromjson_" + t + "(xc_Json_t);\n"
         i = i + 1
     }
     i = 0
-    while i < ne {
-        out = out + genOneCodec(prog, stringArrGet(prog.eventTypes, i))
+    while i < nc {
+        out = out + genOneCodec(prog, stringArrGet(types, i))
         i = i + 1
     }
     return out + "\n"
@@ -2707,54 +2914,17 @@ mapper genEventDispatch(prog: Program) -> String {
     return out + "\n"
 }
 
-// Any `route` methods in the program?
-predicate hasRoutes(prog: Program) {
-    let ci = 0
-    let cn = classSpecLen(prog.classes)
-    while ci < cn {
-        let cs = classSpecGet(prog.classes, ci)
-        let mi = 0
-        let mn = methodSpecLen(cs.methList)
-        while mi < mn {
-            if methodSpecGet(cs.methList, mi).kind == "route" { return true }
-            mi = mi + 1
-        }
-        ci = ci + 1
-    }
-    return false
-}
-
-// std/web routing: per `route` method a trampoline (DI-resolves the owning class
-// and calls the handler with the Request), a dispatcher that matches
-// (method, path), and an init that registers the dispatcher with the runtime.
+// std/web (handler model): the runtime hands each request a fresh mutable
+// response; we resolve the bound WebRequestHandler and call handle(req, res).
+// Routing is just `where`-overloaded handle methods inside the handler class.
 mapper genWebDispatch(prog: Program) -> String {
-    if not hasRoutes(prog) { return "" }
-    let out = "/* === Web routes === */\n"
-    let disp = "static xc_Response_t xc_web_dispatch(xc_Request_t __req) {\n"
-    let ci = 0
-    let cn = classSpecLen(prog.classes)
-    while ci < cn {
-        let cs = classSpecGet(prog.classes, ci)
-        let mi = 0
-        let mn = methodSpecLen(cs.methList)
-        while mi < mn {
-            let ms = methodSpecGet(cs.methList, mi)
-            if ms.kind == "route" and string_len(ms.topic) > 0 {
-                let sp = findChar(ms.topic, 32)             // "method /path"
-                let method = string_slice(ms.topic, 0, sp)
-                let path = string_slice(ms.topic, sp + 1, string_len(ms.topic))
-                let tr = "xc_route_" + cs.name + "_" + ms.name
-                out = out + "static xc_Response_t " + tr + "(xc_Request_t __r) {\n"
-                    + "    return xc_" + cs.name + "_" + ms.name + "_impl((void*)xc_new_" + cs.name + "(), __r);\n}\n"
-                disp = disp + "    if (xstd_web_match(__req, xc_string_from_cstr(\"" + method + "\"), xc_string_from_cstr(\"" + path + "\"))) return " + tr + "(__req);\n"
-            }
-            mi = mi + 1
-        }
-        ci = ci + 1
-    }
-    disp = disp + "    return xstd_resp(404, xc_string_from_cstr(\"Not Found\"), xc_string_from_cstr(\"text/plain\"));\n}\n"
-    out = out + disp
-    out = out + "static void xc_web_init(void) { xstd_web_set_dispatch(xc_web_dispatch); }\n\n"
+    if not webEnabled(prog) { return "" }
+    let out = "/* === Web (WebRequestHandler dispatch) === */\n"
+    out = out + "static void xc_web_handle(xc_HttpRequest_t __req, xc_HttpResponse_t __res) {\n"
+    out = out + "    xc_WebRequestHandler_t __h = xc_resolve_WebRequestHandler();\n"
+    out = out + "    __h.vtable->handle(__h.self, __req, __res);\n"
+    out = out + "}\n"
+    out = out + "static void xc_web_init(void) { xstd_web_set_handler(xc_web_handle); }\n\n"
     return out
 }
 
@@ -2765,7 +2935,7 @@ mapper genEntry(prog: Program) -> String {
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
     out = out + "    xc_atoms_init();\n"
-    if hasRoutes(prog) { out = out + "    xc_web_init();\n" }
+    if webEnabled(prog) { out = out + "    xc_web_init();\n" }
     out = out + "    xc_arr_string_t xc_args;\n"
     out = out + "    xc_args.len = (xc_size_t)argc;\n"
     out = out + "    xc_args.cap = (xc_size_t)argc;\n"

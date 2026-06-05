@@ -152,16 +152,19 @@ Digests are `Bytes`; render with `hex`/`base64`. (Test-vector verified.)
 
 ### `web` — `std/web.xi`
 
-A tiny **REST framework** over HTTP/1.1: write `route` handlers (a DI-wired
-function kind) and run `web.serve`. See [Web](web.md).
+A tiny **REST framework** over HTTP/1.1: implement `WebRequestHandler`, route by
+overloading `handle` with `where` guards, and run `web.serve`. Payloads
+auto-(de)serialize via a `WebTransport` (JSON by default). See [Web](web.md).
 
 | Name | Kind / Signature |
 |------|------------------|
-| `route h(req: Request) -> Response on get "/path/:id"` | a route handler (function kind) |
-| `web.param` / `web.query` / `web.header` | `(Request, String) -> String` |
-| `web.method` / `web.path` / `web.body` | `(Request) -> String` |
-| `web.bodyJson` | `(Request) -> Json` |
-| `web.text` / `web.json` / `web.respond` | build a `Response` |
+| `WebRequestHandler` | interface — `action handle(req: HttpRequest, res: HttpResponse)` |
+| `WebTransport` | interface — `serialize(Json) -> String` / `deserialize(String) -> Json` (JSON default) |
+| `req.path` / `req.method` / `req.body` | `HttpRequest -> String` |
+| `req.query("q")` / `req.header("X")` | `(HttpRequest, String) -> String` |
+| `req.parse(T)` | deserialize the body into a `T` |
+| `res.send(dto)` | serialize `dto` and reply `200` |
+| `res.sendStatus(code, msg)` / `res.sendText(code, body)` | plain-text reply |
 | `web.serve` | `(Integer)` — run a blocking HTTP/1.1 server |
 
 ### `events` — `std/events.xi`

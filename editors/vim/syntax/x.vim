@@ -13,7 +13,7 @@ syn keyword xKeyword let return if else match for while loop break continue
 syn keyword xKeyword unsafe spawn when otherwise where
 syn keyword xStorage async own dup move
 syn keyword xScope   singleton transient scoped
-syn keyword xFunctionKind mapper projector predicate consumer producer reducer creator entry
+syn keyword xFunctionKind mapper projector predicate consumer producer reducer creator action entry
 syn keyword xOperator and or not is in matches await
 syn keyword xBoolean true false
 syn keyword xConstant none
