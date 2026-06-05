@@ -215,7 +215,7 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
     snprintf(cmd, need,
              "cc -std=c99 -O2 -w -Wno-implicit-int -Wno-implicit-function-declaration "
              "-Wno-int-conversion -Wno-incompatible-pointer-types "
-             "-I%s %s %s/runtime.c -o %s -lm",
+             "-I%s %s %s/runtime.c -o %s -lm -lpthread",
              dir, cp, dir, bp);
 
     int rc = system(cmd);

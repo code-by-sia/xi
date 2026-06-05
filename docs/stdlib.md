@@ -167,6 +167,20 @@ auto-(de)serialize via a `WebTransport` (JSON by default). See [Web](web.md).
 | `res.sendStatus(code, msg)` / `res.sendText(code, body)` | plain-text reply |
 | `web.serve` | `(Integer)` — run a blocking HTTP/1.1 server |
 
+### `thread` — `std/thread.xi`
+
+**Share-nothing threads + channels.** A `parallel` block runs on a new OS thread
+and yields a `Thread` handle; threads communicate only through thread-safe
+channels (string payloads, copied across the boundary). See [Threading](threading.md).
+
+| Name | Kind / Signature |
+|------|------------------|
+| `thread.channel()` | `() -> Channel` (thread-safe FIFO) |
+| `ch.send(s)` / `ch.recv()` / `ch.close()` | `(Channel, String)` / `(Channel) -> String` (blocks) / `(Channel)` |
+| `parallel [(caps…)] { … }` | spawn a thread, evaluates to a `Thread` (captures must be channels) |
+| `thread.stopped()` | `() -> Bool` — inside a block, has stop been requested? |
+| `t.stop()` / `t.wait()` / `t.running()` | request stop / join / `Bool` liveness |
+
 ### `events` — `std/events.xi`
 
 Built-in **typed publish/subscribe**. A producer publishes any DTO under a topic

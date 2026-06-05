@@ -1677,3 +1677,80 @@ void xstd_web_serve(xc_integer_t port) {
         free(buf);
     }
 }
+
+/* ─── Threading (std/thread) ──────────────────────────────────────────────────
+ * Share-nothing OS threads over thread-safe channels. A `parallel { }` block is
+ * lifted by the compiler to a void*(void*) function and started here; the
+ * returned handle supports cooperative stop, join, and a running check. The
+ * current thread's control block is kept in thread-local storage so a body can
+ * call thread.stopped().
+ */
+struct xc_chan_node { char* data; size_t len; struct xc_chan_node* next; };
+struct xc_chan {
+    pthread_mutex_t m; pthread_cond_t cv;
+    struct xc_chan_node* head; struct xc_chan_node* tail; int closed;
+};
+struct xc_thread {
+    pthread_t tid; volatile int stop; volatile int done;
+    void* (*fn)(void*); void* arg;
+};
+
+xc_Channel_t xstd_chan_new(void) {
+    struct xc_chan* c = (struct xc_chan*)calloc(1, sizeof(*c)); if (!c) abort();
+    pthread_mutex_init(&c->m, NULL); pthread_cond_init(&c->cv, NULL);
+    return c;
+}
+void xstd_chan_send(xc_Channel_t c, xc_string_t s) {
+    struct xc_chan_node* n = (struct xc_chan_node*)malloc(sizeof(*n)); if (!n) abort();
+    n->len = s.len; n->data = (char*)malloc(s.len ? s.len : 1); if (!n->data) abort();
+    if (s.len) memcpy(n->data, s.data, s.len);
+    n->next = NULL;
+    pthread_mutex_lock(&c->m);
+    if (c->tail) c->tail->next = n; else c->head = n;
+    c->tail = n;
+    pthread_cond_signal(&c->cv);
+    pthread_mutex_unlock(&c->m);
+}
+xc_string_t xstd_chan_recv(xc_Channel_t c) {
+    pthread_mutex_lock(&c->m);
+    while (!c->head && !c->closed) pthread_cond_wait(&c->cv, &c->m);
+    if (!c->head) { pthread_mutex_unlock(&c->m); return xc_str_copy("", 0); }
+    struct xc_chan_node* n = c->head;
+    c->head = n->next; if (!c->head) c->tail = NULL;
+    pthread_mutex_unlock(&c->m);
+    xc_string_t r = xc_str_copy(n->data, n->len);
+    free(n->data); free(n);
+    return r;
+}
+void xstd_chan_close(xc_Channel_t c) {
+    pthread_mutex_lock(&c->m);
+    c->closed = 1;
+    pthread_cond_broadcast(&c->cv);
+    pthread_mutex_unlock(&c->m);
+}
+
+static pthread_key_t xc_thread_key;
+static pthread_once_t xc_thread_key_once = PTHREAD_ONCE_INIT;
+static void xc_thread_key_init(void) { pthread_key_create(&xc_thread_key, NULL); }
+
+static void* xc_thread_trampoline(void* p) {
+    struct xc_thread* t = (struct xc_thread*)p;
+    pthread_setspecific(xc_thread_key, t);
+    t->fn(t->arg);
+    t->done = 1;
+    return NULL;
+}
+xc_Thread_t xstd_thread_spawn(void* (*fn)(void*), void* arg) {
+    pthread_once(&xc_thread_key_once, xc_thread_key_init);
+    struct xc_thread* t = (struct xc_thread*)calloc(1, sizeof(*t)); if (!t) abort();
+    t->fn = fn; t->arg = arg;
+    if (pthread_create(&t->tid, NULL, xc_thread_trampoline, t) != 0) { free(t); return NULL; }
+    return t;
+}
+void xstd_thread_stop(xc_Thread_t t) { if (t) t->stop = 1; }
+void xstd_thread_wait(xc_Thread_t t) { if (t) pthread_join(t->tid, NULL); }
+xc_bool_t xstd_thread_running(xc_Thread_t t) { return t ? !t->done : false; }
+xc_bool_t xstd_thread_stopped(void) {
+    struct xc_thread* t = (struct xc_thread*)pthread_getspecific(xc_thread_key);
+    return t ? (t->stop != 0) : false;
+}

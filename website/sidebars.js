@@ -17,6 +17,7 @@ const sidebars = {
     'serialization',
     'events',
     'web',
+    'threading',
     'internals',
     {
       type: 'category',
