@@ -194,7 +194,9 @@ type TypeSpec = {
     fields:     String[],      // for compound types: "name:ctype" pairs
     hasWhere:   Bool,
     whereSrc:   String,        // (legacy, unused)
-    whereTokens: Token[]       // refined-type constraint tokens (no `where`)
+    whereTokens: Token[],      // refined-type constraint tokens (no `where`)
+    isSum:      Bool,          // tagged-union (sum / algebraic) type
+    variants:   String[]       // for sum types: "Variant|f1:ct1,f2:ct2" per variant
 }
 
 // An interface
@@ -755,7 +757,7 @@ mapper parseDecision(name: String, ps: PState) -> DecisionResult {
     let emptyStrs: String[] = []
     let emptyRows: DecisionRow[] = []
     let emptyTable = DecisionTable { name: "", params: "", policy: "first", agg: "", outNames: emptyStrs, outCtypes: emptyStrs, retElem: "", retCtype: "", isMulti: false, rows: emptyRows }
-    let emptyType = TypeSpec { name: "", isCompound: false, baseCtype: "", fields: emptyStrs, hasWhere: false, whereSrc: "", whereTokens: emptyToks }
+    let emptyType = TypeSpec { name: "", isCompound: false, baseCtype: "", fields: emptyStrs, hasWhere: false, whereSrc: "", whereTokens: emptyToks, isSum: false, variants: [] }
     // probe past `{` and an optional `hit <policy>` to detect the form
     let probe = 1
     if peekAt(ps, probe).kind == 257 { probe = probe + 2 }
@@ -844,7 +846,7 @@ mapper parseDecision(name: String, ps: PState) -> DecisionResult {
             fields = appendString(fields, stringArrGet(outNames, fi) + ":" + stringArrGet(outCtypes, fi))
             fi = fi + 1
         }
-        outType = TypeSpec { name: name + "Out", isCompound: true, baseCtype: "", fields: fields, hasWhere: false, whereSrc: "", whereTokens: emptyToks }
+        outType = TypeSpec { name: name + "Out", isCompound: true, baseCtype: "", fields: fields, hasWhere: false, whereSrc: "", whereTokens: emptyToks, isSum: false, variants: [] }
         hasOutType = true
         retElem = "xc_" + name + "Out_t"
     } else {
@@ -962,7 +964,7 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
     let emptyToks0: Token[] = []
     let emptyRows0: DecisionRow[] = []
     let dTable = DecisionTable { name: "", params: "", policy: "first", agg: "", outNames: emptyStrs0, outCtypes: emptyStrs0, retElem: "", retCtype: "", isMulti: false, rows: emptyRows0 }
-    let dOutType = TypeSpec { name: "", isCompound: false, baseCtype: "", fields: emptyStrs0, hasWhere: false, whereSrc: "", whereTokens: emptyToks0 }
+    let dOutType = TypeSpec { name: "", isCompound: false, baseCtype: "", fields: emptyStrs0, hasWhere: false, whereSrc: "", whereTokens: emptyToks0, isSum: false, variants: [] }
     let hasTable = false
     let hasOutType = false
     let br = parseBody(ps2)
@@ -1061,7 +1063,43 @@ mapper parseTypeDecl(ps: PState) -> TypeResult2 {
         let spec = TypeSpec {
             name: name, isCompound: true,
             baseCtype: "", fields: fields,
-            hasWhere: false, whereSrc: "", whereTokens: []
+            hasWhere: false, whereSrc: "", whereTokens: [],
+            isSum: false, variants: []
+        }
+        return TypeResult2 { spec: spec, ps: ps2 }
+    }
+
+    // Sum / algebraic type:  = | Variant { fields } | Variant2 | ...
+    if peek(ps2).kind == 125 {   // leading `|`
+        let variants: String[] = []
+        while peek(ps2).kind == 125 {
+            ps2 = advance(ps2)                       // consume `|`
+            let vname = peek(ps2).text
+            ps2 = advance(ps2)
+            let vfields = ""
+            if peek(ps2).kind == 102 {               // optional { fields }
+                ps2 = advance(ps2)
+                let first = true
+                while peek(ps2).kind != 103 and peek(ps2).kind != 0 {
+                    let fname = peek(ps2).text
+                    ps2 = advance(ps2)
+                    if peek(ps2).kind == 108 { ps2 = advance(ps2) }  // :
+                    let ftr = parseTypeExpr(ps2)
+                    ps2 = ftr.ps
+                    if not first { vfields = vfields + "," }
+                    vfields = vfields + fname + ":" + ftr.ctype
+                    first = false
+                    if peek(ps2).kind == 106 { ps2 = advance(ps2) }  // ,
+                }
+                if peek(ps2).kind == 103 { ps2 = advance(ps2) }      // }
+            }
+            variants = appendString(variants, vname + "|" + vfields)
+        }
+        let spec = TypeSpec {
+            name: name, isCompound: false,
+            baseCtype: "", fields: [],
+            hasWhere: false, whereSrc: "", whereTokens: [],
+            isSum: true, variants: variants
         }
         return TypeResult2 { spec: spec, ps: ps2 }
     }
@@ -1083,7 +1121,8 @@ mapper parseTypeDecl(ps: PState) -> TypeResult2 {
     let spec = TypeSpec {
         name: name, isCompound: false,
         baseCtype: tr.ctype, fields: fields,
-        hasWhere: hasWhere, whereSrc: "", whereTokens: whereTokens
+        hasWhere: hasWhere, whereSrc: "", whereTokens: whereTokens,
+        isSum: false, variants: []
     }
     return TypeResult2 { spec: spec, ps: ps2 }
 }
@@ -1699,14 +1738,16 @@ creator parseProgram(tokens: Token[]) -> Program {
                     types = appendTypeSpec(types, TypeSpec {
                         name: mr.spec.name + "Data", isCompound: true, baseCtype: "",
                         fields: mr.spec.dataFields,
-                        hasWhere: false, whereSrc: "", whereTokens: []
+                        hasWhere: false, whereSrc: "", whereTokens: [],
+                        isSum: false, variants: []
                     })
                     mfields = appendString(mfields, "data:xc_" + mr.spec.name + "Data_t")
                 }
                 types = appendTypeSpec(types, TypeSpec {
                     name: mr.spec.name, isCompound: true, baseCtype: "",
                     fields: mfields,
-                    hasWhere: false, whereSrc: "", whereTokens: []
+                    hasWhere: false, whereSrc: "", whereTokens: [],
+                    isSum: false, variants: []
                 })
                 // register the IllegalTransition interrupt once
                 let hasIT = false
@@ -1722,7 +1763,8 @@ creator parseProgram(tokens: Token[]) -> Program {
                     types = appendTypeSpec(types, TypeSpec {
                         name: "IllegalTransition", isCompound: true, baseCtype: "",
                         fields: itfields,
-                        hasWhere: false, whereSrc: "", whereTokens: []
+                        hasWhere: false, whereSrc: "", whereTokens: [],
+                        isSum: false, variants: []
                     })
                     interrupts = appendString(interrupts, "IllegalTransition")
                 }
