@@ -20,7 +20,7 @@ const sidebars = {
     {
       type: 'category',
       label: 'Proposals (draft)',
-      items: ['proposals/typed-events', 'proposals/state-machines'],
+      items: ['proposals/web-stack', 'proposals/typed-events', 'proposals/state-machines'],
     },
   ],
 };

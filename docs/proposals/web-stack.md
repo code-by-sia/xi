@@ -1,0 +1,104 @@
+# Proposal: Web stack — crypto → HTTPS → HTTP/2-3 → `std/web`
+
+> **Status: phased.** Phase 1 (**`std/crypto`**) is **implemented** — see
+> [the standard library](../stdlib.md). The later phases (HTTPS, HTTP/2 and /3,
+> and a `std/web` REST framework) are designed here and **gated on one decision:
+> the external-dependency policy** (below).
+
+## Goal
+
+Let a developer stand up a **REST API served over HTTPS** with a few lines of Xi,
+reusing what's already shipped: `std/json` for bodies, `std/crypto` for tokens/
+signing, dependency injection for handlers, and the `std/http`/`std/net` stack for
+transport.
+
+## Phase 1 — Cryptography ✅ (shipped)
+
+`std/crypto`: SHA-256/SHA-1/MD5, HMAC-SHA256, hex/base64, and CSPRNG bytes — all
+self-contained C, test-vector verified. Enough for token signing, content hashes,
+and API-key HMACs. (AES/ChaCha20 and X25519/ECDSA can follow if needed; those are
+larger but still implementable in pure C.)
+
+## The gating decision: TLS / HTTP dependencies
+
+Everything past crypto needs **TLS**, and HTTP/2-3 need framing/QUIC stacks.
+Writing a correct, *secure* TLS 1.3 or a QUIC stack from scratch is not advisable
+(it's thousands of lines and a security liability). The realistic options:
+
+- **A. Optional system libraries.** Link against the platform's TLS/HTTP stack
+  **when present** — `libssl`/`libcrypto` (OpenSSL/LibreSSL) for TLS 1.2/1.3,
+  `nghttp2` for HTTP/2, and a QUIC lib (`ngtcp2`+`nghttp3`, or `quiche`) for
+  HTTP/3. The compiler would add `-lssl -lcrypto …` to the `cc` invocation only
+  when a module that needs them is imported. **Cost:** breaks the current
+  “dependency-light, just libc + `-lm`” promise; the runtime gains optional deps.
+- **B. From scratch.** Implement TLS/HTTP2/HTTP3 in pure C. **Not recommended** —
+  enormous and a security risk; effectively out of scope.
+
+**Recommendation: A**, scoped tightly — TLS first (HTTPS covers the vast majority
+of "REST API" needs), then HTTP/2, then HTTP/3 (which carries the heaviest
+dependency, QUIC). Each is opt-in via its `import`.
+
+## Phase 2 — HTTPS
+
+- **Client:** extend `std/http` so `https://` URLs work — wrap the existing `net`
+  socket in a TLS session (handshake, read/write) via the chosen TLS lib.
+- **Server:** a TLS listener (cert + key) producing encrypted `net.Conn`s.
+- API stays the same shape as today's `std/http`; only the transport changes.
+
+## Phase 3 — HTTP/2, then HTTP/3
+
+- **HTTP/2** over TLS (ALPN `h2`): framing + HPACK via `nghttp2`, exposed behind
+  the same request/response types.
+- **HTTP/3** over QUIC (UDP): a QUIC library (`ngtcp2`+`nghttp3` or `quiche`).
+  Highest dependency weight; last in line.
+- Negotiation is transparent (ALPN); callers keep one API.
+
+## Phase 4 — `std/web` (REST framework)
+
+A small framework so a server is declarative and DI-wired:
+
+```x
+import "std/web.xi"
+import "std/json.xi"
+
+// A route handler is a function kind; the body uses DI like any class.
+class Users {
+    deps { db: Repo }
+    route get "/users/:id" (req: Request) -> Response {
+        let u = db.find(req.param("id"))
+        return web.json(200, userToJson(u))
+    }
+    route post "/users" (req: Request) -> Response {
+        let u = userFromJson(req.body())     // req.body() : Json
+        return web.json(201, userToJson(db.add(u)))
+    }
+}
+
+async entry main(args: String[]) -> Integer {
+    web.serveTLS(8443, "cert.pem", "key.pem")   // discovers routes via DI, like listeners
+    return 0
+}
+module App {}
+```
+
+- **`route <method> "/path"`** — a new function kind (like `listener`): the
+  compiler discovers routes and builds the router, mirroring event listeners.
+- **`Request`** — method, path, params (`:id`), query, headers, and `body()` as a
+  `Json` (via `std/json`). **`Response`** — status + headers + body; `web.json(...)`
+  / `web.text(...)` helpers.
+- **`web.serve(port)`** (HTTP) and **`web.serveTLS(port, cert, key)`** (HTTPS),
+  with HTTP/2-3 negotiated transparently once those land.
+- Middleware (auth via `std/crypto` HMAC/JWT, logging) as ordinary DI-wired
+  components.
+
+## Open question for you
+
+How should we handle the TLS/HTTP dependency (the gate above)?
+
+1. **Option A — optional system libs** (OpenSSL for TLS now; nghttp2 / QUIC lib
+   later), linked only when the relevant module is imported. *(recommended)*
+2. **Vendored TLS** — bundle a small TLS library's source in `runtime/` so there's
+   no system dependency, at the cost of carrying that code.
+3. **Hold** HTTPS+ until there's a clearer dependency policy.
+
+Crypto (phase 1) is done regardless; the rest proceeds once this is settled.

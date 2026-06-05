@@ -1313,3 +1313,171 @@ xc_Json_t xstd_xml_parse(xc_string_t src) {
     const char* tag; size_t tl;
     return xx_element(&P, &tag, &tl);         /* returns the root element's value */
 }
+
+/* ─── Cryptography (std/crypto) ───────────────────────────────────────────────
+ * Self-contained, dependency-light hashing, HMAC, hex/base64, and CSPRNG bytes.
+ * Operate on xc_bytes_t; digests are heap-allocated fresh buffers.
+ */
+static xc_bytes_t xc_bytes_new(const unsigned char* p, size_t n) {
+    unsigned char* b = (unsigned char*)malloc(n ? n : 1);
+    if (!b) abort();
+    if (n && p) memcpy(b, p, n);
+    return (xc_bytes_t){ .data = b, .len = n };
+}
+
+/* ---- SHA-256 (FIPS 180-4) ---- */
+#define XROR32(x,n) (((x) >> (n)) | ((x) << (32 - (n))))
+static const uint32_t XK256[64] = {
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2 };
+typedef struct { uint32_t s[8]; uint64_t len; unsigned char buf[64]; size_t n; } xsha256;
+static void xsha256_block(xsha256* c, const unsigned char* p) {
+    uint32_t w[64];
+    for (int i=0;i<16;i++) w[i]=((uint32_t)p[i*4]<<24)|((uint32_t)p[i*4+1]<<16)|((uint32_t)p[i*4+2]<<8)|p[i*4+3];
+    for (int i=16;i<64;i++){ uint32_t s0=XROR32(w[i-15],7)^XROR32(w[i-15],18)^(w[i-15]>>3);
+        uint32_t s1=XROR32(w[i-2],17)^XROR32(w[i-2],19)^(w[i-2]>>10); w[i]=w[i-16]+s0+w[i-7]+s1; }
+    uint32_t a=c->s[0],b=c->s[1],cc=c->s[2],d=c->s[3],e=c->s[4],f=c->s[5],g=c->s[6],h=c->s[7];
+    for (int i=0;i<64;i++){ uint32_t S1=XROR32(e,6)^XROR32(e,11)^XROR32(e,25); uint32_t ch=(e&f)^((~e)&g);
+        uint32_t t1=h+S1+ch+XK256[i]+w[i]; uint32_t S0=XROR32(a,2)^XROR32(a,13)^XROR32(a,22);
+        uint32_t maj=(a&b)^(a&cc)^(b&cc); uint32_t t2=S0+maj; h=g;g=f;f=e;e=d+t1;d=cc;cc=b;b=a;a=t1+t2; }
+    c->s[0]+=a;c->s[1]+=b;c->s[2]+=cc;c->s[3]+=d;c->s[4]+=e;c->s[5]+=f;c->s[6]+=g;c->s[7]+=h;
+}
+static void xsha256_init(xsha256* c){ c->s[0]=0x6a09e667;c->s[1]=0xbb67ae85;c->s[2]=0x3c6ef372;c->s[3]=0xa54ff53a;
+    c->s[4]=0x510e527f;c->s[5]=0x9b05688c;c->s[6]=0x1f83d9ab;c->s[7]=0x5be0cd19;c->len=0;c->n=0; }
+static void xsha256_update(xsha256* c,const unsigned char* p,size_t n){ c->len+=n;
+    while(n){ size_t k=64-c->n; if(k>n)k=n; memcpy(c->buf+c->n,p,k); c->n+=k;p+=k;n-=k; if(c->n==64){xsha256_block(c,c->buf);c->n=0;} } }
+static void xsha256_final(xsha256* c, unsigned char* out){ uint64_t bits=c->len*8; unsigned char pad=0x80;
+    xsha256_update(c,&pad,1); unsigned char z=0; while(c->n!=56) xsha256_update(c,&z,1);
+    unsigned char L[8]; for(int i=0;i<8;i++) L[i]=(unsigned char)(bits>>(56-8*i)); xsha256_update(c,L,8);
+    for(int i=0;i<8;i++){ out[i*4]=(unsigned char)(c->s[i]>>24);out[i*4+1]=(unsigned char)(c->s[i]>>16);
+        out[i*4+2]=(unsigned char)(c->s[i]>>8);out[i*4+3]=(unsigned char)c->s[i]; } }
+xc_bytes_t xstd_sha256(xc_bytes_t in){ xsha256 c; xsha256_init(&c); xsha256_update(&c,in.data,in.len);
+    unsigned char d[32]; xsha256_final(&c,d); return xc_bytes_new(d,32); }
+
+/* ---- SHA-1 (FIPS 180) ---- */
+#define XROL32(x,n) (((x) << (n)) | ((x) >> (32 - (n))))
+typedef struct { uint32_t s[5]; uint64_t len; unsigned char buf[64]; size_t n; } xsha1;
+static void xsha1_block(xsha1* c, const unsigned char* p){
+    uint32_t w[80];
+    for(int i=0;i<16;i++) w[i]=((uint32_t)p[i*4]<<24)|((uint32_t)p[i*4+1]<<16)|((uint32_t)p[i*4+2]<<8)|p[i*4+3];
+    for(int i=16;i<80;i++) w[i]=XROL32(w[i-3]^w[i-8]^w[i-14]^w[i-16],1);
+    uint32_t a=c->s[0],b=c->s[1],cc=c->s[2],d=c->s[3],e=c->s[4];
+    for(int i=0;i<80;i++){ uint32_t f,k;
+        if(i<20){f=(b&cc)|((~b)&d);k=0x5a827999;}
+        else if(i<40){f=b^cc^d;k=0x6ed9eba1;}
+        else if(i<60){f=(b&cc)|(b&d)|(cc&d);k=0x8f1bbcdc;}
+        else{f=b^cc^d;k=0xca62c1d6;}
+        uint32_t t=XROL32(a,5)+f+e+k+w[i]; e=d;d=cc;cc=XROL32(b,30);b=a;a=t; }
+    c->s[0]+=a;c->s[1]+=b;c->s[2]+=cc;c->s[3]+=d;c->s[4]+=e;
+}
+static void xsha1_init(xsha1* c){ c->s[0]=0x67452301;c->s[1]=0xEFCDAB89;c->s[2]=0x98BADCFE;c->s[3]=0x10325476;c->s[4]=0xC3D2E1F0;c->len=0;c->n=0; }
+static void xsha1_update(xsha1* c,const unsigned char* p,size_t n){ c->len+=n;
+    while(n){ size_t k=64-c->n; if(k>n)k=n; memcpy(c->buf+c->n,p,k); c->n+=k;p+=k;n-=k; if(c->n==64){xsha1_block(c,c->buf);c->n=0;} } }
+static void xsha1_final(xsha1* c, unsigned char* out){ uint64_t bits=c->len*8; unsigned char pad=0x80;
+    xsha1_update(c,&pad,1); unsigned char z=0; while(c->n!=56) xsha1_update(c,&z,1);
+    unsigned char L[8]; for(int i=0;i<8;i++) L[i]=(unsigned char)(bits>>(56-8*i)); xsha1_update(c,L,8);
+    for(int i=0;i<5;i++){ out[i*4]=(unsigned char)(c->s[i]>>24);out[i*4+1]=(unsigned char)(c->s[i]>>16);
+        out[i*4+2]=(unsigned char)(c->s[i]>>8);out[i*4+3]=(unsigned char)c->s[i]; } }
+xc_bytes_t xstd_sha1(xc_bytes_t in){ xsha1 c; xsha1_init(&c); xsha1_update(&c,in.data,in.len);
+    unsigned char d[20]; xsha1_final(&c,d); return xc_bytes_new(d,20); }
+
+/* ---- MD5 (RFC 1321) ---- */
+static const uint32_t XMD5K[64]={
+    0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
+    0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
+    0xf61e2562,0xc040b340,0x265e5a51,0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
+    0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,0x676f02d9,0x8d2a4c8a,
+    0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,
+    0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
+    0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,0xffeff47d,0x85845dd1,
+    0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391 };
+static const int XMD5S[64]={7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+    5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+    4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+    6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21};
+typedef struct { uint32_t s[4]; uint64_t len; unsigned char buf[64]; size_t n; } xmd5;
+static void xmd5_block(xmd5* c,const unsigned char* p){
+    uint32_t m[16]; for(int i=0;i<16;i++) m[i]=(uint32_t)p[i*4]|((uint32_t)p[i*4+1]<<8)|((uint32_t)p[i*4+2]<<16)|((uint32_t)p[i*4+3]<<24);
+    uint32_t a=c->s[0],b=c->s[1],cc=c->s[2],d=c->s[3];
+    for(int i=0;i<64;i++){ uint32_t f; int g;
+        if(i<16){f=(b&cc)|((~b)&d);g=i;}
+        else if(i<32){f=(d&b)|((~d)&cc);g=(5*i+1)&15;}
+        else if(i<48){f=b^cc^d;g=(3*i+5)&15;}
+        else{f=cc^(b|(~d));g=(7*i)&15;}
+        uint32_t t=d; d=cc; cc=b; uint32_t x=a+f+XMD5K[i]+m[g]; b=b+XROL32(x,XMD5S[i]); a=t; }
+    c->s[0]+=a;c->s[1]+=b;c->s[2]+=cc;c->s[3]+=d;
+}
+static void xmd5_init(xmd5* c){ c->s[0]=0x67452301;c->s[1]=0xefcdab89;c->s[2]=0x98badcfe;c->s[3]=0x10325476;c->len=0;c->n=0; }
+static void xmd5_update(xmd5* c,const unsigned char* p,size_t n){ c->len+=n;
+    while(n){ size_t k=64-c->n; if(k>n)k=n; memcpy(c->buf+c->n,p,k); c->n+=k;p+=k;n-=k; if(c->n==64){xmd5_block(c,c->buf);c->n=0;} } }
+static void xmd5_final(xmd5* c, unsigned char* out){ uint64_t bits=c->len*8; unsigned char pad=0x80;
+    xmd5_update(c,&pad,1); unsigned char z=0; while(c->n!=56) xmd5_update(c,&z,1);
+    unsigned char L[8]; for(int i=0;i<8;i++) L[i]=(unsigned char)(bits>>(8*i)); xmd5_update(c,L,8);
+    for(int i=0;i<4;i++){ out[i*4]=(unsigned char)c->s[i];out[i*4+1]=(unsigned char)(c->s[i]>>8);
+        out[i*4+2]=(unsigned char)(c->s[i]>>16);out[i*4+3]=(unsigned char)(c->s[i]>>24); } }
+xc_bytes_t xstd_md5(xc_bytes_t in){ xmd5 c; xmd5_init(&c); xmd5_update(&c,in.data,in.len);
+    unsigned char d[16]; xmd5_final(&c,d); return xc_bytes_new(d,16); }
+
+/* ---- HMAC-SHA256 (RFC 2104) ---- */
+xc_bytes_t xstd_hmac_sha256(xc_bytes_t key, xc_bytes_t msg){
+    unsigned char k[64]; memset(k,0,64);
+    if(key.len>64){ xsha256 c; xsha256_init(&c); xsha256_update(&c,key.data,key.len); unsigned char kd[32]; xsha256_final(&c,kd); memcpy(k,kd,32); }
+    else memcpy(k,key.data,key.len);
+    unsigned char ipad[64],opad[64];
+    for(int i=0;i<64;i++){ ipad[i]=k[i]^0x36; opad[i]=k[i]^0x5c; }
+    unsigned char inner[32];
+    { xsha256 c; xsha256_init(&c); xsha256_update(&c,ipad,64); xsha256_update(&c,msg.data,msg.len); xsha256_final(&c,inner); }
+    unsigned char out[32];
+    { xsha256 c; xsha256_init(&c); xsha256_update(&c,opad,64); xsha256_update(&c,inner,32); xsha256_final(&c,out); }
+    return xc_bytes_new(out,32);
+}
+
+/* ---- hex ---- */
+xc_string_t xstd_hex(xc_bytes_t b){
+    static const char* H="0123456789abcdef";
+    char* s=(char*)malloc(b.len*2+1); if(!s) abort();
+    for(size_t i=0;i<b.len;i++){ s[i*2]=H[b.data[i]>>4]; s[i*2+1]=H[b.data[i]&15]; }
+    s[b.len*2]='\0'; return (xc_string_t){ .data=s, .len=b.len*2 };
+}
+static int xhexv(char c){ if(c>='0'&&c<='9')return c-'0'; if(c>='a'&&c<='f')return c-'a'+10; if(c>='A'&&c<='F')return c-'A'+10; return -1; }
+xc_bytes_t xstd_unhex(xc_string_t s){
+    size_t n=s.len/2; unsigned char* b=(unsigned char*)malloc(n?n:1); if(!b) abort();
+    for(size_t i=0;i<n;i++){ int hi=xhexv(s.data[i*2]); int lo=xhexv(s.data[i*2+1]); b[i]=(unsigned char)(((hi<0?0:hi)<<4)|(lo<0?0:lo)); }
+    return (xc_bytes_t){ .data=b, .len=n };
+}
+
+/* ---- base64 (standard alphabet, padded) ---- */
+xc_string_t xstd_base64(xc_bytes_t in){
+    static const char* A="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    size_t olen=((in.len+2)/3)*4; char* o=(char*)malloc(olen+1); if(!o) abort();
+    size_t j=0; size_t i=0;
+    while(i+3<=in.len){ uint32_t v=(in.data[i]<<16)|(in.data[i+1]<<8)|in.data[i+2];
+        o[j++]=A[(v>>18)&63];o[j++]=A[(v>>12)&63];o[j++]=A[(v>>6)&63];o[j++]=A[v&63]; i+=3; }
+    if(in.len-i==1){ uint32_t v=in.data[i]<<16; o[j++]=A[(v>>18)&63];o[j++]=A[(v>>12)&63];o[j++]='=';o[j++]='='; }
+    else if(in.len-i==2){ uint32_t v=(in.data[i]<<16)|(in.data[i+1]<<8); o[j++]=A[(v>>18)&63];o[j++]=A[(v>>12)&63];o[j++]=A[(v>>6)&63];o[j++]='='; }
+    o[j]='\0'; return (xc_string_t){ .data=o, .len=j };
+}
+static int xb64v(char c){ if(c>='A'&&c<='Z')return c-'A'; if(c>='a'&&c<='z')return c-'a'+26; if(c>='0'&&c<='9')return c-'0'+52; if(c=='+')return 62; if(c=='/')return 63; return -1; }
+xc_bytes_t xstd_unbase64(xc_string_t s){
+    unsigned char* o=(unsigned char*)malloc(s.len/4*3+3); if(!o) abort();
+    size_t j=0; int q[4]; int qn=0;
+    for(size_t i=0;i<s.len;i++){ char c=s.data[i]; if(c=='='||c=='\n'||c=='\r'||c==' ') continue; int v=xb64v(c); if(v<0) continue;
+        q[qn++]=v; if(qn==4){ o[j++]=(unsigned char)((q[0]<<2)|(q[1]>>4)); o[j++]=(unsigned char)((q[1]<<4)|(q[2]>>2)); o[j++]=(unsigned char)((q[2]<<6)|q[3]); qn=0; } }
+    if(qn>=2){ o[j++]=(unsigned char)((q[0]<<2)|(q[1]>>4)); if(qn>=3) o[j++]=(unsigned char)((q[1]<<4)|(q[2]>>2)); }
+    return (xc_bytes_t){ .data=o, .len=j };
+}
+
+/* ---- CSPRNG bytes (/dev/urandom) ---- */
+xc_bytes_t xstd_random_bytes(xc_integer_t n){
+    if(n<0) n=0; unsigned char* b=(unsigned char*)malloc((size_t)(n?n:1)); if(!b) abort();
+    FILE* f=fopen("/dev/urandom","rb");
+    if(f){ size_t got=fread(b,1,(size_t)n,f); fclose(f); if(got==(size_t)n) return (xc_bytes_t){ .data=b, .len=(size_t)n }; }
+    for(xc_integer_t i=0;i<n;i++) b[i]=(unsigned char)(rand()&0xff);   /* fallback */
+    return (xc_bytes_t){ .data=b, .len=(size_t)n };
+}

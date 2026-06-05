@@ -135,6 +135,21 @@ scalar → text). See [Serialization](serialization.md).
 | `stringifyAs` | `(Json, String) -> String` (custom root tag) |
 | `parse` | `(String) -> Json` |
 
+### `crypto` — `std/crypto.xi`
+
+Self-contained hashing, HMAC, encodings, and a CSPRNG — no external libraries.
+Digests are `Bytes`; render with `hex`/`base64`. (Test-vector verified.)
+
+| Function | Signature |
+|----------|-----------|
+| `sha256` / `sha1` / `md5` | `(Bytes) -> Bytes` (digest) |
+| `sha256Hex` / `sha1Hex` / `md5Hex` | `(String) -> String` (hex digest of text) |
+| `hmacSha256` | `(Bytes, Bytes) -> Bytes` (key, msg) |
+| `hmacSha256Hex` | `(String, String) -> String` |
+| `hex` / `fromHex` | `(Bytes) -> String` / `(String) -> Bytes` |
+| `base64` / `fromBase64` | `(Bytes) -> String` / `(String) -> Bytes` |
+| `randomBytes` / `randomHex` | `(Integer) -> Bytes` / `(Integer) -> String` (from `/dev/urandom`) |
+
 ### `events` — `std/events.xi`
 
 Built-in **typed publish/subscribe**. A producer publishes any DTO under a topic
