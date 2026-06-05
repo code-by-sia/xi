@@ -236,6 +236,12 @@ typedef struct {
     xc_size_t    cap;
 } xc_arr_string_t;
 
+/* Arrays of primitives — so they can be struct/event fields and array literals. */
+typedef struct { xc_integer_t* data; xc_size_t len; xc_size_t cap; } xc_arr_integer_t;
+typedef struct { xc_number_t*  data; xc_size_t len; xc_size_t cap; } xc_arr_number_t;
+typedef struct { xc_bool_t*    data; xc_size_t len; xc_size_t cap; } xc_arr_bool_t;
+typedef struct { xc_char_t*    data; xc_size_t len; xc_size_t cap; } xc_arr_char_t;
+
 typedef struct {
     void*      data;
     xc_size_t  len;

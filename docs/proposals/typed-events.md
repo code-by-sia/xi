@@ -9,18 +9,16 @@
 
 ## Open items
 
-- **Primitive number/bool arrays in payloads.** The derived codec now encodes
-  array fields element-by-element — `String[]` and arrays of `event` types work
-  ([Events](../events.md), `examples/event_array_demo.xi`). Arrays of primitive
-  numbers/bools (`Integer[]`, `Number[]`, `Bool[]`) still can't be *fields* of a
-  payload because the language doesn't yet emit those array typedefs for struct
-  members (a general limitation, not codec-specific); the codec already handles
-  them once that lands.
+- ~~**Primitive number/bool arrays in payloads.**~~ **Done.** `Integer[]`,
+  `Number[]`, and `Bool[]` (alongside `String[]` and arrays of `event` types) now
+  work as payload fields — the runtime defines the primitive array typedefs and
+  the derived codec encodes them element-by-element.
 
 - **Async / buffered delivery.** Delivery today is synchronous within the pump
-  (`Events.run` drains the in-memory queue on the calling thread). A
-  `ConsumerService` that delivers on a worker thread, batches, retries, or
-  dead-letters is a transport concern that can be added without language changes.
+  (`Events.run` drains the in-memory queue on the calling thread). Now that
+  [threading](../threading.md) exists, a `ConsumerService` that delivers on a
+  worker thread (batching, retries, dead-letters) can be built as a transport
+  without language changes.
 
 - **The topic inside the listener.** A listener receives the typed DTO only. For
   wildcard subscriptions (one listener over several topics) it may also want the
