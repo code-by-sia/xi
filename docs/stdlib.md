@@ -150,6 +150,20 @@ Digests are `Bytes`; render with `hex`/`base64`. (Test-vector verified.)
 | `base64` / `fromBase64` | `(Bytes) -> String` / `(String) -> Bytes` |
 | `randomBytes` / `randomHex` | `(Integer) -> Bytes` / `(Integer) -> String` (from `/dev/urandom`) |
 
+### `web` — `std/web.xi`
+
+A tiny **REST framework** over HTTP/1.1: write `route` handlers (a DI-wired
+function kind) and run `web.serve`. See [Web](web.md).
+
+| Name | Kind / Signature |
+|------|------------------|
+| `route h(req: Request) -> Response on get "/path/:id"` | a route handler (function kind) |
+| `web.param` / `web.query` / `web.header` | `(Request, String) -> String` |
+| `web.method` / `web.path` / `web.body` | `(Request) -> String` |
+| `web.bodyJson` | `(Request) -> Json` |
+| `web.text` / `web.json` / `web.respond` | build a `Response` |
+| `web.serve` | `(Integer)` — run a blocking HTTP/1.1 server |
+
 ### `events` — `std/events.xi`
 
 Built-in **typed publish/subscribe**. A producer publishes any DTO under a topic

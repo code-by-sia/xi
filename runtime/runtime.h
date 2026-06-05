@@ -155,6 +155,22 @@ typedef struct xc_json_node* xc_Json_t;
    The default transport moves envelopes through an in-memory FIFO with no
    serialization; external transports (de)serialize the payload themselves. */
 typedef struct xc_event_env* xc_Event_t;
+
+/* Web (std/web): an HTTP request/response and a tiny HTTP/1.1 server. The
+   generated router is registered via xstd_web_set_dispatch and run by serve. */
+typedef struct xc_web_request*  xc_Request_t;
+typedef struct xc_web_response* xc_Response_t;
+xc_string_t   xstd_req_method(xc_Request_t);
+xc_string_t   xstd_req_path(xc_Request_t);
+xc_string_t   xstd_req_query(xc_Request_t, xc_string_t name);
+xc_string_t   xstd_req_header(xc_Request_t, xc_string_t name);
+xc_string_t   xstd_req_param(xc_Request_t, xc_string_t name);
+xc_string_t   xstd_req_body(xc_Request_t);
+xc_Response_t xstd_resp(xc_integer_t status, xc_string_t body, xc_string_t ctype);
+xc_bool_t     xstd_web_match(xc_Request_t, xc_string_t method, xc_string_t pattern);
+void          xstd_web_set_dispatch(xc_Response_t (*fn)(xc_Request_t));
+void          xstd_web_serve(xc_integer_t port);
+
 xc_Event_t   xstd_event_make(xc_string_t topic, xc_string_t type, void* payload);
 xc_string_t  xstd_event_topic(xc_Event_t);
 xc_string_t  xstd_event_type(xc_Event_t);

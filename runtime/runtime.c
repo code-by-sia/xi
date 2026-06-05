@@ -1481,3 +1481,179 @@ xc_bytes_t xstd_random_bytes(xc_integer_t n){
     for(xc_integer_t i=0;i<n;i++) b[i]=(unsigned char)(rand()&0xff);   /* fallback */
     return (xc_bytes_t){ .data=b, .len=(size_t)n };
 }
+
+/* ─── Web server (std/web) ────────────────────────────────────────────────────
+ * A minimal blocking HTTP/1.1 server. The compiler generates a dispatcher that
+ * matches (method, path) to a route handler and registers it via
+ * xstd_web_set_dispatch; xstd_web_serve runs the accept loop.
+ */
+struct xc_web_request {
+    char* method; char* path; char* query; char* headers; char* body; size_t blen;
+    char* pk[16]; char* pv[16]; int pn;   /* captured path params */
+};
+struct xc_web_response { int status; char* body; size_t blen; char* ctype; };
+
+static xc_string_t xw_str(const char* s) { return xc_str_copy(s ? s : "", s ? strlen(s) : 0); }
+xc_string_t xstd_req_method(xc_Request_t r) { return xw_str(r->method); }
+xc_string_t xstd_req_path(xc_Request_t r)   { return xw_str(r->path); }
+xc_string_t xstd_req_body(xc_Request_t r)   { return xc_str_copy(r->body ? r->body : "", r->blen); }
+
+xc_string_t xstd_req_param(xc_Request_t r, xc_string_t name) {
+    for (int i = 0; i < r->pn; i++)
+        if (strlen(r->pk[i]) == name.len && memcmp(r->pk[i], name.data, name.len) == 0) return xw_str(r->pv[i]);
+    return xw_str("");
+}
+/* find "name=value" in a urlencoded-ish query string (no %-decoding) */
+static xc_string_t xw_kv(const char* hay, const char* sep, xc_string_t name) {
+    if (!hay) return xw_str("");
+    size_t nl = name.len;
+    const char* p = hay;
+    while (*p) {
+        const char* amp = strstr(p, sep);
+        const char* end = amp ? amp : p + strlen(p);
+        const char* eq = memchr(p, '=', (size_t)(end - p));
+        if (eq && (size_t)(eq - p) == nl && memcmp(p, name.data, nl) == 0)
+            return xc_str_copy(eq + 1, (size_t)(end - eq - 1));
+        if (!amp) break;
+        p = amp + strlen(sep);
+    }
+    return xw_str("");
+}
+xc_string_t xstd_req_query(xc_Request_t r, xc_string_t name) { return xw_kv(r->query, "&", name); }
+xc_string_t xstd_req_header(xc_Request_t r, xc_string_t name) {
+    /* headers are "Key: Value\r\n..."; case-insensitive key match */
+    if (!r->headers) return xw_str("");
+    const char* p = r->headers;
+    while (*p) {
+        const char* eol = strstr(p, "\r\n"); const char* end = eol ? eol : p + strlen(p);
+        const char* colon = memchr(p, ':', (size_t)(end - p));
+        if (colon && (size_t)(colon - p) == name.len) {
+            int ok = 1;
+            for (size_t i = 0; i < name.len; i++) if (tolower((unsigned char)p[i]) != tolower((unsigned char)name.data[i])) { ok = 0; break; }
+            if (ok) { const char* v = colon + 1; while (v < end && *v == ' ') v++; return xc_str_copy(v, (size_t)(end - v)); }
+        }
+        if (!eol) break;
+        p = eol + 2;
+    }
+    return xw_str("");
+}
+xc_Response_t xstd_resp(xc_integer_t status, xc_string_t body, xc_string_t ctype) {
+    struct xc_web_response* r = (struct xc_web_response*)malloc(sizeof(*r)); if (!r) abort();
+    r->status = (int)status; r->blen = body.len;
+    r->body = (char*)malloc(body.len ? body.len : 1); if (!r->body) abort();
+    if (body.len) memcpy(r->body, body.data, body.len);
+    r->ctype = xc_string_to_cstr(ctype);
+    return r;
+}
+/* match method (case-insensitive) and a "/a/:id/b" pattern against the request,
+   capturing :params into the request on success */
+xc_bool_t xstd_web_match(xc_Request_t req, xc_string_t method, xc_string_t pattern) {
+    if (strlen(req->method) != method.len) return false;
+    for (size_t i = 0; i < method.len; i++)
+        if (tolower((unsigned char)req->method[i]) != tolower((unsigned char)method.data[i])) return false;
+    req->pn = 0;
+    const char* pp = req->path;
+    char pat[1024]; size_t pl = pattern.len < 1023 ? pattern.len : 1023;
+    memcpy(pat, pattern.data, pl); pat[pl] = '\0';
+    const char* qp = pat;
+    /* walk segments of both, split on '/' */
+    while (1) {
+        while (*pp == '/') pp++;
+        while (*qp == '/') qp++;
+        if (*pp == '\0' && *qp == '\0') return true;
+        if (*pp == '\0' || *qp == '\0') return false;
+        const char* ps = pp; while (*pp && *pp != '/') pp++;
+        const char* qs = qp; while (*qp && *qp != '/') qp++;
+        size_t plen2 = (size_t)(pp - ps), qlen = (size_t)(qp - qs);
+        if (qlen > 0 && qs[0] == ':') {
+            if (req->pn < 16) { req->pk[req->pn] = xj_strdup_n(qs + 1, qlen - 1); req->pv[req->pn] = xj_strdup_n(ps, plen2); req->pn++; }
+        } else {
+            if (plen2 != qlen || memcmp(ps, qs, plen2) != 0) return false;
+        }
+    }
+}
+
+static xc_Response_t (*xc_web_dispatch_fn)(xc_Request_t) = NULL;
+void xstd_web_set_dispatch(xc_Response_t (*fn)(xc_Request_t)) { xc_web_dispatch_fn = fn; }
+
+/* Content-Length from a complete header block (case-insensitive, portable). */
+static long xw_content_length(const char* hdr) {
+    const char* p = hdr;
+    while (*p) {
+        const char* eol = strstr(p, "\r\n"); const char* end = eol ? eol : p + strlen(p);
+        const char* colon = memchr(p, ':', (size_t)(end - p));
+        if (colon && (size_t)(colon - p) == 14) {
+            const char* k = "content-length"; int ok = 1;
+            for (size_t i = 0; i < 14; i++) if (tolower((unsigned char)p[i]) != k[i]) { ok = 0; break; }
+            if (ok) { const char* v = colon + 1; while (*v == ' ') v++; return strtol(v, NULL, 10); }
+        }
+        if (!eol) break;
+        p = eol + 2;
+    }
+    return 0;
+}
+
+static const char* xw_reason(int s) {
+    switch (s) { case 200: return "OK"; case 201: return "Created"; case 204: return "No Content";
+        case 400: return "Bad Request"; case 401: return "Unauthorized"; case 403: return "Forbidden";
+        case 404: return "Not Found"; case 500: return "Internal Server Error"; default: return "OK"; }
+}
+void xstd_web_serve(xc_integer_t port) {
+    int fd = (int)xstd_tcp_listen(port, 64);
+    if (fd < 0) { fprintf(stderr, "web: cannot listen on port %lld\n", (long long)port); return; }
+    fprintf(stderr, "web: serving on http://0.0.0.0:%lld\n", (long long)port);
+    for (;;) {
+        int c = accept(fd, NULL, NULL);
+        if (c < 0) continue;
+        /* read until headers end (\r\n\r\n), then the body per Content-Length */
+        size_t cap = 8192, len = 0; char* buf = (char*)malloc(cap);
+        long need_total = -1; size_t hdr_end = 0;
+        while (1) {
+            if (len + 4096 > cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
+            ssize_t n = recv(c, buf + len, 4096, 0);
+            if (n <= 0) break;
+            len += (size_t)n;
+            if (hdr_end == 0) {
+                buf[len] = '\0';
+                char* h = strstr(buf, "\r\n\r\n");
+                if (h) {
+                    hdr_end = (size_t)(h - buf) + 4;
+                    long clen = xw_content_length(buf);
+                    need_total = (long)hdr_end + (clen > 0 ? clen : 0);
+                }
+            }
+            if (need_total >= 0 && (long)len >= need_total) break;
+        }
+        if (len == 0) { free(buf); close(c); continue; }
+        buf[len] = '\0';
+        struct xc_web_request req; memset(&req, 0, sizeof(req));
+        /* request line: METHOD SP PATH SP HTTP/1.1\r\n */
+        char* sp1 = strchr(buf, ' ');
+        char* sp2 = sp1 ? strchr(sp1 + 1, ' ') : NULL;
+        char* eol = strstr(buf, "\r\n");
+        if (sp1 && sp2 && eol) {
+            req.method = xj_strdup_n(buf, (size_t)(sp1 - buf));
+            char* path = xj_strdup_n(sp1 + 1, (size_t)(sp2 - sp1 - 1));
+            char* q = strchr(path, '?');
+            if (q) { *q = '\0'; req.query = xj_strdup_n(q + 1, strlen(q + 1)); } else req.query = xj_strdup_n("", 0);
+            req.path = path;
+            req.headers = xj_strdup_n(eol + 2, hdr_end > (size_t)(eol + 2 - buf) ? (size_t)(buf + hdr_end - 2 - (eol + 2)) : 0);
+            req.body = xj_strdup_n(buf + hdr_end, len - hdr_end);
+            req.blen = len - hdr_end;
+        }
+        struct xc_web_response* resp = NULL;
+        if (xc_web_dispatch_fn && req.method) resp = xc_web_dispatch_fn(&req);
+        int status = resp ? resp->status : 404;
+        const char* body = resp ? resp->body : "Not Found";
+        size_t blen = resp ? resp->blen : 9;
+        const char* ctype = (resp && resp->ctype) ? resp->ctype : "text/plain";
+        char head[512];
+        int hl = snprintf(head, sizeof(head),
+            "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
+            status, xw_reason(status), ctype, blen);
+        send(c, head, (size_t)hl, 0);
+        if (blen) send(c, body, blen, 0);
+        close(c);
+        free(buf);
+    }
+}

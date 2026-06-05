@@ -359,6 +359,7 @@ decision parseFuncKind(ps: PState) -> KindResult {
     when peek(ps).kind == 218 => KindResult { kind: "reducer",   ps: advance(ps), ok: true }
     when peek(ps).kind == 256 => KindResult { kind: "decision",  ps: advance(ps), ok: true }
     when peek(ps).kind == 295 => KindResult { kind: "listener",  ps: advance(ps), ok: true }
+    when peek(ps).kind == 297 => KindResult { kind: "route",     ps: advance(ps), ok: true }
     else                      => KindResult { kind: "", ps: ps, ok: false }
 }
 
@@ -928,12 +929,24 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
     }
 
     // `listener` subscription clause:  on "topic.name"
+    // `route` clause:                  on <method> "/path"   (topic = "method /path")
     let topic = ""
     if kindStr == "listener" {
         if peek(ps2).kind == 1 and peek(ps2).text == "on" {
             ps2 = advance(ps2)
             if peek(ps2).kind == 4 {   // string literal
                 topic = peek(ps2).text
+                ps2 = advance(ps2)
+            }
+        }
+    }
+    if kindStr == "route" {
+        if peek(ps2).kind == 1 and peek(ps2).text == "on" {
+            ps2 = advance(ps2)
+            let method = peek(ps2).text     // get / post / put / delete / ...
+            ps2 = advance(ps2)
+            if peek(ps2).kind == 4 {        // "/path" string literal
+                topic = method + " " + peek(ps2).text
                 ps2 = advance(ps2)
             }
         }

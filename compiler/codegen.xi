@@ -2707,6 +2707,57 @@ mapper genEventDispatch(prog: Program) -> String {
     return out + "\n"
 }
 
+// Any `route` methods in the program?
+predicate hasRoutes(prog: Program) {
+    let ci = 0
+    let cn = classSpecLen(prog.classes)
+    while ci < cn {
+        let cs = classSpecGet(prog.classes, ci)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn {
+            if methodSpecGet(cs.methList, mi).kind == "route" { return true }
+            mi = mi + 1
+        }
+        ci = ci + 1
+    }
+    return false
+}
+
+// std/web routing: per `route` method a trampoline (DI-resolves the owning class
+// and calls the handler with the Request), a dispatcher that matches
+// (method, path), and an init that registers the dispatcher with the runtime.
+mapper genWebDispatch(prog: Program) -> String {
+    if not hasRoutes(prog) { return "" }
+    let out = "/* === Web routes === */\n"
+    let disp = "static xc_Response_t xc_web_dispatch(xc_Request_t __req) {\n"
+    let ci = 0
+    let cn = classSpecLen(prog.classes)
+    while ci < cn {
+        let cs = classSpecGet(prog.classes, ci)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn {
+            let ms = methodSpecGet(cs.methList, mi)
+            if ms.kind == "route" and string_len(ms.topic) > 0 {
+                let sp = findChar(ms.topic, 32)             // "method /path"
+                let method = string_slice(ms.topic, 0, sp)
+                let path = string_slice(ms.topic, sp + 1, string_len(ms.topic))
+                let tr = "xc_route_" + cs.name + "_" + ms.name
+                out = out + "static xc_Response_t " + tr + "(xc_Request_t __r) {\n"
+                    + "    return xc_" + cs.name + "_" + ms.name + "_impl((void*)xc_new_" + cs.name + "(), __r);\n}\n"
+                disp = disp + "    if (xstd_web_match(__req, xc_string_from_cstr(\"" + method + "\"), xc_string_from_cstr(\"" + path + "\"))) return " + tr + "(__req);\n"
+            }
+            mi = mi + 1
+        }
+        ci = ci + 1
+    }
+    disp = disp + "    return xstd_resp(404, xc_string_from_cstr(\"Not Found\"), xc_string_from_cstr(\"text/plain\"));\n}\n"
+    out = out + disp
+    out = out + "static void xc_web_init(void) { xstd_web_set_dispatch(xc_web_dispatch); }\n\n"
+    return out
+}
+
 mapper genEntry(prog: Program) -> String {
     let es = prog.entrySpec
     let out = hoistCatches(prog, es.bodyTokens, "entry")
@@ -2714,6 +2765,7 @@ mapper genEntry(prog: Program) -> String {
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
     out = out + "    xc_atoms_init();\n"
+    if hasRoutes(prog) { out = out + "    xc_web_init();\n" }
     out = out + "    xc_arr_string_t xc_args;\n"
     out = out + "    xc_args.len = (xc_size_t)argc;\n"
     out = out + "    xc_args.cap = (xc_size_t)argc;\n"
@@ -3052,6 +3104,7 @@ mapper genAll(prog: Program) -> String {
          + genMachineDefs(prog)
          + genClassMethods(prog)
          + genEventDispatch(prog)
+         + genWebDispatch(prog)
          + genEntry(prog)
 }
 

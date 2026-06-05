@@ -16,6 +16,7 @@ const sidebars = {
     'stdlib',
     'serialization',
     'events',
+    'web',
     'internals',
     {
       type: 'category',

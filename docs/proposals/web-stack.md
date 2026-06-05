@@ -1,9 +1,10 @@
 # Proposal: Web stack — crypto → HTTPS → HTTP/2-3 → `std/web`
 
-> **Status: phased.** Phase 1 (**`std/crypto`**) is **implemented** — see
-> [the standard library](../stdlib.md). The later phases (HTTPS, HTTP/2 and /3,
-> and a `std/web` REST framework) are designed here and **gated on one decision:
-> the external-dependency policy** (below).
+> **Status: phased.** Phase 1 (**`std/crypto`**) and Phase 4 (**`std/web`**, over
+> plain HTTP) are **implemented** — see [crypto](../stdlib.md) and [Web](../web.md).
+> The transport phases (HTTPS, HTTP/2 and /3) remain and are **gated on one
+> decision: the external-dependency policy** (below) — resolved as **Option A,
+> optional system libs**; HTTPS is the next build.
 
 ## Goal
 

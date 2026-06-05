@@ -124,7 +124,7 @@ library, and the compiler internals — lives in the repository at
 compiler/   the compiler, written in Xi (lexer, parser, codegen, driver) + xc_helpers.c
             plus bootstrap.sh / fetch-seed.sh / selfhost.sh
 runtime/    the C runtime (runtime.h, runtime.c) — the Xi equivalent of libc/libcore
-std/        standard library (math, text, bytes, convert, json, yaml, xml, crypto, events, io, fs, path, net, process, time)
+std/        standard library (math, text, bytes, convert, json, yaml, xml, crypto, events, web, io, fs, path, net, http, process, time)
 examples/   runnable programs, incl. proj/ (multi-file) and showcase/ (full project)
 docs/       documentation (Docusaurus site under website/)
 editors/    Tree-sitter grammar, Zed extension, Vim plugin
