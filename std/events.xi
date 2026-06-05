@@ -1,4 +1,4 @@
-// std/events — typed pub/sub event system.  import "std/events.x"
+// std/events — typed pub/sub event system.  import "std/events.xi"
 //
 // A producer publishes any DTO under a topic through an injected
 // `PublisherService`:
@@ -21,7 +21,7 @@
 //
 // The pump (`ConsumerService.run`) drains delivered events to the listeners.
 
-import "std/json.x"
+import "std/json.xi"
 
 // ── Transport seams (replace these to go external) ──────────────────────────
 

@@ -8,7 +8,7 @@
 - **`vscode/`** — a Visual Studio Code extension (TextMate highlighting,
   snippets, keyword/stdlib completion). See `vscode/README.md`.
 
-The grammar parses every `.x` file in this repository — the examples, the
+The grammar parses every `.xi` file in this repository — the examples, the
 standard library, and the compiler's own sources — with no errors.
 
 ## Zed
@@ -39,14 +39,14 @@ point at the subdirectory), so no separate repository is needed.
 3. **Install the extension.** In Zed open the command palette and run
    **`zed: install dev extension`**, then choose the `editors/zed/` directory.
 
-Open any `.x` file and you'll get syntax highlighting, an outline (types,
+Open any `.xi` file and you'll get syntax highlighting, an outline (types,
 interfaces, classes, functions), comment toggling, and bracket auto-close.
 
 What the extension provides (`editors/zed/languages/x/`):
 
 | File | Purpose |
 |------|---------|
-| `config.toml`     | file association (`.x`), comments, brackets, autoclose |
+| `config.toml`     | file association (`.xi`), comments, brackets, autoclose |
 | `highlights.scm`  | syntax highlighting queries |
 | `outline.scm`     | symbols for the outline panel |
 | `indents.scm`     | auto-indentation |
@@ -58,7 +58,7 @@ After editing `editors/tree-sitter-x/grammar.js`:
 ```console
 $ cd editors/tree-sitter-x
 $ npx tree-sitter-cli generate --no-bindings   # regenerate src/parser.c only
-$ npx tree-sitter-cli parse ../../examples/showcase/main.x   # sanity-check
+$ npx tree-sitter-cli parse ../../examples/showcase/main.xi   # sanity-check
 ```
 
 (`--no-bindings` keeps the repo free of generated Node/Python/Rust/Swift binding
@@ -70,4 +70,4 @@ Then commit the updated `src/` and bump the `commit` in `extension.toml`.
 
 The grammar's `queries/highlights.scm` works directly with Neovim
 (`nvim-treesitter`) and Helix — register the grammar and copy the queries into
-the editor's runtime, associating the `x` filetype with `source.x`.
+the editor's runtime, associating the `x` filetype with `source.xi`.

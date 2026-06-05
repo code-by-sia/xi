@@ -11,7 +11,7 @@
 //   driver.x   import resolution + entry point (main)
 // =============================================================
 
-import "lexer.x"
-import "parser.x"
-import "codegen.x"
-import "driver.x"
+import "lexer.xi"
+import "parser.xi"
+import "codegen.xi"
+import "driver.xi"

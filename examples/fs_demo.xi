@@ -1,6 +1,6 @@
 // Filesystem + path standard library.
-import "std/fs.x"
-import "std/path.x"
+import "std/fs.xi"
+import "std/path.xi"
 
 async entry main(args: String[]) -> Integer {
     let dir = "/tmp/x_fs_demo"

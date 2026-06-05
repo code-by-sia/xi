@@ -6,7 +6,7 @@ foundation for anything that crosses a boundary — files, sockets, HTTP bodies,
 and external [event](events.md) transports.
 
 ```x
-import "std/json.x"
+import "std/json.xi"
 ```
 
 ## The `Json` value
@@ -136,9 +136,9 @@ back from any of them. Build/read with `std/json`; pick the wire format at the
 edge.
 
 ```x
-import "std/json.x"
-import "std/yaml.x"
-import "std/xml.x"
+import "std/json.xi"
+import "std/yaml.xi"
+import "std/xml.xi"
 
 let y = yaml.stringify(person)   // block YAML
 let p = yaml.parse(y)            // -> Json (check with json.isValid)
@@ -180,4 +180,4 @@ inherently lossy, so use it for data interchange, not document fidelity.
 - No streaming parser — `parse` reads a whole string.
 - No schema validation; you check shapes yourself with `kind`/`is*`.
 
-See `examples/json_demo.x` and `examples/yaml_xml_demo.x`.
+See `examples/json_demo.xi` and `examples/yaml_xml_demo.xi`.

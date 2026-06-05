@@ -12,13 +12,13 @@ A clear description of the bug.
 
 ## Minimal reproduction
 
-The smallest `.x` program that triggers it:
+The smallest `.xi` program that triggers it:
 
 ```x
 // paste here
 ```
 
-Command you ran (e.g. `./compiler/xc foo.x`, `./bin/xi`, `./compiler/selfhost.sh`):
+Command you ran (e.g. `./compiler/xc foo.xi`, `./bin/xi`, `./compiler/selfhost.sh`):
 
 ```sh
 
@@ -27,7 +27,7 @@ Command you ran (e.g. `./compiler/xc foo.x`, `./bin/xi`, `./compiler/selfhost.sh
 ## Expected vs. actual
 
 - **Expected:**
-- **Actual:** (paste the full output / error, e.g. `xc: file.x:LINE: error: ...`)
+- **Actual:** (paste the full output / error, e.g. `xc: file.xi:LINE: error: ...`)
 
 ## Environment
 

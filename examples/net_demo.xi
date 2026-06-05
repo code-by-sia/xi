@@ -1,6 +1,6 @@
 // TCP sockets: a self-contained loopback echo (client + server in one process).
 // Works single-threaded because the kernel buffers the small messages.
-import "std/net.x"
+import "std/net.xi"
 
 async entry main(args: String[]) -> Integer {
     let lr = net.listen(0)            // 0 = OS-assigned ephemeral port

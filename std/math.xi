@@ -1,4 +1,4 @@
-// std/math — numeric functions.  Use as:  import "std/math.x"  then  math.sqrt(2)
+// std/math — numeric functions.  Use as:  import "std/math.xi"  then  math.sqrt(2)
 namespace math
 
 extern "C" {

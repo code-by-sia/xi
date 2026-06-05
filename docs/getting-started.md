@@ -11,24 +11,37 @@ Supported platforms: **Linux** (x86_64, arm64) and **macOS** (arm64, x86_64).
 ## Windows
 
 There is no native Windows build yet — the runtime uses POSIX APIs (sockets,
-directories, processes). On Windows, use **WSL2**: install a Linux distribution,
-then follow the Linux instructions unchanged (download the `linux-x86_64`
-release or build from source inside WSL). A native Windows port is tracked as
-future work.
+directories, processes). Two options:
+
+- **WSL2**: install a Linux distribution, then follow the Linux instructions
+  unchanged (download the `linux-x86_64` release or build from source inside WSL).
+- **Docker** (using the [`Dockerfile`](https://github.com/code-by-sia/x/blob/main/Dockerfile)
+  at the repo root):
+
+  ```powershell
+  docker build -t xi .
+  docker run --rm -v "${PWD}:/work" xi xi hello.xi   # compile + run
+  docker run --rm -it -v "${PWD}:/work" xi xi        # REPL
+  ```
+
+  The image downloads a published release and puts `xc` / `xi` on PATH (it
+  bundles a C compiler since `xc` shells out to `cc`).
+
+A native Windows port is tracked as future work.
 
 ## Build the compiler from source
 
 The compiler is self-hosting. `bootstrap.sh` downloads the released `xc` binary
-for your platform (the seed), compiles `compiler/xc.x` with it, then rebuilds the
+for your platform (the seed), compiles `compiler/xc.xi` with it, then rebuilds the
 result from source with itself — so the compiler you get is built from the
 current source, not the download:
 
 ```console
 $ ./compiler/bootstrap.sh
 ==> [seed] fetching a released compiler to bootstrap from ...
-==> [stage1] seed compiler builds xc from compiler/xc.x ...
-==> [stage2] xc rebuilds itself from compiler/xc.x ...
-==> Building the REPL / run tool 'x' from compiler/repl.x ...
+==> [stage1] seed compiler builds xc from compiler/xc.xi ...
+==> [stage2] xc rebuilds itself from compiler/xc.xi ...
+==> Building the REPL / run tool 'x' from compiler/repl.xi ...
 Bootstrap complete. The compiler is built from current Xi source.
 ```
 
@@ -42,7 +55,7 @@ This produces:
 
 ## Hello, world
 
-```x title="hello.x"
+```x title="hello.xi"
 interface Printer { consumer print(msg: String) }
 
 class ConsolePrinter implements Printer {
@@ -63,7 +76,7 @@ Compile and run:
 
 ```console
 $ export XC_RUNTIME="$PWD/runtime"
-$ ./compiler/xc hello.x        # writes build/hello (a native binary)
+$ ./compiler/xc hello.xi        # writes build/hello (a native binary)
 $ ./build/hello
 Hello, World!
 ```
@@ -71,7 +84,7 @@ Hello, World!
 Or do both at once with the `x` tool:
 
 ```console
-$ ./bin/xi hello.x
+$ ./bin/xi hello.xi
 Hello, World!
 ```
 

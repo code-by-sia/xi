@@ -1,4 +1,4 @@
-// std/convert — parsing and stringification.  import "std/convert.x"
+// std/convert — parsing and stringification.  import "std/convert.xi"
 namespace convert
 
 extern "C" {

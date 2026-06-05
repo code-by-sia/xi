@@ -135,5 +135,5 @@ an atom when you just need one evolving piece of state.
   (distinct fields per state) needs sum types and isn't supported yet.
 - Transitions are synchronous and single-threaded.
 
-See `examples/machine_demo.x` (data-less) and `examples/machine_data_demo.x`
+See `examples/machine_demo.xi` (data-less) and `examples/machine_data_demo.xi`
 (data + guards + `update` + `can`).

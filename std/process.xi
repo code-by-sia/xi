@@ -1,4 +1,4 @@
-// std/process — environment & subprocesses.  import "std/process.x" then proc.env("HOME")
+// std/process — environment & subprocesses.  import "std/process.xi" then proc.env("HOME")
 namespace proc
 
 extern "C" {

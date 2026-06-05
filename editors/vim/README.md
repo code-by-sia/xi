@@ -1,11 +1,11 @@
 # Vim / Neovim support for Xi
 
 Syntax highlighting, filetype detection, comment settings, and brace-based
-indentation for `.x` files. Works in both Vim and Neovim (legacy Vim syntax).
+indentation for `.xi` files. Works in both Vim and Neovim (legacy Vim syntax).
 
 ```
 vim/
-├── ftdetect/x.vim   associate *.x with filetype `x`
+├── ftdetect/x.vim   associate *.xi with filetype `x`
 ├── syntax/x.vim     syntax highlighting
 ├── ftplugin/x.vim   commentstring, comments, indentation width
 └── indent/x.vim     auto-indent
@@ -43,6 +43,6 @@ Or symlink for local development:
 $ ln -s "$PWD/editors/vim" ~/.vim/pack/x/start/x
 ```
 
-Open any `.x` file to get highlighting. For richer, tree-based highlighting in
+Open any `.xi` file to get highlighting. For richer, tree-based highlighting in
 Neovim, you can instead register the Tree-sitter grammar in `../tree-sitter-x`
 with `nvim-treesitter`.

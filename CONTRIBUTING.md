@@ -17,7 +17,7 @@ how the project is laid out.
 ## Build
 
 The compiler is self-hosting. `bootstrap.sh` downloads the released `xc` for your
-platform, compiles `compiler/xc.x` with it, then rebuilds the result from source
+platform, compiles `compiler/xc.xi` with it, then rebuilds the result from source
 with itself:
 
 ```sh
@@ -32,7 +32,7 @@ XC_SEED=/path/to/xc ./compiler/bootstrap.sh
 
 ## Before you open a PR
 
-1. **Self-hosting fixpoint must hold.** Any change to `compiler/*.x`,
+1. **Self-hosting fixpoint must hold.** Any change to `compiler/*.xi`,
    `compiler/xc_helpers.c`, or `runtime/` must still produce a byte-identical
    fixpoint:
 
@@ -44,7 +44,7 @@ XC_SEED=/path/to/xc ./compiler/bootstrap.sh
 
    ```sh
    export XC_RUNTIME="$PWD/runtime"
-   for f in examples/*.x examples/proj/main.x examples/showcase/main.x; do
+   for f in examples/*.xi examples/proj/main.xi examples/showcase/main.xi; do
        ./compiler/xc "$f"
    done
    ```

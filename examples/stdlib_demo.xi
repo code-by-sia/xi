@@ -1,6 +1,6 @@
-import "std/math.x"
-import "std/text.x"
-import "std/convert.x"
+import "std/math.xi"
+import "std/text.xi"
+import "std/convert.xi"
 
 async entry main(args: String[]) -> Integer {
     system.stdout.writeln("sqrt(2)   = " + math.sqrt(2.0))

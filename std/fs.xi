@@ -1,7 +1,7 @@
-// std/fs — filesystem.  import "std/fs.x"  then  fs.readFile(path)
+// std/fs — filesystem.  import "std/fs.xi"  then  fs.readFile(path)
 namespace fs
 
-import "std/bytes.x"
+import "std/bytes.xi"
 
 extern "C" {
     producer  file_read_all(path: String) -> String

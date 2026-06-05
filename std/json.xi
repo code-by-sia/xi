@@ -1,4 +1,4 @@
-// std/json — JSON serialization.  import "std/json.x"  then  json.stringify(v)
+// std/json — JSON serialization.  import "std/json.xi"  then  json.stringify(v)
 //
 // `Json` is an opaque value tree. Build one with the constructors, compose
 // objects/arrays with `set`/`push`, turn it into text with `stringify`/`pretty`,

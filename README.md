@@ -78,23 +78,34 @@ Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:
 
 ```sh
 # Build the compiler. bootstrap.sh downloads the matching released `xc` binary
-# (the seed), compiles compiler/xc.x with it, then rebuilds from source with
+# (the seed), compiles compiler/xc.xi with it, then rebuilds from source with
 # itself. Produces ./compiler/xc and ./bin/xi (the REPL / run tool).
 # Needs curl + a C compiler. Build offline with XC_SEED=/path/to/xc.
 ./compiler/bootstrap.sh
 
 export XC_RUNTIME="$PWD/runtime"
-./compiler/xc examples/greeting.x   # -> build/greeting
+./compiler/xc examples/greeting.xi   # -> build/greeting
 ./build/greeting
 
 # Or compile-and-run, or start the REPL, with `x`:
 export XC="$PWD/compiler/xc"
-./bin/xi examples/greeting.x          # compile + run
+./bin/xi examples/greeting.xi          # compile + run
 ./bin/xi                              # interactive REPL
 ```
 
 Runs on **Linux** (x86_64/arm64) and **macOS** (arm64/x86_64). On **Windows**,
-use **WSL2** and follow the Linux steps (no native Windows build yet).
+use **WSL2** and follow the Linux steps, or run the toolchain in **Docker** (no
+native Windows build yet):
+
+```powershell
+docker build -t xi .
+docker run --rm -v "${PWD}:/work" xi xi hello.xi   # compile + run
+docker run --rm -v "${PWD}:/work" xi xc hello.xi   # compile -> build/hello
+docker run --rm -it -v "${PWD}:/work" xi xi        # REPL
+```
+
+The image downloads a published release; pin one with
+`--build-arg XI_VERSION=v0.0.14`. See the [`Dockerfile`](Dockerfile).
 
 ## Dependency injection & IoC
 
@@ -155,7 +166,7 @@ module App {}   // empty: resolution is automatic. Add `bind`s here only to stee
                 // e.g.  bind Logger -> ConsoleLogger as singleton
 ```
 
-Runnable as [`examples/di_auto.x`](examples/di_auto.x). `singleton` / `transient`
+Runnable as [`examples/di_auto.xi`](examples/di_auto.xi). `singleton` / `transient`
 scopes are selected with `bind I -> Impl as singleton`.
 
 ## Decision tables (DxT)
@@ -205,8 +216,8 @@ decision shipping {
 
 A decision desugars to an `if/return` chain (zero runtime overhead). See
 [decision tables](https://code-by-sia.github.io/x/decisions),
-[`examples/decision_demo.x`](examples/decision_demo.x), and
-[`examples/decision_table_demo.x`](examples/decision_table_demo.x).
+[`examples/decision_demo.xi`](examples/decision_demo.xi), and
+[`examples/decision_table_demo.xi`](examples/decision_table_demo.xi).
 
 ## A tour of the rest
 
@@ -244,21 +255,21 @@ mapper mapResponse(r: ApiResponse) -> String { return "Unhandled " + r.status } 
 
 **`match`**, **multi-file `import` / `namespace`**, the **standard library**, and
 more are covered in the [guide](https://code-by-sia.github.io/x/). See [`examples/`](examples/) for runnable
-programs (incl. [`fs_demo.x`](examples/fs_demo.x) and a loopback TCP echo in
-[`net_demo.x`](examples/net_demo.x)).
+programs (incl. [`fs_demo.x`](examples/fs_demo.xi) and a loopback TCP echo in
+[`net_demo.x`](examples/net_demo.xi)).
 
 ## How it compiles
 
 ```
-source.x (+ imported files)
-  ↓ load     resolve `import`s, apply `namespace` prefixing   (compiler/driver.x)
-  ↓ lex      tokeniser                                        (compiler/lexer.x)
-  ↓ parse    recursive-descent parser                         (compiler/parser.x)
+source.xi (+ imported files)
+  ↓ load     resolve `import`s, apply `namespace` prefixing   (compiler/driver.xi)
+  ↓ lex      tokeniser                                        (compiler/lexer.xi)
+  ↓ parse    recursive-descent parser                         (compiler/parser.xi)
   ↓ codegen  C99: DI wiring, vtables, refined types, overloads, results, match
   ↓ cc       C → native binary (invoked automatically)
 ```
 
-The compiler is itself an Xi program (`compiler/*.x`); `selfhost.sh` proves the
+The compiler is itself an Xi program (`compiler/*.xi`); `selfhost.sh` proves the
 fixpoint (successive self-compiles emit byte-identical C). See
 [internals](https://code-by-sia.github.io/x/internals).
 
@@ -277,7 +288,7 @@ editors/    Tree-sitter grammar, Zed extension, Vim plugin
 ## Editor support
 
 A Tree-sitter grammar plus **Zed** and **Vim** integrations live in
-[`editors/`](editors/). The grammar parses every `.x` file in this repo.
+[`editors/`](editors/). The grammar parses every `.xi` file in this repo.
 
 ## License
 

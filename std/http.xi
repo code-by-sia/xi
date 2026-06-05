@@ -3,9 +3,9 @@
 //   if isOk(r) { system.stdout.writeln(r.value.body) }
 namespace http
 
-import "std/net.x"
-import "std/text.x"
-import "std/convert.x"
+import "std/net.xi"
+import "std/text.xi"
+import "std/convert.xi"
 
 type Url      = { host: String, port: Integer, path: String }
 // `headers` is the raw header block (CRLF-separated "Key: Value" lines);

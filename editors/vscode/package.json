@@ -25,7 +25,7 @@
       {
         "id": "x",
         "aliases": ["X", "x"],
-        "extensions": [".x"],
+        "extensions": [".xi", ".x"],
         "configuration": "./language-configuration.json"
       }
     ],

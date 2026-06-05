@@ -1,7 +1,7 @@
-// std/path — path string manipulation (pure X).  import "std/path.x"
+// std/path — path string manipulation (pure X).  import "std/path.xi"
 namespace path
 
-import "std/text.x"
+import "std/text.xi"
 
 // Last index of a single character code in s, or -1.
 mapper lastIndexCode(s: String, code: Integer) -> Integer {

@@ -6,7 +6,7 @@
 //
 // This demo exercises the URL and response parsing deterministically (no
 // network), so it is reproducible in CI.
-import "std/http.x"
+import "std/http.xi"
 
 async entry main(args: String[]) -> Integer {
     let u = http.parseUrl("http://example.com:8080/path?q=1")

@@ -1,4 +1,4 @@
-// std/io — console input/output.  import "std/io.x"  then  io.println("hi")
+// std/io — console input/output.  import "std/io.xi"  then  io.println("hi")
 namespace io
 
 extern "C" {

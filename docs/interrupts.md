@@ -3,7 +3,7 @@
 > **Status: Implemented** — `skip` + `recover`, for top-level functions,
 > `entry`, and class methods. `retry`, value-producing signals, and *checking*
 > of the `interrupts T` annotation (it is currently parsed but not enforced)
-> remain future work (see Limitations). Runnable: `examples/interrupt_demo.x`.
+> remain future work (see Limitations). Runnable: `examples/interrupt_demo.xi`.
 
 ## Summary
 

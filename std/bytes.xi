@@ -1,4 +1,4 @@
-// std/bytes — raw byte buffers.  import "std/bytes.x"  then  bytes.fromString("hi")
+// std/bytes — raw byte buffers.  import "std/bytes.xi"  then  bytes.fromString("hi")
 namespace bytes
 
 extern "C" {

@@ -1,4 +1,4 @@
-// std/time — monotonic clock & sleep.  import "std/time.x"  then  time.nowNanos()
+// std/time — monotonic clock & sleep.  import "std/time.xi"  then  time.nowNanos()
 namespace time
 
 extern "C" {

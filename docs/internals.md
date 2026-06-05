@@ -2,15 +2,15 @@
 
 ## The compiler is written in Xi
 
-`compiler/xc.x` is the Xi compiler, written in Xi. It is split across four files
-(imported by the `xc.x` manifest):
+`compiler/xc.xi` is the Xi compiler, written in Xi. It is split across four files
+(imported by the `xc.xi` manifest):
 
 | File | Role |
 |------|------|
-| `lexer.x`   | source text → tokens |
-| `parser.x`  | tokens → `Program` (spec structs) |
-| `codegen.x` | `Program` → C99 |
-| `driver.x`  | `import` resolution + entry point |
+| `lexer.xi`   | source text → tokens |
+| `parser.xi`  | tokens → `Program` (spec structs) |
+| `codegen.xi` | `Program` → C99 |
+| `driver.xi`  | `import` resolution + entry point |
 
 The compiler emits C and then invokes `cc` to produce a native binary. The only
 non-Xi code is:
@@ -30,10 +30,10 @@ published `xc` for your platform:
 
 ```
 released xc   (downloaded by compiler/fetch-seed.sh)
-        │  xc compiler/xc.x          (Xi compiling Xi)
+        │  xc compiler/xc.xi          (Xi compiling Xi)
         ▼
        xc   (built from current source)
-        │  xc compiler/xc.x          (self-rebuild)
+        │  xc compiler/xc.xi          (self-rebuild)
         ▼
        xc   (shipped compiler — from source, not the download)
 ```
@@ -49,10 +49,10 @@ generation *N* yields the same C as generation *N+1*.
 
 ```
 gen0 = the released seed compiler
-gen1 = xc.x compiled by gen0          (current source, seed codegen)
-gen2 = xc.x compiled by gen1          (current source, current codegen)
-gen3 = xc.x compiled by gen2
-assert  C(gen2 on xc.x) == C(gen3 on xc.x)     # byte-identical
+gen1 = xc.xi compiled by gen0          (current source, seed codegen)
+gen2 = xc.xi compiled by gen1          (current source, current codegen)
+gen3 = xc.xi compiled by gen2
+assert  C(gen2 on xc.xi) == C(gen3 on xc.xi)     # byte-identical
 ```
 
 Comparing gen2 and gen3 (both built from current source) makes the test correct
@@ -63,10 +63,10 @@ performs this build and diffs the outputs.
 
 ```mermaid
 flowchart LR
-    src["source.x<br/>(+ imports)"] --> load["load<br/>imports + namespaces<br/>(driver.x)"]
-    load --> lex["lex<br/>tokeniser<br/>(lexer.x)"]
-    lex --> parse["parse<br/>recursive descent → Program<br/>(parser.x)"]
-    parse --> codegen["codegen<br/>DI, vtables, refined types,<br/>overloads, results, match → C99<br/>(codegen.x)"]
+    src["source.xi<br/>(+ imports)"] --> load["load<br/>imports + namespaces<br/>(driver.xi)"]
+    load --> lex["lex<br/>tokeniser<br/>(lexer.xi)"]
+    lex --> parse["parse<br/>recursive descent → Program<br/>(parser.xi)"]
+    parse --> codegen["codegen<br/>DI, vtables, refined types,<br/>overloads, results, match → C99<br/>(codegen.xi)"]
     codegen --> cc["cc<br/>C → native binary"]
     cc --> bin([native binary])
 ```
@@ -82,16 +82,16 @@ state-machine when used. There is no VM, no GC, and no reflection.
 
 ```
 compiler/
-  xc.x          manifest (imports the parts)
-  lexer.x parser.x codegen.x driver.x   the compiler, in Xi
-  repl.x        the REPL / run tool (compiled to ./x)
+  xc.xi          manifest (imports the parts)
+  lexer.xi parser.xi codegen.xi driver.xi   the compiler, in Xi
+  repl.xi        the REPL / run tool (compiled to ./bin/xi)
   xc_helpers.c  C primitives (extern "C")
   fetch-seed.sh download the released seed compiler
   bootstrap.sh selfhost.sh
 runtime/
   runtime.h runtime.c   the C runtime
 examples/
-  *.x            single-file examples
+  *.xi            single-file examples
   proj/          multi-file example (import + namespace)
 docs/            this documentation (MkDocs)
 ```

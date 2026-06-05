@@ -3,7 +3,7 @@
 
 // ── Multi-file support: import resolution ────────────────────────
 //
-// `import "path.x"` (top level) splices another file's declarations into the
+// `import "path.xi"` (top level) splices another file's declarations into the
 // compilation unit.  Imports are resolved recursively and de-duplicated by
 // path, so a diamond of imports includes each file once.  `namespace a.b`
 // prefixes a file's top-level symbol names with `a_b__` so independently
@@ -65,7 +65,7 @@ mapper joinPath(dir: String, rel: String) -> String {
 
 // Resolve an import: first relative to the importing file, then relative to the
 // standard-library/search root in $XC_STD (default ".").  This lets programs
-// `import "std/math.x"` from anywhere the library is installed.
+// `import "std/math.xi"` from anywhere the library is installed.
 mapper resolveImport(dir: String, rel: String) -> String {
     let local = joinPath(dir, rel)
     if xstd_file_exists(local) { return local }

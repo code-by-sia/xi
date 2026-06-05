@@ -196,7 +196,7 @@ mapper { logger: Logger } mapPerson(p: Person) -> ResponseDTO {
 ```
 
 Interface calls dispatch through a vtable; the compiler devirtualizes when the
-concrete type is known. See `examples/di_auto.x`.
+concrete type is known. See `examples/di_auto.xi`.
 
 ## Control flow
 

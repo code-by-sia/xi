@@ -1,4 +1,4 @@
-// std/text — string utilities.  import "std/text.x"  then  text.trim(s)
+// std/text — string utilities.  import "std/text.xi"  then  text.trim(s)
 namespace text
 
 extern "C" {

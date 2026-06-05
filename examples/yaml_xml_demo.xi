@@ -1,9 +1,9 @@
 // Serialization in three formats over one value tree. Build a `Json` value with
 // std/json, then render it as JSON, YAML, or XML — and parse each back. The
 // document model (`Json`) is shared; only the encoder/decoder differs.
-import "std/json.x"
-import "std/yaml.x"
-import "std/xml.x"
+import "std/json.xi"
+import "std/yaml.xi"
+import "std/xml.xi"
 
 mapper sample() -> Json {
     let langs = json.array()

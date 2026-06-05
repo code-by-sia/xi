@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the X compiler. There is no checked-in C seed: we download the matching
-# released `xc` binary, use it to compile compiler/xc.x into a fresh `xc`, then
+# released `xc` binary, use it to compile compiler/xc.xi into a fresh `xc`, then
 # rebuild that from source with itself (self-host). The released seed only kicks
 # off the first compile — the shipped compiler/xc is built from current source.
 #
@@ -21,23 +21,23 @@ echo "==> [seed] fetching a released compiler to bootstrap from ..."
 SEED="$("$ROOT/compiler/fetch-seed.sh")"
 echo "    seed: $SEED"
 
-echo "==> [stage1] seed compiler builds xc from compiler/xc.x ..."
-XC_HELPERS="$HELP" "$SEED" compiler/xc.x >/dev/null
+echo "==> [stage1] seed compiler builds xc from compiler/xc.xi ..."
+XC_HELPERS="$HELP" "$SEED" compiler/xc.xi >/dev/null
 cp "$XC_OUT/xc" compiler/xc
 echo "    built compiler/xc"
 
-echo "==> [stage2] xc rebuilds itself from compiler/xc.x ..."
-XC_HELPERS="$HELP" ./compiler/xc compiler/xc.x >/dev/null
+echo "==> [stage2] xc rebuilds itself from compiler/xc.xi ..."
+XC_HELPERS="$HELP" ./compiler/xc compiler/xc.xi >/dev/null
 cp "$XC_OUT/xc" compiler/xc
 echo "    compiler/xc is now built from source by itself"
 
-echo "==> Building the REPL / run tool 'xi' from compiler/repl.x ..."
-./compiler/xc compiler/repl.x >/dev/null
+echo "==> Building the REPL / run tool 'xi' from compiler/repl.xi ..."
+./compiler/xc compiler/repl.xi >/dev/null
 mkdir -p bin
 cp "$XC_OUT/repl" bin/xi
 echo "    built ./bin/xi"
 
 echo "Bootstrap complete. The compiler is built from current Xi source."
-echo "  ./compiler/xc <file.x>   compile to a native binary"
+echo "  ./compiler/xc <file.xi>   compile to a native binary"
 echo "  ./bin/xi                 start the REPL"
-echo "  ./bin/xi <file.x>        compile and run a file"
+echo "  ./bin/xi <file.xi>        compile and run a file"

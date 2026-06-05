@@ -1,4 +1,4 @@
-// std/yaml — YAML serialization over the Json value tree.  import "std/yaml.x"
+// std/yaml — YAML serialization over the Json value tree.  import "std/yaml.xi"
 //
 // Build/read values with std/json; render or parse YAML here. Supports block
 // style: mappings, sequences, scalars, nesting, and `#` comments. (Flow style,

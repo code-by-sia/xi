@@ -142,5 +142,5 @@ A row whose cells are all `-` is the default. The table desugars to the same
   completeness/overlap statically (a future analysis over the constrained cell
   DSL).
 
-See `examples/decision_demo.x` (when-form) and
-`examples/decision_table_demo.x` (table form).
+See `examples/decision_demo.xi` (when-form) and
+`examples/decision_table_demo.xi` (table form).

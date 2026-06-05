@@ -54,13 +54,13 @@ guide and [`README.md`](README.md) for a tour with examples.
 
 | Feature | Status |
 |---------|--------|
-| Multi-file `import "file.x"` (recursive, de-duplicated) | ✓ |
+| Multi-file `import "file.xi"` (recursive, de-duplicated) | ✓ |
 | `namespace a.b` (top-level symbol isolation; cross-file `a.b.Name`) | ✓ |
 | String concatenation with `+` (auto-coercion of scalars) | ✓ |
 | `extern "C"` blocks | ✓ (declaration) |
 | `export "C"` functions | ✓ |
 
-## Standard library (`std/*.x`)
+## Standard library (`std/*.xi`)
 
 | Module | Provides |
 |--------|----------|

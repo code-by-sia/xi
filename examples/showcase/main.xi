@@ -1,15 +1,15 @@
 // Showcase entry point. `main` aggregates the project's imports; each module
 // lives in its own small file under model/ rules/ services/ util/.
 
-import "model/types.x"
-import "rules/classify.x"
-import "services/logger.x"
-import "services/format.x"
-import "services/audit.x"
-import "services/greeter.x"
-import "util/parse.x"
-import "std/text.x"
-import "std/convert.x"
+import "model/types.xi"
+import "rules/classify.xi"
+import "services/logger.xi"
+import "services/format.xi"
+import "services/audit.xi"
+import "services/greeter.xi"
+import "util/parse.xi"
+import "std/text.xi"
+import "std/convert.xi"
 
 consumer report(label: String, r: model.Age!) {
     if isOk(r) { system.stdout.writeln(label + " -> age " + r.value) }

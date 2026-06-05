@@ -1,7 +1,7 @@
 // std/json — X's serialization library. Build a Json value tree, render it to
 // text (compact or pretty), parse text back, and read fields. Malformed input is
 // reported through `isValid`.
-import "std/json.x"
+import "std/json.xi"
 
 async entry main(args: String[]) -> Integer {
     // Build an object: { "name": "Ada", "age": 36, "langs": ["X","C"], "admin": true }

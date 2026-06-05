@@ -1,9 +1,9 @@
-// std/net — TCP sockets (blocking).  import "std/net.x"
+// std/net — TCP sockets (blocking).  import "std/net.xi"
 //   client:  let c = net.dial("example.com", 80)
 //   server:  let l = net.listen(0)  then  net.accept(l)
 namespace net
 
-import "std/bytes.x"
+import "std/bytes.xi"
 
 extern "C" {
     producer xstd_tcp_connect(host: String, port: Integer) -> Integer

@@ -1,5 +1,5 @@
 // Bytes: a raw byte buffer type, distinct from String.
-import "std/bytes.x"
+import "std/bytes.xi"
 
 async entry main(args: String[]) -> Integer {
     let b = bytes.fromString("hello")

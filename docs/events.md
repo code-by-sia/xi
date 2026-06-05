@@ -7,8 +7,8 @@ other, and the *same* code works whether events stay in the process or cross the
 network — only the bound transport changes.
 
 ```x
-import "std/json.x"
-import "std/events.x"
+import "std/json.xi"
+import "std/events.xi"
 ```
 
 ## Declaring an event
@@ -144,4 +144,4 @@ the derived `toJson`/`fromJson`. Nothing is serialized unless a transport calls
 - A listener receives the DTO only (not the topic string).
 - Array-typed fields aren't encoded by the derived codec yet.
 
-See `examples/typed_event_demo.x`.
+See `examples/typed_event_demo.xi`.

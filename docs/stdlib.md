@@ -4,8 +4,8 @@ The standard library lives in `std/` as ordinary Xi modules that wrap C runtime
 primitives. Import a module and call it through its namespace:
 
 ```x
-import "std/math.x"
-import "std/text.x"
+import "std/math.xi"
+import "std/text.xi"
 
 async entry main(args: String[]) -> Integer {
     system.stdout.writeln("sqrt(2) = " + math.sqrt(2.0))
@@ -14,22 +14,22 @@ async entry main(args: String[]) -> Integer {
 }
 ```
 
-Import everything at once with `import "std/all.x"`.
+Import everything at once with `import "std/all.xi"`.
 
 ## Resolving imports
 
-`import "std/<mod>.x"` is resolved first relative to the importing file, then
+`import "std/<mod>.xi"` is resolved first relative to the importing file, then
 relative to `$XC_STD` (default `.`, the current directory). Running the compiler
 from the project root finds `std/` automatically. To use the library from
 elsewhere, point `XC_STD` at the directory that contains `std/`:
 
 ```console
-$ XC_STD=/path/to/x ./compiler/xc myapp.x
+$ XC_STD=/path/to/x ./compiler/xc myapp.xi
 ```
 
 ## Modules
 
-### `math` — `std/math.x`
+### `math` — `std/math.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -41,7 +41,7 @@ $ XC_STD=/path/to/x ./compiler/xc myapp.x
 | `min`, `max` | `(Number, Number) -> Number` |
 | `clamp` | `(Number, Number, Number) -> Number` |
 
-### `text` — `std/text.x`
+### `text` — `std/text.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -55,7 +55,7 @@ $ XC_STD=/path/to/x ./compiler/xc myapp.x
 | `replace` | `(String, String, String) -> String` (all occurrences) |
 | `isEmpty` | `predicate (String)` |
 
-### `bytes` — `std/bytes.x`
+### `bytes` — `std/bytes.xi`
 
 `Bytes` is a primitive type: a raw byte buffer, distinct from `String`. Like
 `String` it is an immutable value (copies share the buffer; producers
@@ -72,7 +72,7 @@ heap-allocate a fresh one). Used for binary I/O.
 | `empty` | `() -> Bytes` |
 | `isEmpty` | `predicate (Bytes)` |
 
-### `convert` — `std/convert.x`
+### `convert` — `std/convert.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -89,7 +89,7 @@ let r = convert.parseInteger("42")
 if isOk(r) { system.stdout.writeln("got " + r.value) }
 ```
 
-### `json` — `std/json.x`
+### `json` — `std/json.xi`
 
 Xi's **serialization** library. `Json` is an opaque value tree; build it with the
 constructors, compose with `set`/`push`, render with `stringify`/`pretty`, and
@@ -115,7 +115,7 @@ guide.
 | `asString`, `asNumber`, `asBool` | leaf coercion |
 | `getString`, `getNumber` | `(Json, String) -> …` (field shortcut) |
 
-### `yaml` — `std/yaml.x`
+### `yaml` — `std/yaml.xi`
 
 YAML over the same `Json` tree (block style). See [Serialization](serialization.md).
 
@@ -124,7 +124,7 @@ YAML over the same `Json` tree (block style). See [Serialization](serialization.
 | `stringify` | `(Json) -> String` |
 | `parse` | `(String) -> Json` |
 
-### `xml` — `std/xml.x`
+### `xml` — `std/xml.xi`
 
 XML over the same `Json` tree (object → child elements, array → repeated element,
 scalar → text). See [Serialization](serialization.md).
@@ -135,7 +135,7 @@ scalar → text). See [Serialization](serialization.md).
 | `stringifyAs` | `(Json, String) -> String` (custom root tag) |
 | `parse` | `(String) -> Json` |
 
-### `events` — `std/events.x`
+### `events` — `std/events.xi`
 
 Built-in **typed publish/subscribe**. A producer publishes any DTO under a topic
 through an injected `PublisherService`; a `listener` subscribes to a topic and
@@ -157,7 +157,7 @@ receive). See [Events](events.md).
 | `Events.encode(e)` / `Events.decode(topic, type, json)` | codec helpers for transports |
 | `Events.topic(e)` / `Events.type(e)` | envelope accessors |
 
-### `io` — `std/io.x`
+### `io` — `std/io.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -165,7 +165,7 @@ receive). See [Events](events.md).
 | `readLine` | `() -> String` |
 | `eof` | `predicate ()` |
 
-### `fs` — `std/fs.x`
+### `fs` — `std/fs.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -182,7 +182,7 @@ receive). See [Events](events.md).
 | `cwd` | `() -> String` |
 | `listDir` | `(String) -> String[]` (names; empty if not a dir) |
 
-### `path` — `std/path.x`
+### `path` — `std/path.xi`
 
 Pure-Xi path string helpers (no I/O).
 
@@ -194,7 +194,7 @@ Pure-Xi path string helpers (no I/O).
 | `ext` | `(String) -> String` (incl. dot, `""` if none) |
 | `stripExt` | `(String) -> String` |
 
-### `net` — `std/net.x`
+### `net` — `std/net.xi`
 
 Blocking TCP sockets, client and server. `Conn` and `Listener` wrap a socket
 file descriptor. Data is sent/received as `Bytes` (with `*Text` convenience
@@ -211,7 +211,7 @@ helpers). Listen on port `0` for an OS-assigned port, then read it with `port`.
 | `close` | `consumer (Conn)` |
 | `closeListener` | `consumer (Listener)` |
 
-### `http` — `std/http.x`
+### `http` — `std/http.xi`
 
 A minimal HTTP/1.1 client over `net` (plain `http://` only — no TLS). A
 `Response` is `{ status: Integer, headers: String, body: String }`, where
@@ -227,7 +227,7 @@ A minimal HTTP/1.1 client over `net` (plain `http://` only — no TLS). A
 | `parseResponse` | `(String) -> Response!` |
 
 ```x
-import "std/http.x"
+import "std/http.xi"
 let r = http.get("http://example.com/")
 if isOk(r) {
     system.stdout.writeln("status " + r.value.status)
@@ -235,7 +235,7 @@ if isOk(r) {
 }
 ```
 
-### `proc` — `std/process.x`
+### `proc` — `std/process.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -244,7 +244,7 @@ if isOk(r) {
 | `run` | `(String) -> Integer` (shell command exit) |
 | `exit` | `consumer (Integer)` |
 
-### `time` — `std/time.x`
+### `time` — `std/time.xi`
 
 | Function | Signature |
 |----------|-----------|

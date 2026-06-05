@@ -1,4 +1,4 @@
-// std/xml — XML serialization over the Json value tree.  import "std/xml.x"
+// std/xml — XML serialization over the Json value tree.  import "std/xml.xi"
 //
 // Build/read values with std/json; render or parse XML here. Convention: an
 // object becomes child elements (one per key), an array repeats its element,

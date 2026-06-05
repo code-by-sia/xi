@@ -3,7 +3,7 @@
 ## `xc` — the compiler
 
 ```console
-$ ./compiler/xc <source.x>
+$ ./compiler/xc <source.xi>
 ```
 
 Pipeline: resolve `import`s → lex → parse → generate C → invoke `cc` →
@@ -20,20 +20,20 @@ keeping source trees clean.
 
 ```console
 $ export XC_RUNTIME="$PWD/runtime"
-$ ./compiler/xc examples/greeting.x     # -> build/greeting
+$ ./compiler/xc examples/greeting.xi     # -> build/greeting
 $ ./build/greeting
 Good day, Ada.
 ```
 
 ## `x` — run tool & REPL
 
-`x` is a native binary (compiled from `compiler/repl.x`). It finds the compiler
+`x` is a native binary (compiled from `compiler/repl.xi`). It finds the compiler
 via the `XC` env var (default `compiler/xc`) and the runtime via `XC_RUNTIME`.
 
 ### Run a file
 
 ```console
-$ ./bin/xi examples/hello.x
+$ ./bin/xi examples/hello.xi
 Hello, World!
 ```
 

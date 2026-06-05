@@ -1,4 +1,5 @@
-*.x linguist-language=TypeScript linguist-detectable=false
+*.xi linguist-language=TypeScript linguist-detectable=false
+*.x  linguist-language=TypeScript linguist-detectable=false
 editors/tree-sitter-x/src/**  linguist-generated=true
 editors/**  linguist-vendored=true
 website/**  linguist-vendored=true

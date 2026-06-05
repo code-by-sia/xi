@@ -9,8 +9,8 @@
 //     typed value is passed straight to listeners — NO serialization.
 //   * a developer's transport serializes on publish and deserializes on receive,
 //     using Events.encode / Events.decode — JSON lives only inside that transport.
-import "std/json.x"
-import "std/events.x"
+import "std/json.xi"
+import "std/events.xi"
 
 event OrderPaid { id: String, item: String, total: Number }
 

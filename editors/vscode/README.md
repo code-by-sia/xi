@@ -5,7 +5,7 @@ Syntax highlighting, snippets, and completion for the
 
 ## Features
 
-- **Syntax highlighting** for `.x` files (TextMate grammar): comments, strings
+- **Syntax highlighting** for `.xi` files (TextMate grammar): comments, strings
   (incl. `"""triple"""`), numbers, the seven function kinds plus `decision`,
   declarations (`type`/`interface`/`class`/`module`/`namespace`), control flow,
   refined-type `where`, operators, primitive and user types.

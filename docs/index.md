@@ -21,7 +21,7 @@ slug: /
   </p>
 </div>
 
-The compiler is **written in Xi itself** (`compiler/xc.x`) and is **self-hosting** —
+The compiler is **written in Xi itself** (`compiler/xc.xi`) and is **self-hosting** —
 it compiles its own source to a byte-identical fixpoint. The only non-Xi code is a
 small C runtime (the equivalent of a language's libc/libcore).
 
@@ -62,7 +62,7 @@ async entry main(args: String[]) -> Integer {
 ```
 
 ```console
-$ ./compiler/xc examples/greeting.x && ./examples/greeting
+$ ./compiler/xc examples/greeting.xi && ./examples/greeting
 ```
 
 Ready? Head to [Getting started](getting-started.md).
