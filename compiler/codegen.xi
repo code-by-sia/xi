@@ -2351,6 +2351,17 @@ predicate hasExternalPublisher(prog: Program) {
 }
 
 // JSON encode/decode expressions for one field ctype ("" = unsupported -> skip).
+// Element C type of an array ctype "xc_arr_<suffix>_t".
+mapper arrElemCtype(fct: String) -> String {
+    let suf = string_slice(fct, 7, string_len(fct) - 2)   // strip "xc_arr_" and "_t"
+    if suf == "string"  { return "xc_string_t" }
+    if suf == "number"  { return "xc_number_t" }
+    if suf == "integer" { return "xc_integer_t" }
+    if suf == "bool"    { return "xc_bool_t" }
+    if suf == "char"    { return "xc_char_t" }
+    return "xc_" + suf + "_t"
+}
+
 mapper jsonEncodeExpr(prog: Program, fct: String, expr: String) -> String {
     if fct == "xc_string_t"  { return "xstd_json_string(" + expr + ")" }
     if fct == "xc_number_t"  { return "xstd_json_number(" + expr + ")" }
@@ -2385,10 +2396,33 @@ mapper genOneCodec(prog: Program, t: String) -> String {
         let fname = string_slice(entry, 0, colon)
         let fct = string_slice(entry, colon + 1, string_len(entry))
         let key = "xc_string_from_cstr(\"" + fname + "\")"
-        let enc = jsonEncodeExpr(prog, fct, "v." + fname)
-        if string_len(enc) > 0 { to = to + "    o = xstd_json_set(o, " + key + ", " + enc + ");\n" }
-        let dec = jsonDecodeExpr(prog, fct, "xstd_json_get(j, " + key + ")")
-        if string_len(dec) > 0 { fr = fr + "    v." + fname + " = " + dec + ";\n" }
+        if startsWith2(fct, "xc_arr_") {
+            // array field -> a JSON array, element by element
+            let ec = arrElemCtype(fct)
+            let sx = int_to_string(i)
+            let encE = jsonEncodeExpr(prog, ec, "v." + fname + ".data[__i" + sx + "]")
+            let decE = jsonDecodeExpr(prog, ec, "xstd_json_at(__a" + sx + ", __i" + sx + ")")
+            if string_len(encE) > 0 {
+                to = to + "    { xc_Json_t __a" + sx + " = xstd_json_array();\n"
+                   + "      for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < (xc_integer_t)v." + fname + ".len; __i" + sx + "++)\n"
+                   + "          xstd_json_push(__a" + sx + ", " + encE + ");\n"
+                   + "      o = xstd_json_set(o, " + key + ", __a" + sx + "); }\n"
+            }
+            if string_len(decE) > 0 {
+                fr = fr + "    { xc_Json_t __a" + sx + " = xstd_json_get(j, " + key + ");\n"
+                   + "      xc_integer_t __n" + sx + " = xstd_json_length(__a" + sx + ");\n"
+                   + "      " + fct + " __r" + sx + "; __r" + sx + ".len = (xc_size_t)__n" + sx + "; __r" + sx + ".cap = (xc_size_t)__n" + sx + ";\n"
+                   + "      __r" + sx + ".data = __n" + sx + " > 0 ? (" + ec + "*)malloc((xc_size_t)__n" + sx + " * sizeof(" + ec + ")) : (" + ec + "*)0;\n"
+                   + "      for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < __n" + sx + "; __i" + sx + "++)\n"
+                   + "          __r" + sx + ".data[__i" + sx + "] = " + decE + ";\n"
+                   + "      v." + fname + " = __r" + sx + "; }\n"
+            }
+        } else {
+            let enc = jsonEncodeExpr(prog, fct, "v." + fname)
+            if string_len(enc) > 0 { to = to + "    o = xstd_json_set(o, " + key + ", " + enc + ");\n" }
+            let dec = jsonDecodeExpr(prog, fct, "xstd_json_get(j, " + key + ")")
+            if string_len(dec) > 0 { fr = fr + "    v." + fname + " = " + dec + ";\n" }
+        }
         i = i + 1
     }
     to = to + "    return o;\n}\n"
@@ -2411,6 +2445,10 @@ mapper genEventCodecs(prog: Program) -> String {
     out = out + "extern xc_string_t xstd_json_as_string(xc_Json_t);\n"
     out = out + "extern xc_number_t xstd_json_as_number(xc_Json_t);\n"
     out = out + "extern xc_bool_t xstd_json_as_bool(xc_Json_t);\n"
+    out = out + "extern xc_Json_t xstd_json_array(void);\n"
+    out = out + "extern xc_Json_t xstd_json_push(xc_Json_t, xc_Json_t);\n"
+    out = out + "extern xc_integer_t xstd_json_length(xc_Json_t);\n"
+    out = out + "extern xc_Json_t xstd_json_at(xc_Json_t, xc_integer_t);\n"
     let i = 0
     while i < ne {
         let t = stringArrGet(prog.eventTypes, i)

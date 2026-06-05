@@ -9,10 +9,13 @@
 
 ## Open items
 
-- **Array / collection fields in the derived codec.** `Events.encode`/`decode`
-  currently handle `String`, `Number`, `Integer`, `Bool`, `Json`, and nested
-  `event` fields. Arrays (`T[]`) inside an event are not encoded yet; they need
-  the JSON codec to emit/parse arrays element-by-element.
+- **Primitive number/bool arrays in payloads.** The derived codec now encodes
+  array fields element-by-element — `String[]` and arrays of `event` types work
+  ([Events](../events.md), `examples/event_array_demo.xi`). Arrays of primitive
+  numbers/bools (`Integer[]`, `Number[]`, `Bool[]`) still can't be *fields* of a
+  payload because the language doesn't yet emit those array typedefs for struct
+  members (a general limitation, not codec-specific); the codec already handles
+  them once that lands.
 
 - **Async / buffered delivery.** Delivery today is synchronous within the pump
   (`Events.run` drains the in-memory queue on the calling thread). A

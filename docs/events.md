@@ -125,8 +125,11 @@ module App {
 }
 ```
 
-The derived codec supports `String`, `Number`, `Integer`, `Bool`, `Json`, and
-nested `event` fields (arrays are not encoded yet).
+The derived codec supports `String`, `Number`, `Integer`, `Bool`, `Json`, nested
+`event` fields, and **arrays** of those (`String[]`, `Order[]`, …) — each encoded
+element by element. (Arrays of *primitive numbers/bools* in a payload await the
+language's general primitive-array-in-struct support; `String[]` and arrays of
+`event` types work today.)
 
 ## Lowering
 
@@ -142,6 +145,7 @@ the derived `toJson`/`fromJson`. Nothing is serialized unless a transport calls
 - Delivery is **synchronous within the pump** and single-threaded; the queue is
   drained when you run the `ConsumerService`.
 - A listener receives the DTO only (not the topic string).
-- Array-typed fields aren't encoded by the derived codec yet.
+- The codec encodes `String[]` and arrays of `event` types; arrays of primitive
+  numbers/bools await general primitive-array-in-struct support.
 
 See `examples/typed_event_demo.xi`.
