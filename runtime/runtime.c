@@ -1611,6 +1611,71 @@ static const char* xw_reason(int s) {
         case 400: return "Bad Request"; case 401: return "Unauthorized"; case 403: return "Forbidden";
         case 404: return "Not Found"; case 500: return "Internal Server Error"; default: return "OK"; }
 }
+/* Per-connection handling, parameterised over read/write so the same logic
+   serves plaintext sockets and TLS sessions. */
+typedef long (*xw_rd_fn)(void* conn, char* buf, long n);
+typedef long (*xw_wr_fn)(void* conn, const char* buf, long n);
+
+static void xw_serve_conn(void* conn, xw_rd_fn rd, xw_wr_fn wr) {
+    size_t cap = 8192, len = 0; char* buf = (char*)malloc(cap);
+    long need_total = -1; size_t hdr_end = 0;
+    while (1) {
+        if (len + 4096 > cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
+        long n = rd(conn, buf + len, 4096);
+        if (n <= 0) break;
+        len += (size_t)n;
+        if (hdr_end == 0) {
+            buf[len] = '\0';
+            char* h = strstr(buf, "\r\n\r\n");
+            if (h) {
+                hdr_end = (size_t)(h - buf) + 4;
+                long clen = xw_content_length(buf);
+                need_total = (long)hdr_end + (clen > 0 ? clen : 0);
+            }
+        }
+        if (need_total >= 0 && (long)len >= need_total) break;
+    }
+    if (len == 0) { free(buf); return; }
+    buf[len] = '\0';
+    struct xc_web_request req; memset(&req, 0, sizeof(req));
+    char* sp1 = strchr(buf, ' ');
+    char* sp2 = sp1 ? strchr(sp1 + 1, ' ') : NULL;
+    char* eol = strstr(buf, "\r\n");
+    if (sp1 && sp2 && eol) {
+        req.method = xj_strdup_n(buf, (size_t)(sp1 - buf));
+        char* path = xj_strdup_n(sp1 + 1, (size_t)(sp2 - sp1 - 1));
+        char* q = strchr(path, '?');
+        if (q) { *q = '\0'; req.query = xj_strdup_n(q + 1, strlen(q + 1)); } else req.query = xj_strdup_n("", 0);
+        req.path = path;
+        req.headers = xj_strdup_n(eol + 2, hdr_end > (size_t)(eol + 2 - buf) ? (size_t)(buf + hdr_end - 2 - (eol + 2)) : 0);
+        req.body = xj_strdup_n(buf + hdr_end, len - hdr_end);
+        req.blen = len - hdr_end;
+    }
+    struct xc_web_response rs; memset(&rs, 0, sizeof(rs));
+    struct xc_web_response* resp = NULL;
+    if (xc_web_handler_fn && req.method) {
+        xc_web_handler_fn(&req, &rs);
+        resp = &rs;
+    } else if (xc_web_dispatch_fn && req.method) {
+        resp = xc_web_dispatch_fn(&req);
+    }
+    int has = resp && resp->status != 0;
+    int status = has ? resp->status : 404;
+    const char* body = has ? resp->body : "Not Found";
+    size_t blen = has ? resp->blen : 9;
+    const char* ctype = (has && resp->ctype) ? resp->ctype : "text/plain";
+    char head[512];
+    int hl = snprintf(head, sizeof(head),
+        "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
+        status, xw_reason(status), ctype, blen);
+    wr(conn, head, hl);
+    if (blen) wr(conn, body, (long)blen);
+    free(buf);
+}
+
+static long xw_fd_rd(void* c, char* b, long n) { return (long)recv((int)(intptr_t)c, b, (size_t)n, 0); }
+static long xw_fd_wr(void* c, const char* b, long n) { return (long)send((int)(intptr_t)c, b, (size_t)n, 0); }
+
 void xstd_web_serve(xc_integer_t port) {
     int fd = (int)xstd_tcp_listen(port, 64);
     if (fd < 0) { fprintf(stderr, "web: cannot listen on port %lld\n", (long long)port); return; }
@@ -1618,65 +1683,52 @@ void xstd_web_serve(xc_integer_t port) {
     for (;;) {
         int c = accept(fd, NULL, NULL);
         if (c < 0) continue;
-        /* read until headers end (\r\n\r\n), then the body per Content-Length */
-        size_t cap = 8192, len = 0; char* buf = (char*)malloc(cap);
-        long need_total = -1; size_t hdr_end = 0;
-        while (1) {
-            if (len + 4096 > cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
-            ssize_t n = recv(c, buf + len, 4096, 0);
-            if (n <= 0) break;
-            len += (size_t)n;
-            if (hdr_end == 0) {
-                buf[len] = '\0';
-                char* h = strstr(buf, "\r\n\r\n");
-                if (h) {
-                    hdr_end = (size_t)(h - buf) + 4;
-                    long clen = xw_content_length(buf);
-                    need_total = (long)hdr_end + (clen > 0 ? clen : 0);
-                }
-            }
-            if (need_total >= 0 && (long)len >= need_total) break;
-        }
-        if (len == 0) { free(buf); close(c); continue; }
-        buf[len] = '\0';
-        struct xc_web_request req; memset(&req, 0, sizeof(req));
-        /* request line: METHOD SP PATH SP HTTP/1.1\r\n */
-        char* sp1 = strchr(buf, ' ');
-        char* sp2 = sp1 ? strchr(sp1 + 1, ' ') : NULL;
-        char* eol = strstr(buf, "\r\n");
-        if (sp1 && sp2 && eol) {
-            req.method = xj_strdup_n(buf, (size_t)(sp1 - buf));
-            char* path = xj_strdup_n(sp1 + 1, (size_t)(sp2 - sp1 - 1));
-            char* q = strchr(path, '?');
-            if (q) { *q = '\0'; req.query = xj_strdup_n(q + 1, strlen(q + 1)); } else req.query = xj_strdup_n("", 0);
-            req.path = path;
-            req.headers = xj_strdup_n(eol + 2, hdr_end > (size_t)(eol + 2 - buf) ? (size_t)(buf + hdr_end - 2 - (eol + 2)) : 0);
-            req.body = xj_strdup_n(buf + hdr_end, len - hdr_end);
-            req.blen = len - hdr_end;
-        }
-        struct xc_web_response rs; memset(&rs, 0, sizeof(rs));
-        struct xc_web_response* resp = NULL;
-        if (xc_web_handler_fn && req.method) {
-            xc_web_handler_fn(&req, &rs);   /* handler fills rs via xstd_resp_set */
-            resp = &rs;
-        } else if (xc_web_dispatch_fn && req.method) {
-            resp = xc_web_dispatch_fn(&req);
-        }
-        int has = resp && resp->status != 0;
-        int status = has ? resp->status : 404;
-        const char* body = has ? resp->body : "Not Found";
-        size_t blen = has ? resp->blen : 9;
-        const char* ctype = (has && resp->ctype) ? resp->ctype : "text/plain";
-        char head[512];
-        int hl = snprintf(head, sizeof(head),
-            "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
-            status, xw_reason(status), ctype, blen);
-        send(c, head, (size_t)hl, 0);
-        if (blen) send(c, body, blen, 0);
+        xw_serve_conn((void*)(intptr_t)c, xw_fd_rd, xw_fd_wr);
         close(c);
-        free(buf);
     }
 }
+
+/* ─── HTTPS (opt-in: build with XC_TLS=1, needs OpenSSL) ─────────────────────── */
+#ifdef XC_HAVE_TLS
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+static long xw_ssl_rd(void* c, char* b, long n) { int r = SSL_read((SSL*)c, b, (int)n); return r; }
+static long xw_ssl_wr(void* c, const char* b, long n) { int r = SSL_write((SSL*)c, b, (int)n); return (long)r; }
+void xstd_web_serve_tls(xc_integer_t port, xc_string_t certPath, xc_string_t keyPath) {
+    SSL_load_error_strings();
+    SSL_library_init();
+    SSL_CTX* ctx = SSL_CTX_new(TLS_server_method());
+    if (!ctx) { fprintf(stderr, "web: TLS context init failed\n"); return; }
+    char* cert = xc_string_to_cstr(certPath);
+    char* key  = xc_string_to_cstr(keyPath);
+    if (SSL_CTX_use_certificate_file(ctx, cert, SSL_FILETYPE_PEM) <= 0 ||
+        SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) <= 0) {
+        fprintf(stderr, "web: cannot load cert/key (%s, %s)\n", cert, key);
+        SSL_CTX_free(ctx); free(cert); free(key); return;
+    }
+    free(cert); free(key);
+    int fd = (int)xstd_tcp_listen(port, 64);
+    if (fd < 0) { fprintf(stderr, "web: cannot listen on port %lld\n", (long long)port); SSL_CTX_free(ctx); return; }
+    fprintf(stderr, "web: serving on https://0.0.0.0:%lld\n", (long long)port);
+    for (;;) {
+        int c = accept(fd, NULL, NULL);
+        if (c < 0) continue;
+        SSL* ssl = SSL_new(ctx);
+        SSL_set_fd(ssl, c);
+        if (SSL_accept(ssl) > 0) {
+            xw_serve_conn(ssl, xw_ssl_rd, xw_ssl_wr);
+        }
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+        close(c);
+    }
+}
+#else
+void xstd_web_serve_tls(xc_integer_t port, xc_string_t certPath, xc_string_t keyPath) {
+    (void)port; (void)certPath; (void)keyPath;
+    fprintf(stderr, "web: TLS not built in — recompile with XC_TLS=1 (needs OpenSSL)\n");
+}
+#endif
 
 /* ─── Threading (std/thread) ──────────────────────────────────────────────────
  * Share-nothing OS threads over thread-safe channels. A `parallel { }` block is

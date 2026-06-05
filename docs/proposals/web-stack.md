@@ -1,10 +1,9 @@
 # Proposal: Web stack — crypto → HTTPS → HTTP/2-3 → `std/web`
 
-> **Status: phased.** Phase 1 (**`std/crypto`**) and Phase 4 (**`std/web`**, over
-> plain HTTP) are **implemented** — see [crypto](../stdlib.md) and [Web](../web.md).
-> The transport phases (HTTPS, HTTP/2 and /3) remain and are **gated on one
-> decision: the external-dependency policy** (below) — resolved as **Option A,
-> optional system libs**; HTTPS is the next build.
+> **Status: phased.** Phase 1 (**`std/crypto`**), Phase 4 (**`std/web`**), and
+> **HTTPS** (`web.serveTLS`, opt-in `XC_TLS=1` linking OpenSSL) are **implemented**
+> — see [crypto](../stdlib.md) and [Web](../web.md). The external-dependency policy
+> was resolved as **Option A, optional system libs**. **HTTP/2 and HTTP/3** remain.
 
 ## Goal
 
@@ -39,12 +38,14 @@ Writing a correct, *secure* TLS 1.3 or a QUIC stack from scratch is not advisabl
 of "REST API" needs), then HTTP/2, then HTTP/3 (which carries the heaviest
 dependency, QUIC). Each is opt-in via its `import`.
 
-## Phase 2 — HTTPS
+## Phase 2 — HTTPS ✅ (server shipped)
 
-- **Client:** extend `std/http` so `https://` URLs work — wrap the existing `net`
-  socket in a TLS session (handshake, read/write) via the chosen TLS lib.
-- **Server:** a TLS listener (cert + key) producing encrypted `net.Conn`s.
-- API stays the same shape as today's `std/http`; only the transport changes.
+- **Server:** ✅ `web.serveTLS(port, cert, key)` wraps each accepted socket in an
+  OpenSSL TLS session and runs the existing handler stack. Opt-in via `XC_TLS=1`
+  at compile time (links `libssl`/`libcrypto`); default builds stay
+  dependency-light and `serveTLS` degrades to a notice.
+- **Client:** extending `std/http` so `https://` URLs work (wrap the `net` socket
+  in a TLS session) is the remaining HTTPS piece.
 
 ## Phase 3 — HTTP/2, then HTTP/3
 

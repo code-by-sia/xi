@@ -206,8 +206,31 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
     const char* helpers = getenv("XC_HELPERS");
     if (helpers && helpers[0]) append_file(cp, helpers);
 
-    /* cc -std=c99 -O2 -I<dir> <cpath> <dir>/runtime.c -o <binpath> -lm */
-    size_t need = strlen(cp) + strlen(bp) + 3 * strlen(dir) + 256;
+    /* Optional TLS (std/web HTTPS): opt-in via XC_TLS so default builds stay
+       dependency-light. When set, enable XC_HAVE_TLS and link OpenSSL — flags
+       from pkg-config when available, else a portable fallback (incl. Homebrew). */
+    char tls[1024]; tls[0] = '\0';
+    const char* want_tls = getenv("XC_TLS");
+    if (want_tls && want_tls[0]) {
+        char pkg[768] = "";
+        if (system("pkg-config --exists openssl 2>/dev/null") == 0) {
+            FILE* pf = popen("pkg-config --cflags --libs openssl 2>/dev/null", "r");
+            if (pf) { if (fgets(pkg, sizeof(pkg), pf)) { pkg[strcspn(pkg, "\n")] = '\0'; } pclose(pf); }
+        }
+        if (pkg[0]) {
+            snprintf(tls, sizeof(tls), "-DXC_HAVE_TLS %s", pkg);
+        } else {
+            /* Fallback: common Homebrew prefixes (keg-only) + plain link flags. */
+            snprintf(tls, sizeof(tls),
+                     "-DXC_HAVE_TLS "
+                     "-I/opt/homebrew/opt/openssl@3/include -L/opt/homebrew/opt/openssl@3/lib "
+                     "-I/usr/local/opt/openssl@3/include -L/usr/local/opt/openssl@3/lib "
+                     "-lssl -lcrypto");
+        }
+    }
+
+    /* cc -std=c99 -O2 -I<dir> <cpath> <dir>/runtime.c -o <binpath> -lm -lpthread [tls] */
+    size_t need = strlen(cp) + strlen(bp) + 3 * strlen(dir) + strlen(tls) + 256;
     char* cmd = (char*)malloc(need);
     if (!cmd) { free(cp); free(bp); return 1; }
     /* -w plus explicit -Wno-* because GCC 14 (Ubuntu 24.04) promotes these to
@@ -215,8 +238,8 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
     snprintf(cmd, need,
              "cc -std=c99 -O2 -w -Wno-implicit-int -Wno-implicit-function-declaration "
              "-Wno-int-conversion -Wno-incompatible-pointer-types "
-             "-I%s %s %s/runtime.c -o %s -lm -lpthread",
-             dir, cp, dir, bp);
+             "-I%s %s %s/runtime.c -o %s -lm -lpthread %s",
+             dir, cp, dir, bp, tls);
 
     int rc = system(cmd);
     free(cmd); free(cp); free(bp);

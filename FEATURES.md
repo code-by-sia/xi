@@ -73,7 +73,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `json` / `yaml` / `xml` | **serialization** — build/parse/stringify; derived codecs for events & compounds |
 | `crypto` | **SHA-256/SHA-1/MD5, HMAC-SHA256, hex/base64, CSPRNG** (`randomBytes`/`randomHex`) |
 | `events` | **typed publish/subscribe** — `publish(topic, dto)` + `listener … on "topic"`, in-memory default bus |
-| `web` | **REST framework** — `WebRequestHandler` + `where`-overloaded `handle`, `res.send`/`req.parse` via `WebTransport`, blocking HTTP/1.1 server |
+| `web` | **REST framework** — `WebRequestHandler` + `where`-overloaded `handle`, `res.send`/`req.parse` via `WebTransport`, blocking HTTP/1.1 server, optional HTTPS (`serveTLS`, `XC_TLS=1`) |
 | `thread` | **share-nothing threads** — `parallel { }` blocks + thread-safe channels (`send`/`recv`/`close`), `Thread` handle (`stop`/`wait`/`running`) |
 | `io` | console `println`/`print`/`eprintln`, `readLine`/`eof` |
 | `fs` | read/write text & **bytes**, exists/isDir/isFile, size/mtime, remove/rename/copy, mkdir/mkdirAll, cwd, listDir |

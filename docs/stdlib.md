@@ -166,6 +166,7 @@ auto-(de)serialize via a `WebTransport` (JSON by default). See [Web](web.md).
 | `res.send(dto)` | serialize `dto` and reply `200` |
 | `res.sendStatus(code, msg)` / `res.sendText(code, body)` | plain-text reply |
 | `web.serve` | `(Integer)` — run a blocking HTTP/1.1 server |
+| `web.serveTLS` | `(Integer, String, String)` — HTTPS (cert, key); build with `XC_TLS=1` |
 
 ### `thread` — `std/thread.xi`
 
