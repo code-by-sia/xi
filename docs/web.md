@@ -126,15 +126,36 @@ $ xc app.xi && ./build/app
 web: serving on http://0.0.0.0:8080
 ```
 
+## HTTPS
+
+`web.serveTLS(port, certPath, keyPath)` runs the same handler stack over TLS.
+TLS is **opt-in** so default builds stay dependency-light: compile the program
+with `XC_TLS=1`, which links the platform's OpenSSL.
+
+```x
+async entry main(args: String[]) -> Integer {
+    web.serveTLS(8443, "cert.pem", "key.pem")   // PEM cert + private key
+    return 0
+}
+```
+
+```console
+$ XC_TLS=1 xc app.xi && ./build/app
+web: serving on https://0.0.0.0:8443
+```
+
+Built without `XC_TLS`, `serveTLS` prints a notice and serves nothing (so the
+program still compiles everywhere). Everything else — controllers, `res.send`,
+`WebTransport` — is identical to plaintext.
+
 ## Notes & limits
 
 - HTTP/1.1, blocking, one request per connection (no keep-alive) — fine for an
   API behind a reverse proxy; concurrency and keep-alive are future work.
 - Routing is by exact `req.path` match in `where` guards. There is no path-pattern
   capture (`/users/:id`); read sub-paths from `req.path` or use query parameters.
-- **HTTPS / HTTP-2 / HTTP-3** are planned; they need a TLS/QUIC dependency — see
-  the [web-stack proposal](proposals/web-stack.md). Today `web.serve` is plaintext
-  HTTP, so put it behind a TLS-terminating proxy for production.
+- HTTPS needs OpenSSL at build time (`XC_TLS=1`). **HTTP/2 / HTTP/3** are still
+  planned — see the [web-stack proposal](proposals/web-stack.md).
 - No `%`-decoding of query values yet; no multipart parsing.
 
 See `examples/web_demo.xi`.

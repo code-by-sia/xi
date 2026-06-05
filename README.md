@@ -59,7 +59,8 @@ module App {}                             // resolution is automatic
 - **Web framework** — implement `WebRequestHandler` and route by overloading
   `action handle(req, res)` with `where` guards; `res.send(dto)` / `req.parse(T)`
   auto-(de)serialize via a pluggable `WebTransport` (JSON by default). No manual
-  JSON. See [Web](https://code-by-sia.github.io/x/web).
+  JSON. Plain HTTP by default; opt-in **HTTPS** (`web.serveTLS`, build with
+  `XC_TLS=1`). See [Web](https://code-by-sia.github.io/x/web).
 - **Share-nothing threading** — `parallel { }` blocks run on OS threads and yield
   a `Thread` handle (`stop`/`wait`/`running`); threads talk only over thread-safe
   channels. See [Threading](https://code-by-sia.github.io/x/threading).

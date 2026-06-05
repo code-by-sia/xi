@@ -30,7 +30,14 @@ import "web_core.xi"
 
 extern "C" {
     producer xstd_web_serve(port: Integer)
+    producer xstd_web_serve_tls(port: Integer, cert: String, key: String)
 }
 
 // ── Server ──────────────────────────────────────────────────────────
 producer serve(port: Integer) { xstd_web_serve(port) }
+
+// HTTPS. Requires the toolchain to be built with TLS: compile with `XC_TLS=1`
+// (needs OpenSSL). Without it, this prints a notice and serves nothing.
+producer serveTLS(port: Integer, cert: String, key: String) {
+    xstd_web_serve_tls(port, cert, key)
+}

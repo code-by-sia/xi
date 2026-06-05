@@ -180,6 +180,7 @@ typedef struct xc_web_response* xc_HttpResponse_t;
 void          xstd_resp_set(xc_HttpResponse_t, xc_integer_t status, xc_string_t body, xc_string_t ctype);
 xc_integer_t  xstd_resp_status(xc_HttpResponse_t);
 void          xstd_web_set_handler(void (*fn)(xc_HttpRequest_t, xc_HttpResponse_t));
+void          xstd_web_serve_tls(xc_integer_t port, xc_string_t certPath, xc_string_t keyPath);
 
 /* Threading (std/thread): share-nothing OS threads communicating over
    thread-safe channels. A `parallel { }` block lifts to a thread function and is
