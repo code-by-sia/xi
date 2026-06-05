@@ -37,9 +37,9 @@ jobs:
         run: |
           set -euo pipefail
           export XC_RUNTIME="$PWD/runtime"
-          for f in examples/*.x examples/proj/main.x examples/showcase/main.x; do
+          for f in examples/*.xi examples/proj/main.xi examples/showcase/main.xi; do
             echo "== $f =="
             ./compiler/xc "$f" >/dev/null
-            bin="build/$(basename "${f%.x}")"
+            bin="build/$(basename "${f%.xi}")"
             if [ -x "$bin" ]; then "$bin" | head -3 || true; fi
           done

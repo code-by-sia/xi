@@ -66,13 +66,13 @@ jobs:
           BUNDLE="$RUNNER_TEMP/$DIST"
 
           # compile-and-run via the wrapper (exercises XC_RUNTIME/XC_STD + cc)
-          cat > "$RUNNER_TEMP/smoke.x" <<'EOF'
+          cat > "$RUNNER_TEMP/smoke.xi" <<'EOF'
           async entry main(args: String[]) -> Integer {
               system.stdout.writeln("smoke ok")
               return 0
           }
           EOF
-          XC_OUT="$RUNNER_TEMP/out" "$BUNDLE/bin/xc" "$RUNNER_TEMP/smoke.x"
+          XC_OUT="$RUNNER_TEMP/out" "$BUNDLE/bin/xc" "$RUNNER_TEMP/smoke.xi"
           got="$("$RUNNER_TEMP/out/smoke")"
           test "$got" = "smoke ok" || { echo "::error::bundle smoke test failed: '$got'"; exit 1; }
 
