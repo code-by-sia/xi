@@ -27,14 +27,17 @@
 
 - **History / time-travel, entry/exit actions, `async` transitions.**
 
-- **Static checks** on the machine graph: reachability, dead states, and
-  exhaustiveness of guards.
+- ~~**Static checks** on the machine graph.~~ **Done (partial).** The compiler now
+  reports unknown state references (error) and unreachable / dead-end states
+  (warning) for every machine. Guard *exhaustiveness* analysis is still open.
 
 - **Multi-line guards.** A transition `where` guard is collected to the end of its
   line; a guard spanning several lines isn't supported (use a helper predicate).
 
-- **Primitive arrays in `state`/`data`.** Fields typed `Integer[]` etc. aren't
-  supported yet — a general array limitation, not specific to atoms/machines.
+- ~~**Primitive arrays in `state`/`data`.**~~ **Done.** Fields typed `Integer[]`,
+  `Number[]`, `Bool[]` work in `data` (and `state`), including an empty `[]`
+  default — the runtime defines the primitive array typedefs (since v0.0.23) and
+  machine init/update cast empty literals to the field type.
 
 ## Background
 

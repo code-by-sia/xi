@@ -129,11 +129,29 @@ An [atom](atoms.md) is a **single global holder** whose value you swap in place 
 `name.dispatch(...)`. Use a machine when the *shape of the lifecycle* matters; use
 an atom when you just need one evolving piece of state.
 
+## Static checks
+
+The compiler validates each machine graph at compile time:
+
+- **Unknown states** referenced by a transition's source or target (or by
+  `initial`/`terminal`) are **errors**.
+- **Unreachable states** (not reachable from `initial` by following transitions)
+  and **dead ends** (a non-terminal state with no outgoing transition) are
+  **warnings**.
+
+```console
+$ xc app.xi
+xc: app.xi: warning: machine Door: state 'Ghost' is unreachable from 'Closed'
+xc: app.xi: warning: machine Door: non-terminal state 'Ghost' has no outgoing transition (dead end)
+```
+
 ## Notes & limits
 
-- `data` is **machine-wide context** shared by all states. **Per-state** data
-  (distinct fields per state) needs sum types and isn't supported yet.
-- Transitions are synchronous and single-threaded.
+- `data` is **machine-wide context** shared by all states; fields may be any type,
+  including arrays (`Integer[]`, …). **Per-state** data (distinct fields per
+  state) can be modelled by making a `data` field a [sum type](language-guide.md#sum-algebraic-types).
+- Transitions are synchronous and single-threaded; entry/exit actions and `async`
+  transitions aren't supported yet.
 
 See `examples/machine_demo.xi` (data-less) and `examples/machine_data_demo.xi`
 (data + guards + `update` + `can`).

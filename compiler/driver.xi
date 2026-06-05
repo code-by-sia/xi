@@ -15,6 +15,7 @@ extern "C" {
     mapper    run_command(cmd: String) -> Integer
     consumer  diag_set_file(path: String)
     consumer  diag_error(line: Integer, msg: String)
+    consumer  diag_warn(line: Integer, msg: String)
 }
 
 // LoadResult carries the merged tokens, the visited-paths set (dedup), and a
@@ -319,6 +320,8 @@ async entry main(args: String[]) -> Integer {
     system.stdout.writeln("xc: parsing ...")
     diag_set_file(srcPath)           // parse errors report the main source
     let prog = parseProgram(tokens)
+
+    checkMachines(prog)              // static machine-graph validation
 
     system.stdout.writeln("xc: generating C ...")
     let cSource = genAll(prog)
