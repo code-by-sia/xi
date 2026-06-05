@@ -14,11 +14,10 @@
   work as payload fields — the runtime defines the primitive array typedefs and
   the derived codec encodes them element-by-element.
 
-- **Async / buffered delivery.** Delivery today is synchronous within the pump
-  (`Events.run` drains the in-memory queue on the calling thread). Now that
-  [threading](../threading.md) exists, a `ConsumerService` that delivers on a
-  worker thread (batching, retries, dead-letters) can be built as a transport
-  without language changes.
+- ~~**Async / buffered delivery.**~~ **Done (basic).** `Events.runAsync()` drains
+  the (now thread-safe) queue on a background worker thread and dispatches to
+  listeners; `Events.stop()` ends it. Richer policies (batching, retries,
+  dead-letters) can still be layered as a custom `ConsumerService`.
 
 - **The topic inside the listener.** A listener receives the typed DTO only. For
   wildcard subscriptions (one listener over several topics) it may also want the

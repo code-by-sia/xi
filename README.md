@@ -55,7 +55,8 @@ module App {}                             // resolution is automatic
   any DTO; the `listener` kind subscribes to a topic and receives the **typed**
   value (no JSON). The default transport queues in memory with zero serialization;
   bind your own `PublisherService`/`ConsumerService` to go external — producers and
-  listeners are unchanged. See [Events](https://code-by-sia.github.io/x/events).
+  listeners are unchanged. Deliver synchronously (`Events.run`) or on a worker
+  thread (`Events.runAsync`). See [Events](https://code-by-sia.github.io/x/events).
 - **Web framework** — implement `WebRequestHandler` and route by overloading
   `action handle(req, res)` with `where` guards; `res.send(dto)` / `req.parse(T)`
   auto-(de)serialize via a pluggable `WebTransport` (JSON by default). No manual

@@ -72,6 +72,29 @@ module App {}                    // MemoryBus / MemoryConsumer are the defaults
 typed listeners. Nothing is serialized — the typed value is passed straight
 through.
 
+### Async delivery — `Events.runAsync()`
+
+`Events.run()` drains on the calling thread. `Events.runAsync()` instead spawns a
+background worker (a [thread](threading.md)) that blocks on the queue and
+dispatches events as they arrive, decoupling delivery from publishing. It returns
+a `Thread` handle; `Events.stop()` closes the queue so the worker exits, then
+`wait()` joins it.
+
+```x
+async entry main(args: String[]) -> Integer {
+    let pump = Events.runAsync()     // deliver on a background thread
+    let shop = App.resolve(Store)
+    shop.checkout("book", 29.0)      // publish from this thread
+
+    Events.stop()                    // close the queue -> the pump returns
+    pump.wait()                      // join the worker
+    return 0
+}
+```
+
+Listeners then run on the worker thread, so treat their work as you would any
+threaded code. See `examples/async_events_demo.xi`.
+
 ## Application vs. external: only the transport differs
 
 The producer and the listeners above never change. The **only** difference
@@ -142,8 +165,9 @@ the derived `toJson`/`fromJson`. Nothing is serialized unless a transport calls
 
 ## Notes & limits
 
-- Delivery is **synchronous within the pump** and single-threaded; the queue is
-  drained when you run the `ConsumerService`.
+- `Events.run()` delivers **synchronously** on the calling thread;
+  `Events.runAsync()` delivers on a background worker thread (the queue is
+  thread-safe). Either way, run the pump to drain the queue.
 - A listener receives the DTO only (not the topic string).
 - The codec encodes `String[]` and arrays of `event` types; arrays of primitive
   numbers/bools await general primitive-array-in-struct support.

@@ -199,7 +199,8 @@ receive). See [Events](events.md).
 | `PublisherService` | `interface { producer publish(e: Event) }` — outbound transport |
 | `ConsumerService` | `interface { consumer run() }` — the delivery pump |
 | `MemoryBus` / `MemoryConsumer` | defaults: in-memory queue, no serialization |
-| `Events.run()` | run the pump (resolve + run the `ConsumerService`) |
+| `Events.run()` | run the pump synchronously (resolve + run the `ConsumerService`) |
+| `Events.runAsync()` / `Events.stop()` | deliver on a worker thread (returns a `Thread`) / close the queue to stop it |
 | `Events.dispatch(e)` | deliver an envelope to its typed listeners |
 | `Events.encode(e)` / `Events.decode(topic, type, json)` | codec helpers for transports |
 | `Events.topic(e)` / `Events.type(e)` | envelope accessors |
