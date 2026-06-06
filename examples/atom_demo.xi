@@ -19,5 +19,9 @@ async entry main(args: String[]) -> Integer {
 
     cart.clear()
     system.stdout.writeln("after clear -> items = " + cart.current.items)
+
+    // Time-travel: undo reverts to the previous state.
+    cart.undo()
+    system.stdout.writeln("after undo  -> items = " + cart.current.items)   // back to 3
     return 0
 }
