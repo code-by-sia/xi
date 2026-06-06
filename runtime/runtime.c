@@ -611,8 +611,46 @@ xc_string_t xstd_replace(xc_string_t s, xc_string_t a, xc_string_t b) {
 }
 
 /* Heap-copy a byte range into a fresh NUL-terminated xc_string_t. */
+/* ─── Per-thread arena (share-nothing thread cleanup) ─────────────────────────
+ * Value allocations (strings, JSON nodes — things that are never individually
+ * freed) come from the current thread's arena when one is active. A spawned
+ * thread runs with its own arena and the whole arena is freed when the thread
+ * finishes, reclaiming everything that thread allocated. The main thread has no
+ * arena (xc_tls_arena == NULL), so its allocations are plain malloc / leak-on-
+ * exit exactly as before — non-threaded programs are unaffected. This is safe
+ * because threads are share-nothing: data crossing a channel is *copied* (the
+ * channel node and the recv result are independent allocations), so nothing a
+ * thread frees on exit is still referenced elsewhere. */
+typedef struct xc_ablock { struct xc_ablock* next; size_t used, cap; } xc_ablock;
+typedef struct xc_arena  { xc_ablock* head; } xc_arena;
+static __thread xc_arena* xc_tls_arena = NULL;
+
+static void* xc_arena_alloc(size_t n) {
+    xc_arena* a = xc_tls_arena;
+    if (!a) return malloc(n);                 /* main / no arena: leak-on-exit */
+    n = (n + 7) & ~((size_t)7);               /* 8-byte align */
+    if (!a->head || a->head->used + n > a->head->cap) {
+        size_t cap = n > 65536 ? n : 65536;
+        xc_ablock* b = (xc_ablock*)malloc(sizeof(xc_ablock) + cap);
+        if (!b) abort();
+        b->next = a->head; b->used = 0; b->cap = cap; a->head = b;
+    }
+    void* p = (char*)(a->head + 1) + a->head->used;
+    a->head->used += n;
+    return p;
+}
+static xc_arena* xc_arena_new(void) {
+    xc_arena* a = (xc_arena*)malloc(sizeof(xc_arena)); if (!a) abort();
+    a->head = NULL; return a;
+}
+static void xc_arena_destroy(xc_arena* a) {
+    xc_ablock* b = a->head;
+    while (b) { xc_ablock* nx = b->next; free(b); b = nx; }
+    free(a);
+}
+
 static xc_string_t xc_str_copy(const char* p, xc_size_t n) {
-    char* buf = (char*)malloc(n + 1); if (!buf) abort();
+    char* buf = (char*)xc_arena_alloc(n + 1); if (!buf) abort();
     if (n) memcpy(buf, p, n);
     buf[n] = '\0';
     return (xc_string_t){ .data = buf, .len = n };
@@ -718,8 +756,9 @@ struct xc_json_node {
 };
 
 static struct xc_json_node* xj_alloc(int kind) {
-    struct xc_json_node* n = (struct xc_json_node*)calloc(1, sizeof(*n));
+    struct xc_json_node* n = (struct xc_json_node*)xc_arena_alloc(sizeof(*n));
     if (!n) abort();
+    memset(n, 0, sizeof(*n));
     n->kind = kind;
     return n;
 }
@@ -2058,7 +2097,11 @@ static void xc_thread_key_init(void) { pthread_key_create(&xc_thread_key, NULL);
 static void* xc_thread_trampoline(void* p) {
     struct xc_thread* t = (struct xc_thread*)p;
     pthread_setspecific(xc_thread_key, t);
+    xc_arena* arena = xc_arena_new();   /* this thread's value allocations */
+    xc_tls_arena = arena;
     t->fn(t->arg);
+    xc_tls_arena = NULL;
+    xc_arena_destroy(arena);            /* free everything the thread allocated */
     t->done = 1;
     return NULL;
 }

@@ -79,6 +79,17 @@ worker.wait()
 
 See `examples/thread_demo.xi` for a two-worker producer/consumer.
 
+## Memory
+
+Because threads are share-nothing, each thread allocates its values from its own
+**arena**, and the whole arena is freed when the thread finishes (or is stopped
+and returns). So a thread reclaims everything it allocated on exit — there's no
+cross-thread garbage, and the main thread is unaffected (it keeps the usual
+allocate-and-free-at-exit behaviour). Data sent over a channel is copied, so it
+survives the sender's cleanup. (This is the per-thread slice of the
+[memory-management plan](proposals/memory-management.md); note the arena is freed
+at thread *exit*, not per loop iteration.)
+
 ## Notes & limits
 
 - Channels carry strings and structured values (`send(dto)` / `recv(T)`, via
