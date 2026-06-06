@@ -53,16 +53,16 @@ type TypeResult = { ctype: String, ps: PState }
 
 mapper primKindToCtype(kind: Integer) -> String {
     match kind {
-        260 -> { return "xc_number_t" }
-        261 -> { return "xc_integer_t" }
-        262 -> { return "xc_bool_t" }
-        263 -> { return "xc_string_t" }
-        264 -> { return "xc_char_t" }
-        265 -> { return "void" }
-        266 -> { return "xc_size_t" }
-        267 -> { return "const char*" }
-        268 -> { return "xc_bytes_t" }
-        _   -> { return "" }
+        260 -> "xc_number_t"
+        261 -> "xc_integer_t"
+        262 -> "xc_bool_t"
+        263 -> "xc_string_t"
+        264 -> "xc_char_t"
+        265 -> "void"
+        266 -> "xc_size_t"
+        267 -> "const char*"
+        268 -> "xc_bytes_t"
+        _   -> ""
     }
 }
 
@@ -153,13 +153,13 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
 // used in xc_arr_<suffix>_t / xc_opt_<suffix>_t typedef names.
 mapper ctypeSuffix(ctype: String) -> String {
     match ctype {
-        "xc_number_t"    -> { return "number" }
-        "xc_integer_t"   -> { return "integer" }
-        "xc_bool_t"      -> { return "bool" }
-        "xc_string_t"    -> { return "string" }
-        "xc_char_t"      -> { return "char" }
-        "xc_size_t"      -> { return "size" }
-        "xc_timestamp_t" -> { return "timestamp" }
+        "xc_number_t"    -> "number"
+        "xc_integer_t"   -> "integer"
+        "xc_bool_t"      -> "bool"
+        "xc_string_t"    -> "string"
+        "xc_char_t"      -> "char"
+        "xc_size_t"      -> "size"
+        "xc_timestamp_t" -> "timestamp"
         _ -> {
             // otherwise strip leading "xc_" and trailing "_t"
             if string_len(ctype) > 5 { return string_slice(ctype, 3, string_len(ctype) - 2) }

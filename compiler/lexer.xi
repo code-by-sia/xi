@@ -163,92 +163,94 @@ creator mkLexState() -> LexState {
 }
 
 // Map a keyword string to its integer kind (a decision table; default = IDENT).
-decision kwKind(word: String) -> Integer {
-    when word == "type"        => 200
-    when word == "interface"   => 201
-    when word == "class"       => 202
-    when word == "implements"  => 203
-    when word == "extends"     => 204
-    when word == "deps"        => 205
-    when word == "when"        => 206
-    when word == "otherwise"   => 207
-    when word == "bind"        => 208
-    when word == "as"          => 209
-    when word == "module"      => 210
-    when word == "scope"       => 211
-    when word == "creator"     => 212
-    when word == "mapper"      => 213
-    when word == "projector"   => 214
-    when word == "predicate"   => 215
-    when word == "consumer"    => 216
-    when word == "producer"    => 217
-    when word == "reducer"     => 218
-    when word == "entry"       => 219
-    when word == "let"         => 220
-    when word == "return"      => 221
-    when word == "if"          => 222
-    when word == "else"        => 223
-    when word == "match"       => 224
-    when word == "and"         => 225
-    when word == "or"          => 226
-    when word == "not"         => 227
-    when word == "is"          => 228
-    when word == "in"          => 229
-    when word == "async"       => 230
-    when word == "await"       => 231
-    when word == "own"         => 232
-    when word == "dup"         => 233
-    when word == "unsafe"      => 234
-    when word == "extern"      => 235
-    when word == "true"        => 236
-    when word == "false"       => 237
-    when word == "self"        => 238
-    when word == "singleton"   => 239
-    when word == "transient"   => 240
-    when word == "scoped"      => 241
-    when word == "where"       => 242
-    when word == "value"       => 243
-    when word == "import"      => 244
-    when word == "export"      => 245
-    when word == "for"         => 246
-    when word == "while"       => 247
-    when word == "loop"        => 248
-    when word == "break"       => 249
-    when word == "continue"    => 250
-    when word == "spawn"       => 251
-    when word == "matches"     => 252
-    when word == "input"       => 253
-    when word == "none"        => 254
-    when word == "namespace"   => 255
-    when word == "decision"    => 256
-    when word == "hit"         => 257
-    when word == "interrupt"   => 280
-    when word == "interrupts"  => 281
-    when word == "signal"      => 282
-    when word == "try"         => 283
-    when word == "catch"       => 284
-    when word == "recover"     => 285
-    when word == "skip"        => 286
-    when word == "atom"        => 288
-    when word == "state"       => 289
-    when word == "transition"  => 290
-    when word == "initial"     => 291
-    when word == "machine"     => 292
-    when word == "states"      => 293
-    when word == "terminal"    => 294
-    when word == "listener"    => 295
-    when word == "event"       => 296
-    when word == "action"      => 298
-    when word == "Number"      => 260
-    when word == "Integer"     => 261
-    when word == "Bool"        => 262
-    when word == "String"      => 263
-    when word == "Char"        => 264
-    when word == "Void"        => 265
-    when word == "Size"        => 266
-    when word == "cstring"     => 267
-    when word == "Bytes"       => 268
-    else                       => 1     // IDENT
+mapper kwKind(word: String) -> Integer {
+    match word {
+        "type"        -> 200
+        "interface"   -> 201
+        "class"       -> 202
+        "implements"  -> 203
+        "extends"     -> 204
+        "deps"        -> 205
+        "when"        -> 206
+        "otherwise"   -> 207
+        "bind"        -> 208
+        "as"          -> 209
+        "module"      -> 210
+        "scope"       -> 211
+        "creator"     -> 212
+        "mapper"      -> 213
+        "projector"   -> 214
+        "predicate"   -> 215
+        "consumer"    -> 216
+        "producer"    -> 217
+        "reducer"     -> 218
+        "entry"       -> 219
+        "let"         -> 220
+        "return"      -> 221
+        "if"          -> 222
+        "else"        -> 223
+        "match"       -> 224
+        "and"         -> 225
+        "or"          -> 226
+        "not"         -> 227
+        "is"          -> 228
+        "in"          -> 229
+        "async"       -> 230
+        "await"       -> 231
+        "own"         -> 232
+        "dup"         -> 233
+        "unsafe"      -> 234
+        "extern"      -> 235
+        "true"        -> 236
+        "false"       -> 237
+        "self"        -> 238
+        "singleton"   -> 239
+        "transient"   -> 240
+        "scoped"      -> 241
+        "where"       -> 242
+        "value"       -> 243
+        "import"      -> 244
+        "export"      -> 245
+        "for"         -> 246
+        "while"       -> 247
+        "loop"        -> 248
+        "break"       -> 249
+        "continue"    -> 250
+        "spawn"       -> 251
+        "matches"     -> 252
+        "input"       -> 253
+        "none"        -> 254
+        "namespace"   -> 255
+        "decision"    -> 256
+        "hit"         -> 257
+        "interrupt"   -> 280
+        "interrupts"  -> 281
+        "signal"      -> 282
+        "try"         -> 283
+        "catch"       -> 284
+        "recover"     -> 285
+        "skip"        -> 286
+        "atom"        -> 288
+        "state"       -> 289
+        "transition"  -> 290
+        "initial"     -> 291
+        "machine"     -> 292
+        "states"      -> 293
+        "terminal"    -> 294
+        "listener"    -> 295
+        "event"       -> 296
+        "action"      -> 298
+        "Number"      -> 260
+        "Integer"     -> 261
+        "Bool"        -> 262
+        "String"      -> 263
+        "Char"        -> 264
+        "Void"        -> 265
+        "Size"        -> 266
+        "cstring"     -> 267
+        "Bytes"       -> 268
+        else          -> 1     // IDENT
+    }
 }
 
 // ── Tokeniser ────────────────────────────────────────────────────
