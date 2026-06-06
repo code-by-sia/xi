@@ -51,17 +51,19 @@ mapper match_tok(ps: PState, kind: Integer) -> MatchResult {
 
 type TypeResult = { ctype: String, ps: PState }
 
-decision primKindToCtype(kind: Integer) -> String {
-    when kind == 260 => "xc_number_t"
-    when kind == 261 => "xc_integer_t"
-    when kind == 262 => "xc_bool_t"
-    when kind == 263 => "xc_string_t"
-    when kind == 264 => "xc_char_t"
-    when kind == 265 => "void"
-    when kind == 266 => "xc_size_t"
-    when kind == 267 => "const char*"
-    when kind == 268 => "xc_bytes_t"
-    else             => ""
+mapper primKindToCtype(kind: Integer) -> String {
+    match kind {
+        260 -> { return "xc_number_t" }
+        261 -> { return "xc_integer_t" }
+        262 -> { return "xc_bool_t" }
+        263 -> { return "xc_string_t" }
+        264 -> { return "xc_char_t" }
+        265 -> { return "void" }
+        266 -> { return "xc_size_t" }
+        267 -> { return "const char*" }
+        268 -> { return "xc_bytes_t" }
+        _   -> { return "" }
+    }
 }
 
 mapper identToCtype(name: String) -> String {
@@ -149,17 +151,21 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
 
 // Convert a base C type (e.g. "xc_string_t", "xc_Person_t") to the suffix
 // used in xc_arr_<suffix>_t / xc_opt_<suffix>_t typedef names.
-decision ctypeSuffix(ctype: String) -> String {
-    when ctype == "xc_number_t"    => "number"
-    when ctype == "xc_integer_t"   => "integer"
-    when ctype == "xc_bool_t"      => "bool"
-    when ctype == "xc_string_t"    => "string"
-    when ctype == "xc_char_t"      => "char"
-    when ctype == "xc_size_t"      => "size"
-    when ctype == "xc_timestamp_t" => "timestamp"
-    // otherwise strip leading "xc_" and trailing "_t"
-    when string_len(ctype) > 5     => string_slice(ctype, 3, string_len(ctype) - 2)
-    else                           => ctype
+mapper ctypeSuffix(ctype: String) -> String {
+    match ctype {
+        "xc_number_t"    -> { return "number" }
+        "xc_integer_t"   -> { return "integer" }
+        "xc_bool_t"      -> { return "bool" }
+        "xc_string_t"    -> { return "string" }
+        "xc_char_t"      -> { return "char" }
+        "xc_size_t"      -> { return "size" }
+        "xc_timestamp_t" -> { return "timestamp" }
+        _ -> {
+            // otherwise strip leading "xc_" and trailing "_t"
+            if string_len(ctype) > 5 { return string_slice(ctype, 3, string_len(ctype) - 2) }
+            return ctype
+        }
+    }
 }
 
 // ── Collected declarations ────────────────────────────────────────
