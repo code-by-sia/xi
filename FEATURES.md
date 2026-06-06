@@ -31,6 +31,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Eight function kinds (`mapper`, `projector`, `predicate`, `consumer`, `producer`, `reducer`, `creator`, `action`) | ✓ |
 | Decision tables — `decision` kind (`when <cond> => <result>`, `hit first`) | ✓ (MVP) |
 | Purity enforcement (pure kinds cannot mutate or be `async`) | ✓ (reference checks) |
+| Inline function bodies (`mapper f(x) => expr`, sugar for `{ return expr }`; any kind, methods, overloads) | ✓ |
 | `where`-guarded overloading — free functions **and methods** (runtime overload selection by guard) | ✓ |
 | `match` (literal / string / bool / bound-ident / variant / `_` / `else` patterns; multi-key `(a, b)` arms; inline `-> expr` or `{ block }` bodies) | ✓ |
 | Interrupts — resumable conditions (`interrupt`/`signal`/`try`/`catch`, `skip`+`recover`) | ✓ (MVP) |
