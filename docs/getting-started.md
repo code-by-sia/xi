@@ -58,15 +58,16 @@ This produces:
 ```x title="hello.xi"
 import "std/log.xi"
 
-async entry { logger: Logger } main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     logger.print("Hello World!")
     return 0
 }
 ```
 
-`{ logger: Logger }` on the entry asks for a `Logger` by interface; the compiler
+`(logger: Logger)` on the entry asks for a `Logger` by interface; the compiler
 injects the standard `ConsoleLogger` — no globals, no setup. (Bind your own
-`Logger` later and `main` doesn't change.)
+`Logger` later and `main` doesn't change.) See
+[Dependency injection](dependency-injection.md) for the full model.
 
 Compile and run:
 

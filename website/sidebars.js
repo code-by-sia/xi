@@ -7,6 +7,7 @@ const sidebars = {
     'getting-started',
     'cli',
     'language-guide',
+    'dependency-injection',
     'multi-file',
     'error-handling',
     'decisions',

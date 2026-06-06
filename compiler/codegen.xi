@@ -2959,7 +2959,8 @@ mapper genClassMethods(prog: Program) -> String {
                 out = out + hoistCatches(prog, ms.bodyTokens, tag)
                 out = out + hoistParallel(prog, ms.bodyTokens, tag)
                 out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "(" + ms.params + ") {\n"
-                let ctx = withTag(withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype), tag)
+                out = out + funcDepPrologue(prog, ms.fnDeps)
+                let ctx = withTag(withRet(seedFuncDeps(seedParams(mkGCtx(prog), ms.params), ms.fnDeps), ms.retCtype), tag)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
             } else {
@@ -2976,7 +2977,8 @@ mapper genClassMethods(prog: Program) -> String {
                 }
                 out = out + "static " + ms.retCtype + " " + implName + "(void* self_ptr" + pstr + ") {\n"
                 out = out + "    xc_" + cs.name + "_t* self = (xc_" + cs.name + "_t*)self_ptr;\n"
-                let ctx = withTag(withRet(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.retCtype), tag)
+                out = out + funcDepPrologue(prog, ms.fnDeps)
+                let ctx = withTag(withRet(seedFuncDeps(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.fnDeps), ms.retCtype), tag)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
                 if overloaded and isLastOfName(cs, mi) {
