@@ -1,179 +1,171 @@
-# Proposal: Collections, streams & generic data structures
+# Proposal: Collections, sequences & generic data structures
 
 > **Status: draft / design.** Decides the *shape* of Ξ's collection and lazy-
-> stream APIs and the two language features they rest on. **Nothing here is
-> implemented yet.**
+> sequence APIs (modelled on **Kotlin's** collections) and the two language
+> features they rest on. **Nothing here is implemented yet.**
 
 ## Goal
 
-Give Ξ a proper data-structure layer — growable lists, maps, sets, and **lazy
-streams** — that honours the three commitments:
+Give Ξ a **Kotlin-style** data-structure layer — read-only and mutable lists,
+maps, and sets; a rich functional API; and lazy **sequences** — that honours the
+three commitments:
 
-- **Fast** — zero-cost abstractions: no boxing, no per-stage allocation, close to
-  hand-written C.
-- **Least dependency** — pure Ξ → C99 over libc; no runtime container library.
-- **Easy** — a familiar fluent API (`xs.map(...).filter(...)`), `for x in`, and
-  lambdas that read like the inline function bodies we already have.
+- **Fast** — zero-cost: monomorphized (no boxing), closures inlined, lazy chains
+  fused into a single loop; close to hand-written C.
+- **Least dependency** — pure Ξ → C99 over libc; no container/iterator runtime.
+- **Easy** — the familiar Kotlin surface: `listOf(...)`, `xs.map { ... }`,
+  `asSequence()`, `for x in xs`.
 
 ## The two prerequisites (decided)
 
-Collections and streams rest on two language features. Both are **decided** as
-the path forward:
-
 ### 1. Generics (monomorphization) — *first*
 
-A reusable `List<T>` / `Map<K,V>` / `Stream<T>` needs a type parameter. Ξ already
-monomorphizes the built-in `T[]` array (the compiler emits `xc_arr_<T>_t` and its
-helpers per element type). **Generics generalize exactly this machinery** to user
-types and functions: for each concrete instantiation actually used, emit one
-specialized version.
+Ξ already monomorphizes the built-in `T[]` array (`xc_arr_<T>_t` + helpers per
+element type). **Generics generalize that machinery** to user types and
+functions: for each concrete instantiation used, emit one specialized version —
+**no boxing, no runtime cost**. Type arguments are inferred at call/construction
+sites; type parameters start unbounded and gain interface bounds (`K: Hashable`,
+`T: Comparable`) where maps and sorting need them. This also cleans up typed
+events/channels (which currently round-trip through JSON).
+
+### 2. Closures / lambdas — *for the functional API*
+
+The functional operators carry behaviour, so we need function values. Two forms,
+matching Kotlin's feel while reusing Ξ's `=>`:
 
 ```x
-type List<T> = { ... }                 // generic type
-mapper map<T, U>(xs: List<T>, f: ...) -> List<U> { ... }   // generic function
-
-let xs: List<Integer> = List()         // monomorphized to a concrete struct
+xs.map(o => o.total)            // explicit parameter
+xs.filter { it > 0 }            // trailing lambda + implicit `it` (single param)
+ys.fold(0) { acc, x => acc + x }
 ```
 
-- **No boxing, no runtime cost** — each instantiation is a distinct concrete type,
-  like `T[]` today.
-- **Inference**: infer type arguments at call/construction sites where possible
-  (`List()` in a `List<Integer>` context; `xs.map(double)` from `xs`'s element).
-- **Bounds**: start with *unbounded* type parameters; add interface bounds
-  (`T: Hashable`, `T: Ord`) when maps/sorting need them — expressed with the
-  interfaces we already have.
-- This is the highest-leverage missing piece: it also cleans up typed events and
-  typed channels, which currently round-trip through JSON.
+A closure lowers to an env struct (captured values) + a function pointer — the
+same shape the `parallel { }` block already lifts to; **no new runtime**. Capture
+is **by value** (matches Ξ's value semantics, stays share-nothing-friendly). A
+closure passed to a *fused* sequence never escapes → **zero allocation**; an
+escaping one follows the [memory-management plan](memory-management.md).
 
-### 2. Closures / lambdas — *for streams*
+## Read-only vs mutable (the Kotlin model)
 
-Stream operations carry behaviour (`map`/`filter`/`reduce`), so we need function
-values. The syntax reuses the inline-body arrow already in the language:
+Collections come in a read-only interface and a mutable sub-interface. Most code
+takes the read-only type; only code that needs to grow it asks for the mutable
+one — a cheap, learnable way to express intent without a borrow checker.
 
 ```x
-xs.map(o => o.total)                    // expression lambda
-xs.filter(o => { return o.active })     // block lambda
-ys.reduce(0, (a, b) => a + b)
+interface List<T>          { ... }          // size, get, contains, iterator, + functional ops
+interface MutableList<T>   extends List<T>  // add, set, removeAt, clear, ...
+interface Set<T>           { ... }          interface MutableSet<T> extends Set<T>
+interface Map<K, V>        { ... }          interface MutableMap<K, V> extends Map<K, V>
 ```
 
-- **Representation:** a closure is an env struct (captured values) + a function
-  pointer — the same shape the `parallel { }` block already lifts to. Lowered to a
-  generated function plus a small env; **no new runtime**.
-- **Capture by value**, matching Ξ's value semantics and keeping it share-nothing-
-  friendly (a closure can cross into a thread the way a captured channel does).
-- **Memory:** a closure passed to a *fused* stream (below) never escapes and needs
-  **zero allocation**; an escaping closure follows the
-  [memory-management plan](memory-management.md) (arena/ARC).
-
-## Eager collections — `std/collections`
-
-Mutable, heap-backed, generic. `T[]` stays the primitive; `List<T>` is the
-growable layer over it.
+**Builders** (also Kotlin-style):
 
 ```x
-let xs = List<Integer>()          // empty; or [1, 2, 3].toList()
-xs.push(4)
-xs.len()                          // 4
-xs.get(0)                         // Integer? (bounds-checked)
-xs.set(0, 9)
-xs.contains(9) / xs.indexOf(9)
-xs.removeAt(2) / xs.insert(1, 7) / xs.clear()
-xs.toArray()                      // back to a T[]
-
-let m = Map<String, User>()
-m.set("ada", u)
-m.get("ada")                      // User?
-m.has("ada") / m.remove("ada") / m.len()
-m.keys() / m.values() / m.entries()
-
-let s = Set<String>()
-s.add("x") / s.has("x") / s.remove("x")
-s.union(t) / s.intersect(t) / s.difference(t)
+let a = listOf(1, 2, 3)              // List<Integer> (read-only)
+let b = mutableListOf<Integer>()     // MutableList<Integer>
+let m = mapOf("ada" to 1, "bo" to 2) // Map<String, Integer>
+let s = setOf("x", "y")
+let e = emptyList<String>()
+let built = buildList { it.add(1); it.add(2) }   // build then freeze
 ```
 
-- **`Map`/`Set` keys** need equality + hashing: built in for primitives and
-  `String`; for user types, an interface bound (`K: Hashable`).
-- **Semantics:** lists/maps/sets are **reference-like mutable** values (a handle
-  to a heap structure) — the conventional, least-surprising choice — with
-  reclamation handled by the memory-management plan. (Open question below.)
+`a to b` is infix sugar for `Pair(a, b)`; `Pair<A, B>` has `.first` / `.second`.
 
-## Lazy streams — `std/stream`
+## The functional API (eager, on `List`/`Iterable`)
 
-A `Stream<T>` is a lazy pipeline. The headline property is **loop fusion**: a
-chain compiles to a *single* loop with no intermediate collections and the
-closures inlined — the zero-cost form of laziness, no iterator objects, no
-allocation.
+The Kotlin operator set, returning new collections (eager). A representative slice:
 
 ```x
-let total = stream(orders)
-    .filter(o => o.active)
-    .map(o => o.total)
-    .reduce(0.0, (a, b) => a + b)        // one fused loop, no temp lists
+xs.map { it * 2 } / mapIndexed / mapNotNull
+xs.filter { it > 0 } / filterNot / filterNotNull
+xs.forEach { ... } / forEachIndexed
+xs.fold(0) { a, x => a + x } / reduce / runningFold(=scan)
+xs.flatMap { it.tags } / flatten
+xs.groupBy { it.kind } / associateBy / associateWith / partition { it.active }
+xs.chunked(3) / windowed(2) / zip(ys) / unzip
+xs.distinct / distinctBy { it.id } / sorted / sortedBy { it.age } / reversed
+xs.take(3) / takeLast / takeWhile { ... } / drop / dropWhile / slice(1..3)
+xs.first / firstOrNull / last / lastOrNull / find { ... } / single
+xs.any { ... } / all / none / count { ... }
+xs.sumOf { it.total } / maxByOrNull { it.age } / minOf / average
+xs.joinToString(", ") { it.name } / contains / indexOf / elementAtOrNull
+xs + ys / xs - zs                  // plus / minus
 ```
 
-**Sources:** `stream(xs)` (over a List/array), `range(0, n)`, `repeat(x)`,
-`iterate(seed, f)` (infinite), `once(x)`, `empty()`.
+**Maps:** `m.get(k)` → `V?`, `getValue`, `getOrElse(k) { ... }`,
+`getOrPut(k) { ... }` (mutable), `keys` / `values` / `entries`, `filterKeys` /
+`filterValues`, `mapValues { it.value + 1 }` / `mapKeys`, `forEach { k, v => ... }`,
+`toList()` → `List<Pair<K, V>>`.
 
-**Lazy ops (return `Stream<U>`):** `map`, `filter`, `take(n)`, `drop(n)`,
-`takeWhile`, `dropWhile`, `flatMap`, `zip`, `enumerate`, `distinct`, `scan`.
+## Lazy `Sequence<T>`
 
-**Terminals (force the pipeline):** `reduce` / `fold`, `collect()` → `List<T>`,
-`toArray()`, `forEach(f)`, `count()`, `sum()`, `any(p)` / `all(p)`, `find(p)` →
-`T?`, `first()` → `T?`, `min` / `max`.
-
-Infinite sources are fine when bounded downstream:
-`iterate(1, n => n * 2).take(10).collect()`.
-
-## The iterable protocol
-
-To let user types flow into streams and `for x in`, a tiny generic interface:
+`asSequence()` switches a collection to lazy evaluation; the same operators apply
+but nothing runs until a terminal. The headline property is **loop fusion**: the
+whole chain compiles to a *single* loop with the closures inlined — no
+intermediate collections, no iterator objects, no allocation.
 
 ```x
-interface Iterator<T> { mapper next() -> T? }       // None ends the sequence
+let total = orders.asSequence()
+    .filter { it.active }
+    .map    { it.total }
+    .fold(0.0) { a, b => a + b }     // one fused loop
+```
+
+**Sources:** `asSequence()`, `sequenceOf(...)`, `generateSequence(seed) { next(it) }`
+(infinite), `(1..n).asSequence()`. **Lazy intermediates:** `map`/`filter`/`take`/
+`drop`/`takeWhile`/`flatMap`/`distinct`/`zip`/`mapIndexed`/`scan`. **Terminals:**
+`toList` / `toMutableList` / `toSet` / `forEach` / `fold` / `reduce` / `count` /
+`sum` / `any` / `all` / `find` / `first(OrNull)` / `max(By)OrNull`. Infinite
+sources are fine when bounded: `generateSequence(1) { it * 2 }.take(10).toList()`.
+
+## Iteration protocol & ranges
+
+```x
+interface Iterator<T> { mapper hasNext() -> Bool   mapper next() -> T }
 interface Iterable<T> { mapper iterator() -> Iterator<T> }
 ```
 
-- `for x in xs` already works on arrays; generalize it to anything `Iterable<T>`.
-- `List`/`Map`/`Set`/ranges implement `Iterable`; `stream(it)` accepts any
-  `Iterable<T>`. A `Sequence<T>` is just an `Iterable<T>` whose source is lazy.
+- `for x in xs` (already works on arrays) generalizes to any `Iterable<T>`.
+- `List`/`Set`/`Map.entries`/ranges are `Iterable`; `asSequence()` accepts any
+  `Iterable`.
+- **Ranges:** `1..10` (inclusive), `1 until 10`, `10 downTo 1`, `step 2` — each an
+  `Iterable<Integer>`, usable in `for` and as sequence sources.
 
 ## Other data structures (follow-ons)
 
-Built on the generic core, added as needed rather than up front:
-
-- `Deque<T>` / `Queue<T>` / `Stack<T>` — thin layers over `List<T>`.
-- `PriorityQueue<T>` (binary heap), needs `T: Ord`.
-- Ordered/sorted `Map`/`Set` (balanced tree) when iteration order matters.
-- `LinkedList<T>` only if a real use-case appears (rarely worth it).
+Built on the generic core, added as needed: `ArrayDeque<T>` (and `Stack`/`Queue`
+over it), `PriorityQueue<T>` (heap, needs `T: Comparable`), sorted/`LinkedHashMap`
+when iteration order matters. `T[]` stays the primitive; `MutableList<T>` is the
+growable layer over it.
 
 ## Phasing
 
 1. **Generics** (monomorphization) — the foundation; also benefits events/channels.
-2. **`std/collections`** — `List`, `Map`, `Set` (eager), with `for x in` support.
-3. **Closures / lambdas** (`x => expr`), capture-by-value, lowered like `parallel`.
-4. **`std/stream`** — lazy, loop-fused `Stream<T>` + the `Iterable`/`Iterator`
-   protocol.
-5. Extra structures (`Deque`, `PriorityQueue`, sorted maps) on demand.
+2. **Closures / lambdas** (`=>` and trailing-`{ it }`), capture-by-value.
+3. **`std/collections`** — `List`/`MutableList`, `Set`/`MutableSet`, `Map`/`MutableMap`,
+   builders, the eager functional API, ranges, `for x in` over `Iterable`.
+4. **`std/sequences`** — lazy fused `Sequence<T>` with the same operators.
+5. Extra structures (`ArrayDeque`, `PriorityQueue`, ordered maps) on demand.
 
 ## Why this fits the philosophy
 
-- **Fast:** monomorphization (no boxing) + inlined closures + loop fusion =
-  genuine zero-cost abstractions, the same way `T[]` is today.
-- **Least dependency:** everything is generated Ξ/C over libc — no container or
-  iterator runtime.
-- **Easy:** fluent `.map().filter()`, `for x in`, and `=>` lambdas that mirror the
-  inline function syntax already in the language; no lifetimes to learn.
+- **Fast:** monomorphization + inlined closures + sequence fusion = real zero-cost
+  abstractions, the way `T[]` already is.
+- **Least dependency:** all generated Ξ/C over libc — no collections runtime.
+- **Easy:** it's the Kotlin API people already know — `listOf`, `xs.map { it }`,
+  `asSequence()`, ranges — with no lifetimes to learn.
 
 ## Open questions
 
-- **Collection semantics:** reference-mutable (proposed) vs value + copy-on-write?
-  The latter is more consistent with Ξ's immutable values but costs copies.
-- **Map key bounds:** built-in hashing for primitives/strings + a `Hashable`
-  interface bound for user keys — exact interface shape (`hash()` + `eq()`?).
-- **Generic bounds:** unbounded to start, or interface bounds from day one
-  (needed for `Map` keys and `PriorityQueue`)?
-- **Type-argument inference** depth — constructors and obvious call sites only, or
-  full bidirectional inference?
-- **Closure capture** — by value only (proposed), or allow `&mut` captures later?
-- **Naming** — `Stream` vs `Sequence` vs `Iter`; `collect` vs `toList`.
-- **`Result`/`Option` ergonomics** in pipelines (`filterMap`, `tryCollect`).
+- **Read-only enforcement:** is `List<T>` a genuinely separate interface from
+  `MutableList<T>` (compile-time read-only), or one type with a runtime/`val`
+  convention? (Leaning: separate interfaces, Kotlin-style.)
+- **Map key bounds:** built-in hashing for primitives/`String` + a `Hashable`
+  (`hash()` + `eq()`) interface bound for user keys.
+- **`it` and trailing lambdas:** adopt Kotlin's `{ it }` / `{ a, b => ... }`
+  trailing-lambda call sugar, or stick to explicit `(x) => ...`?
+- **Generic bounds** from day one (needed for `Map` keys / `PriorityQueue`) vs
+  later.
+- **Destructuring** (`let (k, v) = pair`, `for (k, v) in m`) — include with Pairs?
+- **Null vs Result** in the API (`getOrNull` returning `T?` — already idiomatic
+  via Ξ optionals).
