@@ -1,5 +1,5 @@
-" Vim syntax file for the X programming language.
-" Language: X
+" Vim syntax file for the X (Xi) programming language.
+" Language: X / Xi
 " Works in Vim and Neovim (legacy syntax).
 
 if exists("b:current_syntax")
@@ -8,21 +8,31 @@ endif
 
 " ── keywords ─────────────────────────────────────────────────────
 syn keyword xKeyword type interface class implements extends deps bind as
-syn keyword xKeyword module scope import export namespace extern
+syn keyword xKeyword module scope import export namespace extern event
 syn keyword xKeyword let return if else match for while loop break continue
-syn keyword xKeyword unsafe spawn when otherwise where
+syn keyword xKeyword unsafe spawn when otherwise where hit
+" interrupts / resumable conditions
+syn keyword xKeyword interrupt interrupts signal try catch recover skip
+" atoms & state machines
+syn keyword xKeyword atom state transition machine states initial terminal data update on
+" threading (parallel block + channel/thread builtins)
+syn keyword xKeyword parallel
+
 syn keyword xStorage async own dup move
 syn keyword xScope   singleton transient scoped
-syn keyword xFunctionKind mapper projector predicate consumer producer reducer creator action entry
+" function kinds (intent annotations)
+syn keyword xFunctionKind mapper projector predicate consumer producer reducer creator action decision listener entry
 syn keyword xOperator and or not is in matches await
 syn keyword xBoolean true false
 syn keyword xConstant none
-syn keyword xBuiltin self input value
+" built-in facilities / pseudo-values
+syn keyword xBuiltin self input value thread Events
 
-" ── primitive types ──────────────────────────────────────────────
-syn keyword xType Number Integer Bool String Char Timestamp Void Size cstring
+" ── primitive & runtime types ─────────────────────────────────────
+syn keyword xType Number Integer Bool String Char Timestamp Void Size cstring Bytes Json
+syn keyword xType Channel Thread Event HttpRequest HttpResponse
 
-" Uppercase-led identifiers read as type names.
+" Uppercase-led identifiers read as type names (incl. sum-type variants).
 syn match xTypeName "\<\u\w*\>"
 
 " Lowercase identifier immediately before '(' reads as a function/call.

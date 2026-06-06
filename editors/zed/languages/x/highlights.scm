@@ -65,6 +65,15 @@
 
 [ "and" "or" "not" "is" "in" "matches" ] @keyword.operator
 
+; ── builtins refined by name (threading / events / runtime types) ──
+; The grammar parses these as plain identifiers; match them by text so they
+; highlight without grammar changes.
+((identifier) @keyword (#eq? @keyword "parallel"))
+((identifier) @variable.special (#any-of? @variable.special "thread" "Events"))
+((identifier) @type.builtin
+  (#any-of? @type.builtin "Channel" "Thread" "Event" "Json" "HttpRequest" "HttpResponse"
+                          "WebRequestHandler" "WebTransport"))
+
 ; ── operators / punctuation ───────────────────────────────────────
 [
   "+" "-" "*" "/" "%" "==" "!=" "<" ">" "<=" ">=" "=" "->"
