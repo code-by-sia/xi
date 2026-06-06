@@ -954,8 +954,8 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
     if peek(ps2).kind == 242 {  // where
         ps2 = advance(ps2)
         hasWhere = true
-        // collect guard tokens until the opening body brace
-        while peek(ps2).kind != 102 and peek(ps2).kind != 0 {
+        // collect guard tokens until the body: a `{` block or an `=>` inline body
+        while peek(ps2).kind != 102 and peek(ps2).kind != 110 and peek(ps2).kind != 0 {
             whereTokens = appendToken(whereTokens, peek(ps2))
             ps2 = advance(ps2)
         }
@@ -971,6 +971,18 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
     let hasTable = false
     let hasOutType = false
     let br = parseBody(ps2)
+    // Inline body: `=> expr` (single line) is sugar for `{ return expr }`.
+    if kindStr != "decision" and peek(ps2).kind == 110 {
+        let ips = advance(ps2)                 // consume =>
+        let ln0 = peek(ips).line
+        let bt: Token[] = []
+        bt = appendToken(bt, mkTok(221, "return", ln0))
+        while peek(ips).kind != 0 and peek(ips).line == ln0 {
+            bt = appendToken(bt, peek(ips))
+            ips = advance(ips)
+        }
+        br = BodyResult { bodyTokens: bt, ps: ips }
+    }
     if kindStr == "decision" {
         let dr = parseDecision(nameTok.text, ps2)
         br = BodyResult { bodyTokens: dr.bodyTokens, ps: dr.ps }

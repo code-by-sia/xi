@@ -120,6 +120,17 @@ predicate isAdult(p: Person) { return p.age >= 18 }
 consumer log(msg: String) { system.stdout.writeln(msg) }
 ```
 
+A one-expression body can be written **inline** with `=>` — sugar for
+`{ return <expr> }` (bounded to its line; use a `{ block }` for multi-line). It
+works for any kind, including methods and `where`-overloads:
+
+```x
+mapper   fullName(p: Person) -> String => p.first + " " + p.last
+predicate isAdult(p: Person)            => p.age >= 18
+mapper   tier(n: Integer) -> String where n >= 100 => "high"
+mapper   tier(n: Integer) -> String                => "low"
+```
+
 ## `where`-guarded overloading
 
 A function may be declared several times under the same name, each with a
