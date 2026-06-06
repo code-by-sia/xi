@@ -266,5 +266,20 @@ match status {
 }
 ```
 
+A `match` arm can be a `{ block }` or — as sugar — a single-line **inline
+expression**, which is returned. Patterns may be a single key, a
+**parenthesised list** of keys (matches any), or `else` / `_` for the default:
+
+```x
+match code {
+    "x"                -> { return 345 }   // block arm
+    "A"                -> 101              // inline: same as -> { return 101 }
+    ("BA", "BD", "BR") -> 200             // multi-key: any of these
+    else               -> 300             // default (alias for `_`)
+}
+```
+
+(An inline arm is bounded to its line; use a `{ block }` for multi-line bodies.)
+
 See [Error handling](error-handling.md) for `T!`, `?`, `ok`/`err`, and
 [Multi-file projects](multi-file.md) for `import`/`namespace`.
