@@ -143,6 +143,11 @@ philosophy and skip the one that doesn't (tracing GC):
    arena in `web.serve`**, so servers stop leaking without any user ceremony.
    Zero dependency, trivial to teach, immediately fixes the only place the status
    quo actually hurts.
+   - **Shipped: per-thread arenas.** Each spawned thread allocates its values
+     (strings, JSON nodes) from its own arena, freed when the thread finishes —
+     so a thread reclaims everything it used on exit. The main thread is
+     unaffected; the share-nothing channel copy makes this safe. (Still freed at
+     thread *exit*, not per scope/iteration — that's the remaining Phase-1 work.)
 
 2. **Phase 2 — automatic reference counting for escaping heap values.** Make ARC
    the general answer for values that outlive their scope (strings, arrays, boxed
