@@ -15,7 +15,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Array types (`T[]`) | ✓ |
 | Type aliases incl. plural/array (`type People = Person[]`, `type Name = String`) | ✓ |
 | `empty T` — the zero value of any type (struct all-zero, array empty) | ✓ |
-| `atom` — active-state store: immutable `state` + `transition` reducers | ✓ |
+| `atom` — active-state store: immutable `state` + `transition` reducers + `undo()`/`canUndo()` time-travel | ✓ |
 | `machine` — finite state machine (named states, machine-wide `data`, transition params, `where` guards, `update`, `.can()`, `IllegalTransition`) | ✓ |
 | Machine **static checks** (unknown-state errors; unreachable / dead-end warnings) | ✓ |
 | `Bytes` — raw binary buffer primitive (distinct from `String`) | ✓ |

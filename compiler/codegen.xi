@@ -1104,12 +1104,22 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 } else {
                 let al = genArgs(toks, p + 2, ctx)
                 if startsWith2(typ, "atom:") {
-                    // atom.transition(args): swap the holder to the reducer result
                     let an = string_slice(typ, 5, string_len(typ))
-                    let sep = ""
-                    if string_len(al.code) > 0 { sep = ", " }
-                    code = "(__atom_" + an + " = xc_" + an + "__" + fld + "(__atom_" + an + sep + al.code + "))"
-                    typ = atomStateTypeName(ctx.prog, an)
+                    if fld == "undo" {
+                        // atom.undo(): revert to the previous state (no-op if none)
+                        code = "xc_atom_" + an + "_undo()"
+                        typ = atomStateTypeName(ctx.prog, an)
+                    } else {
+                    if fld == "canUndo" {
+                        code = "(__atom_" + an + "_histlen > 0)"
+                        typ = "Bool"
+                    } else {
+                        // atom.transition(args): push history, swap to the reducer result
+                        let sep = ""
+                        if string_len(al.code) > 0 { sep = ", " }
+                        code = "(xc_atom_" + an + "_push(), __atom_" + an + " = xc_" + an + "__" + fld + "(__atom_" + an + sep + al.code + "))"
+                        typ = atomStateTypeName(ctx.prog, an)
+                    } }
                 } else {
                 if startsWith2(typ, "machinetype:") {
                     // Machine.start(...) -> xc_Machine__start(...)
@@ -3652,7 +3662,17 @@ mapper genAtomDecls(prog: Program) -> String {
     let n = atomSpecLen(prog.atoms)
     while i < n {
         let a = atomSpecGet(prog.atoms, i)
-        out = out + "static xc_" + a.stateTypeName + "_t __atom_" + a.name + ";\n"
+        let st = "xc_" + a.stateTypeName + "_t"
+        out = out + "static " + st + " __atom_" + a.name + ";\n"
+        // Bounded history for undo()/time-travel (keeps the most recent states).
+        out = out + "static " + st + " __atom_" + a.name + "_hist[256];\n"
+        out = out + "static int __atom_" + a.name + "_histlen = 0;\n"
+        out = out + "static void xc_atom_" + a.name + "_push(void) {\n"
+        out = out + "    if (__atom_" + a.name + "_histlen == 256) { memmove(__atom_" + a.name + "_hist, __atom_" + a.name + "_hist + 1, 255 * sizeof(" + st + ")); __atom_" + a.name + "_histlen = 255; }\n"
+        out = out + "    __atom_" + a.name + "_hist[__atom_" + a.name + "_histlen++] = __atom_" + a.name + ";\n}\n"
+        out = out + "static " + st + " xc_atom_" + a.name + "_undo(void) {\n"
+        out = out + "    if (__atom_" + a.name + "_histlen > 0) __atom_" + a.name + " = __atom_" + a.name + "_hist[--__atom_" + a.name + "_histlen];\n"
+        out = out + "    return __atom_" + a.name + ";\n}\n"
         let j = 0
         let m = funcSpecLen(a.transitions)
         while j < m {

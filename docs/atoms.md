@@ -33,6 +33,10 @@ let n = cart.current.items   // read the current immutable snapshot
   the *current* state as `s` automatically — you supply only the payload — then
   stores the returned value. A transition with no payload is just `f(s: T) -> T`.
 - **`name.current`** reads the current value.
+- **Time-travel:** every transition records the prior state, so **`name.undo()`**
+  reverts to it (returning the restored value) and **`name.canUndo()`** reports
+  whether there's anything to revert. History is bounded (the most recent 256
+  states), so undo can't grow memory without limit.
 
 ## Lowering
 

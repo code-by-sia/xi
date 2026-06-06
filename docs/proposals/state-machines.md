@@ -25,7 +25,10 @@
 - **Per-instance stores.** Both `atom`s and machine-backed stores are global
   singletons today; multiple independent instances aren't expressible.
 
-- **History / time-travel, entry/exit actions, `async` transitions.**
+- **History / time-travel** — **done for atoms.** Every atom transition records
+  the prior state; `atom.undo()` reverts and `atom.canUndo()` queries it (bounded
+  to the most recent 256 states). Machine history (a value-level snapshot list)
+  and **entry/exit actions** / **`async` transitions** remain.
 
 - ~~**Static checks** on the machine graph.~~ **Done (partial).** The compiler now
   reports unknown state references (error) and unreachable / dead-end states
