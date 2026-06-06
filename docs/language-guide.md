@@ -244,30 +244,29 @@ class TaxEngine implements Engine {
 | `d: I or J` | the resolved `I`, or class `J` if none qualifies |
 | `d: I?` | the implementation if one exists, else `none` |
 
-### Function-level dependencies
+### Function-, method-, and entry-level dependencies
 
-A function can declare its own deps in a block between the kind and the name;
-they are auto-resolved on entry and visible in the body:
+A function, method, or `entry` can declare its own deps between the kind and the
+name; they are auto-resolved before the body and visible by name. Use `(…)` for
+plain deps and `{…}` when you need disambiguation (`where` / `or` / `I[]` / `I?`):
 
 ```x
-mapper { logger: Logger } mapPerson(p: Person) -> ResponseDTO {
+mapper (logger: Logger) mapPerson(p: Person) -> ResponseDTO {      // simple: ( )
     logger.print("mapping " + p.name)
     return ResponseDTO { greeting: "Hello, " + p.name }
 }
-```
 
-`entry` (e.g. `main`) takes the same deps block, so the program's root can be
-DI-wired too:
+mapper { db: Repo where env == "prod" } load(id: String) -> Row { ... }   // guarded: { }
 
-```x
-async entry { logger: Logger } main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {     // entry too
     logger.print("Hello, world!")
     return 0
 }
 ```
 
 Interface calls dispatch through a vtable; the compiler devirtualizes when the
-concrete type is known. See `examples/di_auto.xi` and `examples/logger_demo.xi`.
+concrete type is known. See the dedicated [Dependency injection](dependency-injection.md)
+page, plus `examples/di_auto.xi` and `examples/logger_demo.xi`.
 
 ## Control flow
 

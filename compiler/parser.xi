@@ -178,7 +178,8 @@ type MethodSpec = {
     bodyTokens: Token[],
     topic:     String,  // for `listener` methods: the subscribed topic ("" otherwise)
     hasWhere:  Bool,    // `where`-guarded overload (routing / dispatch by guard)
-    whereTokens: Token[]
+    whereTokens: Token[],
+    fnDeps:    DepSpec[] // method-level dependencies: kind (d: I) name(...)
 }
 
 // A type declaration (refined or compound)
@@ -887,9 +888,11 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         ps2 = kr.ps
     }
 
-    // optional function-level deps block:  kind { d: I, ... } name(...)
+    // optional function-level deps block, before the name:
+    //   kind { d: I, ... } name(...)   — full form (where / or / list disambiguation)
+    //   kind (d: I, ...)  name(...)    — simple form (plain deps, no guards)
     let fdeps: DepSpec[] = []
-    if peek(ps2).kind == 102 {  // {
+    if peek(ps2).kind == 102 {  // { ... }
         ps2 = advance(ps2)
         while peek(ps2).kind != 103 and peek(ps2).kind != 0 {
             let dr = parseDep(ps2)
@@ -897,6 +900,16 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
             ps2 = dr.ps
         }
         if peek(ps2).kind == 103 { ps2 = advance(ps2) }  // }
+    } else {
+        if peek(ps2).kind == 100 {  // ( ... ) — simple deps
+            ps2 = advance(ps2)
+            while peek(ps2).kind != 101 and peek(ps2).kind != 0 {
+                let dr = parseDep(ps2)
+                fdeps = appendDepSpec(fdeps, dr.spec)
+                ps2 = dr.ps
+            }
+            if peek(ps2).kind == 101 { ps2 = advance(ps2) }  // )
+        }
     }
 
     // name
@@ -1021,7 +1034,7 @@ mapper parseSig(ps: PState, isAsync: Bool) -> SigResult {
     let spec = MethodSpec {
         isAsync: isAsync, kind: kr.kind,
         name: nameTok.text, params: pr.params, retCtype: retCtype,
-        bodyTokens: [], topic: "", hasWhere: false, whereTokens: []
+        bodyTokens: [], topic: "", hasWhere: false, whereTokens: [], fnDeps: []
     }
     return SigResult { spec: spec, ps: ps2 }
 }
@@ -1197,7 +1210,7 @@ mapper parseIface(ps: PState) -> IfaceResult {
                     isAsync: ms.isAsync, kind: ms.kind, name: ms.name,
                     params: ms.params, retCtype: ms.retCtype,
                     bodyTokens: br.bodyTokens, topic: ms.topic,
-                    hasWhere: false, whereTokens: []
+                    hasWhere: false, whereTokens: [], fnDeps: ms.fnDeps
                 }
                 ps2 = br.ps
             }
@@ -1320,7 +1333,7 @@ mapper parseClass(ps: PState) -> ClassResult {
                 isAsync: isAsync, kind: "creator",
                 name: fr.spec.name, params: fr.spec.params,
                 retCtype: fr.spec.retCtype, bodyTokens: fr.spec.bodyTokens,
-                topic: "", hasWhere: false, whereTokens: []
+                topic: "", hasWhere: false, whereTokens: [], fnDeps: fr.spec.fnDeps
             }
             methList = appendMethodSpec(methList, ms)
         } else {
@@ -1333,7 +1346,8 @@ mapper parseClass(ps: PState) -> ClassResult {
                     name: fr.spec.name, params: fr.spec.params,
                     retCtype: fr.spec.retCtype, bodyTokens: fr.spec.bodyTokens,
                     topic: fr.spec.topic,
-                    hasWhere: fr.spec.hasWhere, whereTokens: fr.spec.whereTokens
+                    hasWhere: fr.spec.hasWhere, whereTokens: fr.spec.whereTokens,
+                    fnDeps: fr.spec.fnDeps
                 }
                 methList = appendMethodSpec(methList, ms)
             } else {
@@ -1803,7 +1817,9 @@ creator parseProgram(tokens: Token[]) -> Program {
                             // entry
                             if peek(ps).kind == 219 {
                                 ps = advance(ps)  // entry keyword
-                                // optional deps block:  entry { d: I, ... } name(...)
+                                // optional deps block before the name:
+                                //   entry { d: I, ... } main(...)   — full form
+                                //   entry (d: I, ...)  main(...)    — simple form
                                 let edeps: DepSpec[] = []
                                 if peek(ps).kind == 102 {
                                     ps = advance(ps)
@@ -1813,6 +1829,16 @@ creator parseProgram(tokens: Token[]) -> Program {
                                         ps = dr.ps
                                     }
                                     if peek(ps).kind == 103 { ps = advance(ps) }
+                                } else {
+                                    if peek(ps).kind == 100 {
+                                        ps = advance(ps)
+                                        while peek(ps).kind != 101 and peek(ps).kind != 0 {
+                                            let dr = parseDep(ps)
+                                            edeps = appendDepSpec(edeps, dr.spec)
+                                            ps = dr.ps
+                                        }
+                                        if peek(ps).kind == 101 { ps = advance(ps) }
+                                    }
                                 }
                                 let nameTok = peek(ps)
                                 ps = advance(ps)

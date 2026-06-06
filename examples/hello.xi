@@ -6,7 +6,7 @@
 // code doesn't change.
 import "std/log.xi"
 
-async entry { logger: Logger } main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     logger.print("Hello World!")
     return 0
 }

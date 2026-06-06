@@ -21,7 +21,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `Bytes` — raw binary buffer primitive (distinct from `String`) | ✓ |
 | Result type `T!` with `ok`/`err` and `?` propagation | ✓ |
 | Interfaces with vtable dispatch | ✓ |
-| `entry` dependency injection (`entry { dep: I } main(...)`) | ✓ |
+| `entry` / function / method dependency injection (`(dep: I)` simple or `{ dep: I where … }` form) | ✓ |
 | `Logger` interface + `ConsoleLogger` default (`std/log`) | ✓ |
 | Interface **default methods** (method bodies inherited unless overridden) | ✓ |
 | Generics | ✗ (planned) |
@@ -50,7 +50,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | **Automatic** dependency injection (implementations discovered; `bind` optional) | ✓ |
 | Classes with a `deps { ... }` block | ✓ |
 | Dep disambiguation: `where` guard, list `I[]`, `or` fallback, optional `I?` | ✓ |
-| Function-level deps: `kind { d: I } name(...)` | ✓ |
+| Function/method/entry deps: `kind (d: I) name(...)` (simple) or `{ … }` (where/or/list) | ✓ |
 | `singleton` / `transient` scopes (via optional `bind ... as`) | ✓ |
 | `App.resolve(Interface)` at use sites | ✓ |
 | `module App { bind I -> Impl ... }` overrides | ✓ |
