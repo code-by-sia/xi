@@ -787,13 +787,20 @@ mapper seedParams(ctx: GCtx, cparams: String) -> GCtx {
     return result
 }
 
-// coerce a C expression to a string value for concatenation
-mapper toStrC(code: String, typ: String) -> String {
-    if typ == "String" { return code }
-    if typ == "Integer" { return "xc_integer_to_string(" + code + ")" }
-    if typ == "Bool" { return "xc_bool_to_string(" + code + ")" }
-    if typ == "Number" { return "xc_number_to_string(" + code + ")" }
-    return "xc_number_to_string((xc_number_t)(" + code + "))"
+// Coerce a C expression to a string value for concatenation. (Written as a
+// tabular `decision` — the compiler dogfooding its own decision-table feature:
+// the `typ` column selects the wrapper, and the output expressions build on the
+// `code` input.)
+decision toStrC {
+    in  code: String
+    in  typ:  String
+    out wrapped: String
+    hit first
+    | - | "String"  => code |
+    | - | "Integer" => "xc_integer_to_string(" + code + ")" |
+    | - | "Bool"    => "xc_bool_to_string(" + code + ")" |
+    | - | "Number"  => "xc_number_to_string(" + code + ")" |
+    | - | -         => "xc_number_to_string((xc_number_t)(" + code + "))" |
 }
 
 // ── argument list ─────────────────────────────────────────────────
