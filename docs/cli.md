@@ -34,7 +34,7 @@ via the `XC` env var (default `compiler/xc`) and the runtime via `XC_RUNTIME`.
 
 ```console
 $ ./bin/xi examples/hello.xi
-Hello, World!
+Hello World!
 ```
 
 This compiles the file and runs the resulting binary.

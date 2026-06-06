@@ -1,23 +1,12 @@
-// Hello, world in X
+// Hello, world in Ξ.
+//
+// `Logger` comes from the standard library; writing `{ logger: Logger }` on the
+// entry asks for it by interface and the compiler injects the default
+// (ConsoleLogger) — no setup, no globals. Swap in your own Logger later and this
+// code doesn't change.
+import "std/log.xi"
 
-interface Printer {
-    consumer print(msg: String)
-}
-
-class ConsolePrinter implements Printer {
-    deps {}
-
-    consumer print(msg: String) {
-        system.stdout.writeln(msg)
-    }
-}
-
-module HelloApp {
-    bind Printer -> ConsolePrinter as singleton
-}
-
-async entry main(args: String[]) -> Integer {
-    let printer = HelloApp.resolve(Printer)
-    printer.print("Hello, World!")
+async entry { logger: Logger } main(args: String[]) -> Integer {
+    logger.print("Hello World!")
     return 0
 }

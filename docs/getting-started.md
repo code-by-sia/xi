@@ -56,21 +56,17 @@ This produces:
 ## Hello, world
 
 ```x title="hello.xi"
-interface Printer { consumer print(msg: String) }
+import "std/log.xi"
 
-class ConsolePrinter implements Printer {
-    deps {}
-    consumer print(msg: String) { system.stdout.writeln(msg) }
-}
-
-module HelloApp { bind Printer -> ConsolePrinter as singleton }
-
-async entry main(args: String[]) -> Integer {
-    let printer = HelloApp.resolve(Printer)
-    printer.print("Hello, World!")
+async entry { logger: Logger } main(args: String[]) -> Integer {
+    logger.print("Hello World!")
     return 0
 }
 ```
+
+`{ logger: Logger }` on the entry asks for a `Logger` by interface; the compiler
+injects the standard `ConsoleLogger` — no globals, no setup. (Bind your own
+`Logger` later and `main` doesn't change.)
 
 Compile and run:
 
@@ -78,14 +74,14 @@ Compile and run:
 $ export XC_RUNTIME="$PWD/runtime"
 $ ./compiler/xc hello.xi        # writes build/hello (a native binary)
 $ ./build/hello
-Hello, World!
+Hello World!
 ```
 
 Or do both at once with the `x` tool:
 
 ```console
 $ ./bin/xi hello.xi
-Hello, World!
+Hello World!
 ```
 
 !!! note "XC_RUNTIME"

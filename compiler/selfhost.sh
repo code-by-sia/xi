@@ -55,7 +55,7 @@ fail=0
 for ex in hello refined_types greeting features overload errors; do
     [ -f "examples/$ex.xi" ] || continue
     cp "examples/$ex.xi" "$W/$ex.xi"
-    ( cd "$W" && XC_OUT=. XC_RUNTIME="$ROOT/runtime" ./xc_gen3 "$ex.xi" >/dev/null 2>&1 )
+    ( cd "$W" && XC_OUT=. XC_RUNTIME="$ROOT/runtime" XC_STD="$ROOT" ./xc_gen3 "$ex.xi" >/dev/null 2>&1 )
     if [ -x "$W/$ex" ]; then echo "    ✓ $ex -> $("$W/$ex" 2>&1 | head -1)"; else echo "    ✗ $ex"; fail=1; fi
 done
 [ "$fail" = 0 ] && echo && echo "SELF-HOSTING VERIFIED — source compiles itself to a fixpoint."
