@@ -149,20 +149,17 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
 
 // Convert a base C type (e.g. "xc_string_t", "xc_Person_t") to the suffix
 // used in xc_arr_<suffix>_t / xc_opt_<suffix>_t typedef names.
-mapper ctypeSuffix(ctype: String) -> String {
-    if ctype == "xc_number_t"  { return "number" }
-    if ctype == "xc_integer_t" { return "integer" }
-    if ctype == "xc_bool_t"    { return "bool" }
-    if ctype == "xc_string_t"  { return "string" }
-    if ctype == "xc_char_t"    { return "char" }
-    if ctype == "xc_size_t"    { return "size" }
-    if ctype == "xc_timestamp_t" { return "timestamp" }
-    // Strip leading "xc_" and trailing "_t"
-    let n = string_len(ctype)
-    if n > 5 {
-        return string_slice(ctype, 3, n - 2)
-    }
-    return ctype
+decision ctypeSuffix(ctype: String) -> String {
+    when ctype == "xc_number_t"    => "number"
+    when ctype == "xc_integer_t"   => "integer"
+    when ctype == "xc_bool_t"      => "bool"
+    when ctype == "xc_string_t"    => "string"
+    when ctype == "xc_char_t"      => "char"
+    when ctype == "xc_size_t"      => "size"
+    when ctype == "xc_timestamp_t" => "timestamp"
+    // otherwise strip leading "xc_" and trailing "_t"
+    when string_len(ctype) > 5     => string_slice(ctype, 3, string_len(ctype) - 2)
+    else                           => ctype
 }
 
 // ── Collected declarations ────────────────────────────────────────
