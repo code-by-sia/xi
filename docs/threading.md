@@ -22,8 +22,22 @@ let msg = ch.recv()      // "hello"
 ch.close()
 ```
 
-Payloads are strings today — use [`std/json`](serialization.md) to pass
-structured data across the boundary.
+Channels carry **any data**, not just strings:
+
+- a `String` passes through as-is;
+- a structured value — an `event` or compound `type` — is JSON-serialized on
+  `send` and rebuilt with the typed `recv(T)`;
+- numbers and bools are stringified automatically.
+
+```x
+type Order = { id: Integer, item: String, qty: Integer }
+
+ch.send(Order { id: 1, item: "book", qty: 2 })   // serialized
+let o = ch.recv(Order)                           // rebuilt as an Order
+```
+
+`recv()` with no argument returns the raw `String`; `recv(T)` deserializes a `T`.
+Serialization uses the same derived codecs as `std/web` / `std/events`.
 
 ## `parallel` blocks
 
@@ -67,7 +81,8 @@ See `examples/thread_demo.xi` for a two-worker producer/consumer.
 
 ## Notes & limits
 
-- Channels carry **strings**; serialize structured data with `std/json`.
+- Channels carry strings and structured values (`send(dto)` / `recv(T)`, via
+  derived JSON codecs); the wire format is a copied string.
 - Captures must be channels (the only legal cross-thread references). Other state
   stays thread-local — that's what makes the model share-nothing.
 - `parallel`, `thread`, `Channel`, and `Thread` are reserved when threading is used.

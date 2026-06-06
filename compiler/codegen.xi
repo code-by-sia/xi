@@ -330,11 +330,51 @@ predicate webEnabled(prog: Program) {
     return stringArrLen(implementorsOf(prog, "WebRequestHandler")) > 0
 }
 
-// A JSON codec (xc_tojson_/xc_fromjson_) is emitted for this X type: every
-// event type, plus (when web is in use) every compound type.
+// Does a token body reference threading (a `parallel` block or the `thread`
+// facility)? Used to decide whether to derive codecs for channel payloads.
+predicate tokensUseThread(toks: Token[]) {
+    let i = 0
+    let n = tokenArrLen(toks)
+    while i < n {
+        let t = tokenArrGet(toks, i)
+        if t.kind == 1 {
+            if t.text == "parallel" { return true }
+            if t.text == "thread" { return true }
+        }
+        i = i + 1
+    }
+    return false
+}
+
+predicate usesThreads(prog: Program) {
+    if tokensUseThread(prog.entrySpec.bodyTokens) { return true }
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n {
+        if tokensUseThread(funcSpecGet(prog.functions, i).bodyTokens) { return true }
+        i = i + 1
+    }
+    let ci = 0
+    let cn = classSpecLen(prog.classes)
+    while ci < cn {
+        let cs = classSpecGet(prog.classes, ci)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn {
+            if tokensUseThread(methodSpecGet(cs.methList, mi).bodyTokens) { return true }
+            mi = mi + 1
+        }
+        ci = ci + 1
+    }
+    return false
+}
+
+// A JSON codec (xc_tojson_/xc_fromjson_) is emitted for this X type: every event
+// type, plus (when web or threading is in use, so channels can carry structured
+// payloads) every compound type.
 predicate hasCodec(prog: Program, xn: String) {
     if isEventTypeC(prog, xn) { return true }
-    if webEnabled(prog) and isCompoundTypeC(prog, xn) { return true }
+    if isCompoundTypeC(prog, xn) and (webEnabled(prog) or usesThreads(prog)) { return true }
     return false
 }
 
@@ -1040,11 +1080,43 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     p = al.pos
                 } else {
                 if typ == "Channel" {
-                    let al = genArgs(toks, p + 2, ctx)
-                    if fld == "send"  { code = "xstd_chan_send("  + code + ", " + al.code + ")"  typ = "" }
-                    if fld == "recv"  { code = "xstd_chan_recv("  + code + ")"  typ = "String" }
-                    if fld == "close" { code = "xstd_chan_close(" + code + ")"  typ = "" }
-                    p = al.pos
+                    let recv = code
+                    if fld == "send" {
+                        // ch.send(x): String passes through; a structured value
+                        // (event/compound) is JSON-serialized; primitives stringify.
+                        let dtoE = genExpr(toks, p + 3, ctx)
+                        let payload = dtoE.code   // String / unknown: send as-is
+                        if hasCodec(ctx.prog, dtoE.xtyp) {
+                            payload = "xstd_json_stringify(xc_tojson_" + dtoE.xtyp + "(" + dtoE.code + "))"
+                        } else {
+                            if dtoE.xtyp == "Integer" or dtoE.xtyp == "Number" or dtoE.xtyp == "Bool" {
+                                payload = toStrC(dtoE.code, dtoE.xtyp)
+                            }
+                        }
+                        code = "xstd_chan_send(" + recv + ", " + payload + ")"
+                        typ = ""
+                        p = dtoE.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }   // )
+                    } else {
+                    if fld == "recv" {
+                        if gkind(toks, p + 3) == 101 {
+                            // ch.recv() -> raw String
+                            code = "xstd_chan_recv(" + recv + ")"
+                            typ = "String"
+                            p = p + 4
+                        } else {
+                            // ch.recv(T) -> deserialize a structured T from JSON
+                            let tn = gtext(toks, p + 3)
+                            code = "xc_fromjson_" + tn + "(xstd_json_parse(xstd_chan_recv(" + recv + ")))"
+                            typ = tn
+                            p = p + 4
+                            if gkind(toks, p) == 101 { p = p + 1 }   // )
+                        }
+                    } else {
+                        let al = genArgs(toks, p + 2, ctx)
+                        if fld == "close" { code = "xstd_chan_close(" + recv + ")"  typ = "" }
+                        p = al.pos
+                    } }
                 } else {
                 if typ == "Thread" {
                     let al = genArgs(toks, p + 2, ctx)
@@ -3350,7 +3422,7 @@ mapper genEventCodecs(prog: Program) -> String {
         types = appendString(types, stringArrGet(prog.eventTypes, ei))
         ei = ei + 1
     }
-    if webEnabled(prog) {
+    if webEnabled(prog) or usesThreads(prog) {
         let ti = 0
         let tn = typeSpecLen(prog.types)
         while ti < tn {
@@ -3377,6 +3449,8 @@ mapper genEventCodecs(prog: Program) -> String {
     out = out + "extern xc_Json_t xstd_json_push(xc_Json_t, xc_Json_t);\n"
     out = out + "extern xc_integer_t xstd_json_length(xc_Json_t);\n"
     out = out + "extern xc_Json_t xstd_json_at(xc_Json_t, xc_integer_t);\n"
+    out = out + "extern xc_string_t xstd_json_stringify(xc_Json_t);\n"
+    out = out + "extern xc_Json_t xstd_json_parse(xc_string_t);\n"
     let i = 0
     while i < nc {
         let t = stringArrGet(types, i)
