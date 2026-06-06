@@ -158,9 +158,7 @@ type LexState = {
     col:  Integer
 }
 
-creator mkLexState() -> LexState {
-    return LexState { pos: 0, line: 1, col: 1 }
-}
+creator mkLexState() -> LexState => LexState { pos: 0, line: 1, col: 1 }
 
 // Map a keyword string to its integer kind (a decision table; default = IDENT).
 mapper kwKind(word: String) -> Integer {

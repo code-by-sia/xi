@@ -5,9 +5,7 @@
 
 type PState = { tokens: Token[], pos: Integer }
 
-creator mkPState(tokens: Token[]) -> PState {
-    return PState { tokens: tokens, pos: 0 }
-}
+creator mkPState(tokens: Token[]) -> PState => PState { tokens: tokens, pos: 0 }
 
 // Peek at the current token
 mapper peek(ps: PState) -> Token {
@@ -26,14 +24,10 @@ mapper peekAt(ps: PState, offset: Integer) -> Token {
 }
 
 // Advance position
-mapper advance(ps: PState) -> PState {
-    return PState { tokens: ps.tokens, pos: ps.pos + 1 }
-}
+mapper advance(ps: PState) -> PState => PState { tokens: ps.tokens, pos: ps.pos + 1 }
 
 // Check current token kind
-predicate check(ps: PState, kind: Integer) {
-    return peek(ps).kind == kind
-}
+predicate check(ps: PState, kind: Integer) => peek(ps).kind == kind
 
 // Match (consume) if kind matches; returns new state or same state
 type MatchResult = { ps: PState, matched: Bool, text: String }
@@ -66,9 +60,7 @@ mapper primKindToCtype(kind: Integer) -> String {
     }
 }
 
-mapper identToCtype(name: String) -> String {
-    return "xc_" + name + "_t"
-}
+mapper identToCtype(name: String) -> String => "xc_" + name + "_t"
 
 mapper parseTypeExpr(ps: PState) -> TypeResult {
     let t = peek(ps)
@@ -452,9 +444,7 @@ mapper parseBody(ps: PState) -> BodyResult {
     return BodyResult { bodyTokens: toks, ps: ps2 }
 }
 
-creator mkTok(kind: Integer, text: String, line: Integer) -> Token {
-    return Token { kind: kind, text: text, line: line }
-}
+creator mkTok(kind: Integer, text: String, line: Integer) -> Token => Token { kind: kind, text: text, line: line }
 
 // Decision tables (DxT). Body grammar:
 //     { [hit first] (when <expr> => <expr>)* else => <expr> }
