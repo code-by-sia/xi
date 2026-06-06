@@ -22,8 +22,9 @@
 //           req.header(n), req.parse(T) (typed body via WebTransport).
 // Response: res.send(dto), res.sendStatus(code, msg), res.sendText(code, body).
 //
-// `web.serve` runs a blocking HTTP/1.1 server. (HTTPS / HTTP-2-3 are planned —
-// see the web-stack proposal.)
+// `web.serve` runs a blocking HTTP/1.1 server; `web.serveTLS` (XC_TLS=1) and
+// `web.serveHttp2` (XC_HTTP2=1) add HTTPS / HTTP-2. HTTP/3 (QUIC) is the one
+// remaining transport.
 namespace web
 
 import "web_core.xi"

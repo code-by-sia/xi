@@ -160,8 +160,9 @@ web: serving HTTP/2 on https://0.0.0.0:8443
 $ curl --http2 -k https://localhost:8443/health    # negotiates h2 via ALPN
 ```
 
-HTTP/3 (QUIC) is not yet available — it needs a QUIC stack; see the
-[web-stack proposal](proposals/web-stack.md).
+HTTP/3 (QUIC) is not yet available — it needs a QUIC stack (`ngtcp2`/`quiche`),
+which isn't broadly installed and has no common client to test against; it's the
+one open transport.
 
 ## Notes & limits
 
@@ -169,8 +170,8 @@ HTTP/3 (QUIC) is not yet available — it needs a QUIC stack; see the
   API behind a reverse proxy; concurrency and keep-alive are future work.
 - Routing is by exact `req.path` match in `where` guards. There is no path-pattern
   capture (`/users/:id`); read sub-paths from `req.path` or use query parameters.
-- HTTPS needs OpenSSL at build time (`XC_TLS=1`). **HTTP/2 / HTTP/3** are still
-  planned — see the [web-stack proposal](proposals/web-stack.md).
+- HTTPS / HTTP/2 need OpenSSL (and nghttp2) at build time (`XC_TLS=1` /
+  `XC_HTTP2=1`). **HTTP/3** is the one remaining transport (QUIC).
 - No `%`-decoding of query values yet; no multipart parsing.
 
 See `examples/web_demo.xi`.
