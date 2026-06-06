@@ -132,18 +132,15 @@ mapper depTypeOf(ctx: GCtx, name: String) -> String {
 }
 
 // ── name/type predicates over the program ─────────────────────────
-mapper ctypeToXName(ctype: String) -> String {
-    if ctype == "xc_string_t"  { return "String" }
-    if ctype == "xc_number_t"  { return "Number" }
-    if ctype == "xc_integer_t" { return "Integer" }
-    if ctype == "xc_bool_t"    { return "Bool" }
-    if ctype == "xc_char_t"    { return "Char" }
-    if ctype == "xc_size_t"    { return "Size" }
-    let n = string_len(ctype)
-    if n > 5 {
-        return string_slice(ctype, 3, n - 2)
-    }
-    return ""
+decision ctypeToXName(ctype: String) -> String {
+    when ctype == "xc_string_t"  => "String"
+    when ctype == "xc_number_t"  => "Number"
+    when ctype == "xc_integer_t" => "Integer"
+    when ctype == "xc_bool_t"    => "Bool"
+    when ctype == "xc_char_t"    => "Char"
+    when ctype == "xc_size_t"    => "Size"
+    when string_len(ctype) > 5   => string_slice(ctype, 3, string_len(ctype) - 2)
+    else                         => ""
 }
 
 // Resolve a refined type name to its underlying primitive X-type name.
@@ -641,43 +638,43 @@ mapper fieldTypeNameC(prog: Program, typeName: String, field: String) -> String 
     return ""
 }
 
-mapper builtinForPath(path: String) -> String {
-    if path == "system.stdout.writeln" { return "xc_stdout_writeln" }
-    if path == "system.stdout.write"   { return "xc_stdout_write" }
-    if path == "system.stderr.writeln" { return "xc_stderr_writeln" }
-    if path == "system.stdin.readLine" { return "xc_stdin_readline" }
-    if path == "system.process.exit"   { return "xc_process_exit" }
-    return "0 /* unknown builtin */"
+decision builtinForPath(path: String) -> String {
+    when path == "system.stdout.writeln" => "xc_stdout_writeln"
+    when path == "system.stdout.write"   => "xc_stdout_write"
+    when path == "system.stderr.writeln" => "xc_stderr_writeln"
+    when path == "system.stdin.readLine" => "xc_stdin_readline"
+    when path == "system.process.exit"   => "xc_process_exit"
+    else                                 => "0 /* unknown builtin */"
 }
 
 // X type name -> C element type
-mapper xnameToCtype(xname: String) -> String {
-    if xname == "String"  { return "xc_string_t" }
-    if xname == "Number"  { return "xc_number_t" }
-    if xname == "Integer" { return "xc_integer_t" }
-    if xname == "Bool"    { return "xc_bool_t" }
-    if xname == "Char"    { return "xc_char_t" }
-    return "xc_" + xname + "_t"
+decision xnameToCtype(xname: String) -> String {
+    when xname == "String"  => "xc_string_t"
+    when xname == "Number"  => "xc_number_t"
+    when xname == "Integer" => "xc_integer_t"
+    when xname == "Bool"    => "xc_bool_t"
+    when xname == "Char"    => "xc_char_t"
+    else                    => "xc_" + xname + "_t"
 }
 
 // X type name -> array typedef suffix
-mapper arrSuffixOf(xname: String) -> String {
-    if xname == "String"  { return "string" }
-    if xname == "Number"  { return "number" }
-    if xname == "Integer" { return "integer" }
-    if xname == "Bool"    { return "bool" }
-    if xname == "Char"    { return "char" }
-    return xname
+decision arrSuffixOf(xname: String) -> String {
+    when xname == "String"  => "string"
+    when xname == "Number"  => "number"
+    when xname == "Integer" => "integer"
+    when xname == "Bool"    => "bool"
+    when xname == "Char"    => "char"
+    else                    => xname
 }
 
 // array typedef suffix -> element X type name
-mapper xnameFromArrSuffix(suf: String) -> String {
-    if suf == "string"  { return "String" }
-    if suf == "number"  { return "Number" }
-    if suf == "integer" { return "Integer" }
-    if suf == "bool"    { return "Bool" }
-    if suf == "char"    { return "Char" }
-    return suf
+decision xnameFromArrSuffix(suf: String) -> String {
+    when suf == "string"  => "String"
+    when suf == "number"  => "Number"
+    when suf == "integer" => "Integer"
+    when suf == "bool"    => "Bool"
+    when suf == "char"    => "Char"
+    else                  => suf
 }
 
 predicate endsWith2(s: String, suffix: String) {
@@ -694,16 +691,16 @@ predicate startsWith2(s: String, prefix: String) {
 }
 
 // Primitive token kind -> C type (for type annotations in let statements)
-mapper primCtypeK(k: Integer) -> String {
-    if k == 260 { return "xc_number_t" }
-    if k == 261 { return "xc_integer_t" }
-    if k == 262 { return "xc_bool_t" }
-    if k == 263 { return "xc_string_t" }
-    if k == 264 { return "xc_char_t" }
-    if k == 265 { return "void" }
-    if k == 266 { return "xc_size_t" }
-    if k == 267 { return "const char*" }
-    return ""
+decision primCtypeK(k: Integer) -> String {
+    when k == 260 => "xc_number_t"
+    when k == 261 => "xc_integer_t"
+    when k == 262 => "xc_bool_t"
+    when k == 263 => "xc_string_t"
+    when k == 264 => "xc_char_t"
+    when k == 265 => "void"
+    when k == 266 => "xc_size_t"
+    when k == 267 => "const char*"
+    else          => ""
 }
 
 // Read a type expression from a token stream and return its C type string.
@@ -3200,25 +3197,23 @@ mapper arrElemCtype(fct: String) -> String {
     return "xc_" + suf + "_t"
 }
 
-mapper jsonEncodeExpr(prog: Program, fct: String, expr: String) -> String {
-    if fct == "xc_string_t"  { return "xstd_json_string(" + expr + ")" }
-    if fct == "xc_number_t"  { return "xstd_json_number(" + expr + ")" }
-    if fct == "xc_integer_t" { return "xstd_json_number((xc_number_t)(" + expr + "))" }
-    if fct == "xc_bool_t"    { return "xstd_json_bool(" + expr + ")" }
-    if fct == "xc_Json_t"    { return expr }
-    let xn = ctypeToXName(fct)
-    if hasCodec(prog, xn) { return "xc_tojson_" + xn + "(" + expr + ")" }
-    return ""
+decision jsonEncodeExpr(prog: Program, fct: String, expr: String) -> String {
+    when fct == "xc_string_t"  => "xstd_json_string(" + expr + ")"
+    when fct == "xc_number_t"  => "xstd_json_number(" + expr + ")"
+    when fct == "xc_integer_t" => "xstd_json_number((xc_number_t)(" + expr + "))"
+    when fct == "xc_bool_t"    => "xstd_json_bool(" + expr + ")"
+    when fct == "xc_Json_t"    => expr
+    when hasCodec(prog, ctypeToXName(fct)) => "xc_tojson_" + ctypeToXName(fct) + "(" + expr + ")"
+    else => ""
 }
-mapper jsonDecodeExpr(prog: Program, fct: String, getexpr: String) -> String {
-    if fct == "xc_string_t"  { return "xstd_json_as_string(" + getexpr + ")" }
-    if fct == "xc_number_t"  { return "xstd_json_as_number(" + getexpr + ")" }
-    if fct == "xc_integer_t" { return "(xc_integer_t)xstd_json_as_number(" + getexpr + ")" }
-    if fct == "xc_bool_t"    { return "xstd_json_as_bool(" + getexpr + ")" }
-    if fct == "xc_Json_t"    { return getexpr }
-    let xn = ctypeToXName(fct)
-    if hasCodec(prog, xn) { return "xc_fromjson_" + xn + "(" + getexpr + ")" }
-    return ""
+decision jsonDecodeExpr(prog: Program, fct: String, getexpr: String) -> String {
+    when fct == "xc_string_t"  => "xstd_json_as_string(" + getexpr + ")"
+    when fct == "xc_number_t"  => "xstd_json_as_number(" + getexpr + ")"
+    when fct == "xc_integer_t" => "(xc_integer_t)xstd_json_as_number(" + getexpr + ")"
+    when fct == "xc_bool_t"    => "xstd_json_as_bool(" + getexpr + ")"
+    when fct == "xc_Json_t"    => getexpr
+    when hasCodec(prog, ctypeToXName(fct)) => "xc_fromjson_" + ctypeToXName(fct) + "(" + getexpr + ")"
+    else => ""
 }
 
 // Derived JSON codec for one event type (used only at the process boundary).
