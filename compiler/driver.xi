@@ -175,9 +175,7 @@ mapper renameTok(t: Token, prefix: String, exports: String[]) -> Token {
 // qualified-name registry for cross-file reference collapsing.
 // Typed empty String[] (a bare `[]` is only valid in a typed context, not as
 // a call argument, so we build it via a return-cast here).
-creator emptyStrings() -> String[] {
-    return []
-}
+creator emptyStrings() -> String[] => []
 
 creator loadModule(path: String, visited: String[]) -> LoadResult {
     if strArrContains(visited, path) {
