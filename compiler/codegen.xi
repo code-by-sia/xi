@@ -1655,6 +1655,32 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let cond = ""
         let bindName = ""
         let bindExpr = subj
+        if pt.kind == 223 {
+            // `else -> ...` default arm (alias for `_`)
+            isWild = true
+            p = p + 1
+        } else {
+        if pt.kind == 100 {
+            // multi-key selector: (lit, lit, ...) -> matches any listed literal
+            p = p + 1
+            let parts = ""
+            while gkind(toks, p) != 101 and gkind(toks, p) != 0 {
+                let lt = tokenArrGet(toks, p)
+                let c1 = ""
+                if lt.kind == 2 { c1 = subj + " == " + lt.text + "LL" } else {
+                if lt.kind == 3 { c1 = subj + " == " + lt.text } else {
+                if lt.kind == 4 { c1 = "xc_string_eq(" + subj + ", xc_string_from_cstr(\"" + lt.text + "\"))" } else {
+                    c1 = "" } } }
+                if string_len(c1) > 0 {
+                    if string_len(parts) > 0 { parts = parts + " || " }
+                    parts = parts + c1
+                }
+                p = p + 1
+                if gkind(toks, p) == 106 { p = p + 1 }   // ,
+            }
+            if gkind(toks, p) == 101 { p = p + 1 }       // )
+            cond = "(" + parts + ")"
+        } else {
         if pt.kind == 1 and isVariantNameC(ctx.prog, pt.text) {
             // sum-type variant pattern:  Variant [binding] -> body
             let sumN = sumOfVariant(ctx.prog, pt.text)
@@ -1691,7 +1717,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
                 if pt.text == "_" { bindName = "" } else { bindName = pt.text }
             }
             p = p + 1
-        } } } } } }
+        } } } } } } } }
         if gkind(toks, p) == 109 { p = p + 1 }   // ->
         let bctx = ctx
         if string_len(bindName) > 0 { bctx = addSym(ctx, bindName, "") }
@@ -1705,9 +1731,23 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             bodyCode = genStmts(toks, p + 1, close, bctx)
             p = close + 1
         } else {
-            let be = genExpr(toks, p, bctx)
-            bodyCode = "        " + be.code + ";\n"
-            p = be.pos
+            // inline arm: `pattern -> expr` (single line) is sugar for `{ return expr }`.
+            // Bound the expression to its own line so it can't swallow the next arm
+            // (e.g. a following `(a, b) -> ...` would otherwise parse as a call).
+            let ln0 = tokenArrGet(toks, p).line
+            let q = p
+            while gkind(toks, q) != 0 and gkind(toks, q) != 103 and tokenArrGet(toks, q).line == ln0 {
+                q = q + 1
+            }
+            let sub: Token[] = []
+            let si = p
+            while si < q { sub = appendToken(sub, tokenArrGet(toks, si))  si = si + 1 }
+            sub = appendToken(sub, Token { kind: 0, text: "", line: ln0 })
+            let be = genExpr(sub, 0, bctx)
+            let rc = be.code
+            if rc == "{0}" { rc = "(" + ctx.retCtype + "){0}" }
+            bodyCode = "        return " + rc + ";\n"
+            p = q
         }
         if gkind(toks, p) == 106 { p = p + 1 }   // ,
         if isWild {

@@ -23,7 +23,6 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Interfaces with vtable dispatch | ✓ |
 | Interface **default methods** (method bodies inherited unless overridden) | ✓ |
 | Generics | ✗ (planned) |
-| Sum types / enums with exhaustive `match` | ✗ (planned) |
 
 ## Functions & control flow
 
@@ -33,7 +32,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Decision tables — `decision` kind (`when <cond> => <result>`, `hit first`) | ✓ (MVP) |
 | Purity enforcement (pure kinds cannot mutate or be `async`) | ✓ (reference checks) |
 | `where`-guarded overloading — free functions **and methods** (runtime overload selection by guard) | ✓ |
-| `match` (literal / string / bool / bound-ident / `_` patterns) | ✓ |
+| `match` (literal / string / bool / bound-ident / variant / `_` / `else` patterns; multi-key `(a, b)` arms; inline `-> expr` or `{ block }` bodies) | ✓ |
 | Interrupts — resumable conditions (`interrupt`/`signal`/`try`/`catch`, `skip`+`recover`) | ✓ (MVP) |
 | `for` loops over arrays | ✓ |
 | `if` / `if let` | ✓ |
