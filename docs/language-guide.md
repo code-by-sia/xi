@@ -251,13 +251,23 @@ they are auto-resolved on entry and visible in the body:
 
 ```x
 mapper { logger: Logger } mapPerson(p: Person) -> ResponseDTO {
-    logger.log("mapping " + p.name)
+    logger.print("mapping " + p.name)
     return ResponseDTO { greeting: "Hello, " + p.name }
 }
 ```
 
+`entry` (e.g. `main`) takes the same deps block, so the program's root can be
+DI-wired too:
+
+```x
+async entry { logger: Logger } main(args: String[]) -> Integer {
+    logger.print("Hello, world!")
+    return 0
+}
+```
+
 Interface calls dispatch through a vtable; the compiler devirtualizes when the
-concrete type is known. See `examples/di_auto.xi`.
+concrete type is known. See `examples/di_auto.xi` and `examples/logger_demo.xi`.
 
 ## Control flow
 

@@ -3613,7 +3613,8 @@ mapper genEntry(prog: Program) -> String {
     out = out + "    xc_args.cap = (xc_size_t)argc;\n"
     out = out + "    xc_args.data = (xc_string_t*)malloc(argc * sizeof(xc_string_t));\n"
     out = out + "    for (int i = 0; i < argc; i++) xc_args.data[i] = xc_string_from_cstr(argv[i]);\n"
-    let ctx = withTag(mkGCtx(prog), "entry")
+    out = out + funcDepPrologue(prog, es.fnDeps)
+    let ctx = withTag(seedFuncDeps(mkGCtx(prog), es.fnDeps), "entry")
     if string_len(es.params) > 0 {
         let pname = lastWord(es.params)
         out = out + "    xc_arr_string_t " + pname + " = xc_args;\n"

@@ -173,12 +173,14 @@ auto-(de)serialize via a `WebTransport` (JSON by default). See [Web](web.md).
 
 **Share-nothing threads + channels.** A `parallel` block runs on a new OS thread
 and yields a `Thread` handle; threads communicate only through thread-safe
-channels (string payloads, copied across the boundary). See [Threading](threading.md).
+channels, which carry strings or structured values. See [Threading](threading.md).
 
 | Name | Kind / Signature |
 |------|------------------|
 | `thread.channel()` | `() -> Channel` (thread-safe FIFO) |
-| `ch.send(s)` / `ch.recv()` / `ch.close()` | `(Channel, String)` / `(Channel) -> String` (blocks) / `(Channel)` |
+| `ch.send(x)` | String as-is; a structured `event`/`type` is JSON-serialized; numbers/bools stringify |
+| `ch.recv()` / `ch.recv(T)` | raw `String` / deserialize a structured `T` (blocks) |
+| `ch.close()` | `(Channel)` — wakes a blocked `recv` |
 | `parallel [(caps…)] { … }` | spawn a thread, evaluates to a `Thread` (captures must be channels) |
 | `thread.stopped()` | `() -> Bool` — inside a block, has stop been requested? |
 | `t.stop()` / `t.wait()` / `t.running()` | request stop / join / `Bool` liveness |
@@ -213,6 +215,17 @@ receive). See [Events](events.md).
 | `println`, `print`, `eprintln` | `consumer (String)` |
 | `readLine` | `() -> String` |
 | `eof` | `predicate ()` |
+
+### `log` — `std/log.xi`
+
+A `Logger` interface with a `ConsoleLogger` default (DI picks it as the sole
+implementor). Inject `Logger` anywhere deps are wired — classes, functions, and
+`entry` — and bind your own implementor to redirect output.
+
+| Name | Kind / Signature |
+|------|------------------|
+| `Logger` | interface — `consumer print(msg: String)` / `consumer error(msg: String)` |
+| `ConsoleLogger` | default impl: `print` -> stdout, `error` -> stderr |
 
 ### `fs` — `std/fs.xi`
 

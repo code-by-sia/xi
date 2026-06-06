@@ -1813,6 +1813,17 @@ creator parseProgram(tokens: Token[]) -> Program {
                             // entry
                             if peek(ps).kind == 219 {
                                 ps = advance(ps)  // entry keyword
+                                // optional deps block:  entry { d: I, ... } name(...)
+                                let edeps: DepSpec[] = []
+                                if peek(ps).kind == 102 {
+                                    ps = advance(ps)
+                                    while peek(ps).kind != 103 and peek(ps).kind != 0 {
+                                        let dr = parseDep(ps)
+                                        edeps = appendDepSpec(edeps, dr.spec)
+                                        ps = dr.ps
+                                    }
+                                    if peek(ps).kind == 103 { ps = advance(ps) }
+                                }
                                 let nameTok = peek(ps)
                                 ps = advance(ps)
                                 if peek(ps).kind == 100 { ps = advance(ps) }
@@ -1829,7 +1840,7 @@ creator parseProgram(tokens: Token[]) -> Program {
                                     params: pr.params,
                                     retCtype: retCtypeFor("entry", rr.ctype),
                                     bodyTokens: br.bodyTokens,
-                                    hasWhere: false, whereTokens: [], fnDeps: [], topic: ""
+                                    hasWhere: false, whereTokens: [], fnDeps: edeps, topic: ""
                                 }
                             } else {
                                 // creator or function kind

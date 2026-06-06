@@ -21,6 +21,8 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `Bytes` — raw binary buffer primitive (distinct from `String`) | ✓ |
 | Result type `T!` with `ok`/`err` and `?` propagation | ✓ |
 | Interfaces with vtable dispatch | ✓ |
+| `entry` dependency injection (`entry { dep: I } main(...)`) | ✓ |
+| `Logger` interface + `ConsoleLogger` default (`std/log`) | ✓ |
 | Interface **default methods** (method bodies inherited unless overridden) | ✓ |
 | Generics | ✗ (planned) |
 
