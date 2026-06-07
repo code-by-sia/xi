@@ -39,6 +39,10 @@ jobs:
           export XC_RUNTIME="$PWD/runtime"
           for f in examples/*.xi examples/proj/main.xi examples/showcase/main.xi; do
             echo "== $f =="
+            case "$(basename "$f")" in
+              # *_test.xi files have no entry — they run via `xi test` below.
+              *_test.xi) echo "  (test file — run via xi test)"; continue ;;
+            esac
             ./compiler/xc "$f" >/dev/null
             bin="build/$(basename "${f%.xi}")"
             case "$(basename "$f")" in
@@ -46,4 +50,13 @@ jobs:
               web_demo.xi) echo "  (server example — compile-only)" ;;
               *) if [ -x "$bin" ]; then "$bin" | head -3 || true; fi ;;
             esac
+          done
+
+      - name: Run unit tests (xi test)
+        run: |
+          set -euo pipefail
+          export XC="$PWD/compiler/xc" XC_RUNTIME="$PWD/runtime"
+          for f in examples/*_test.xi; do
+            echo "== xi test $f =="
+            ./bin/xi test "$f"
           done

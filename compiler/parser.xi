@@ -327,7 +327,8 @@ type Program = {
     atoms:      AtomSpec[],   // declared `atom`s
     machines:   MachineSpec[], // declared `machine`s
     eventTypes: String[],     // names of declared `event` types (typed payloads)
-    tables:     DecisionTable[] // table-form `decision`s (emitted by codegen)
+    tables:     DecisionTable[], // table-form `decision`s (emitted by codegen)
+    tests:      FuncSpec[]     // `test "name" (deps) { ... }` cases (kind="test")
 }
 
 // C helpers for building typed arrays used by Program
@@ -1742,6 +1743,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     let machines: MachineSpec[] = []
     let eventTypes: String[] = []
     let tables: DecisionTable[] = []
+    let tests: FuncSpec[] = []
     let entrySpec = FuncSpec {
         isCreator: false, isAsync: false,
         kind: "entry", name: "main",
@@ -1873,6 +1875,31 @@ creator parseProgram(tokens: Token[]) -> Program {
                                 ps = advance(ps)
                             }
 
+                            // test "name" (deps?) { body }
+                            if peek(ps).kind == 299 {
+                                ps = advance(ps)  // test keyword
+                                let testName = peek(ps).text   // string label
+                                ps = advance(ps)
+                                let tdeps: DepSpec[] = []
+                                if peek(ps).kind == 100 {      // (deps)
+                                    ps = advance(ps)
+                                    while peek(ps).kind != 101 and peek(ps).kind != 0 {
+                                        let dr = parseDep(ps)
+                                        tdeps = appendDepSpec(tdeps, dr.spec)
+                                        ps = dr.ps
+                                    }
+                                    if peek(ps).kind == 101 { ps = advance(ps) }
+                                }
+                                let tb = parseBody(ps)
+                                ps = tb.ps
+                                tests = appendFuncSpec(tests, FuncSpec {
+                                    isCreator: false, isAsync: isAsync,
+                                    kind: "test", name: testName,
+                                    params: "", retCtype: "void",
+                                    bodyTokens: tb.bodyTokens,
+                                    hasWhere: false, whereTokens: [], fnDeps: tdeps, topic: ""
+                                })
+                            } else {
                             // entry
                             if peek(ps).kind == 219 {
                                 ps = advance(ps)  // entry keyword
@@ -1935,6 +1962,7 @@ creator parseProgram(tokens: Token[]) -> Program {
                                     }
                                 }
                             }
+                            }
                         }
                     }
                 }
@@ -1948,7 +1976,8 @@ creator parseProgram(tokens: Token[]) -> Program {
         types: types, ifaces: ifaces, classes: classes,
         modules: modules, functions: functions, externs: externs,
         entrySpec: entrySpec, interrupts: interrupts, atoms: atoms,
-        machines: machines, eventTypes: eventTypes, tables: tables
+        machines: machines, eventTypes: eventTypes, tables: tables,
+        tests: tests
     }
 }
 

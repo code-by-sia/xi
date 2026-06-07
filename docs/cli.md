@@ -72,6 +72,19 @@ It no-ops with "already up to date" when you're on the latest version. Notes:
 - Requires `curl` and `tar` on `PATH`. Override the source repo with
   `XI_UPDATE_REPO=owner/name`.
 
+### Run tests
+
+`xi test <file.xi>` compiles in test mode and runs the file's `test` cases,
+printing `ok`/`not ok` per case, a summary, and a nonzero exit code if any failed.
+See [Testing](testing.md).
+
+```console
+$ xi test examples/calc_test.xi
+ok - addition
+...
+3 tests, 3 passed, 0 failed
+```
+
 ### AI agent skill
 
 `xi skill` fetches the latest **[Xi agent guide](skill.md)** (a single markdown
