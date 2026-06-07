@@ -67,8 +67,7 @@ mapper area(s: Shape) -> Number {
 ```
 
 A sum type is an ordinary type: use it in fields (`type Light = { color: Color }`),
-arrays (`Shape[]`), parameters, and returns. It lowers to a tagged union — an
-`int` tag plus a union of the variant payloads. Variant names must be unique
+arrays (`Shape[]`), parameters, and returns. Variant names must be unique
 across all sum types in the program.
 
 ## Type aliases
@@ -156,20 +155,9 @@ mapper mapResponse(res: ApiResponse) -> String {        // default
 }
 ```
 
-It lowers to one implementation per overload plus a dispatcher:
-
-```c
-static xc_string_t xc_mapResponse(xc_ApiResponse_t res) {
-    if ((res.status == 200LL)) return xc_mapResponse__ovl0(res);
-    if ((res.status == 404LL)) return xc_mapResponse__ovl1(res);
-    if ((res.status >= 500LL)) return xc_mapResponse__ovl2(res);
-    return xc_mapResponse__ovl3(res);
-}
-```
-
 The same applies to **methods**: a class may declare a method several times with
-`where` guards (each can use `self`/deps), and the compiler builds a per-method
-dispatcher behind its interface slot. `std/web` routing is exactly this — several
+`where` guards (each can use `self`/deps), and the first matching guard wins.
+`std/web` routing is exactly this — several
 `action handle(req, res) where req.path == "…"` overloads plus a default.
 
 ## Classes, deps, and dependency injection

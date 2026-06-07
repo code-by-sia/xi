@@ -38,19 +38,6 @@ let n = cart.current.items   // read the current immutable snapshot
   whether there's anything to revert. History is bounded (the most recent 256
   states), so undo can't grow memory without limit.
 
-## Lowering
-
-```c
-static xc_Cart_t __atom_cart;                         /* the holder */
-static xc_Cart_t xc_cart__addItem(xc_Cart_t s, xc_number_t price) { /* reducer */ }
-/* cart.addItem(9.99)  ->  (__atom_cart = xc_cart__addItem(__atom_cart, 9.99)) */
-/* cart.current        ->  __atom_cart */
-```
-
-Holders are seeded at startup. There is no runtime machinery beyond the reducer
-call and the assignment — and (currently) a single, program-global instance per
-atom.
-
 ## Notes & limits
 
 - One global instance per `atom` (no per-instance stores yet).

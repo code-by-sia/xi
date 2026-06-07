@@ -105,22 +105,6 @@ system.stdout.writeln(l.state + " / " + l.data.attempts)
 
 Guards are written on the line following the arrow; `update` blocks may span lines.
 
-## Lowering
-
-A machine compiles to a small integer tag plus pure functions — no runtime
-machinery beyond a comparison and a struct copy:
-
-```c
-typedef struct { xc_integer_t __state; } xc_Door_t;
-static xc_Door_t   xc_Door__start(void);          /* Door.start() */
-static xc_string_t xc_Door__state(xc_Door_t);     /* d.state      */
-static xc_boolean_t xc_Door__isTerminal(xc_Door_t);
-static xc_Door_t   xc_Door__open(xc_Door_t self); /* checks source, else signals */
-```
-
-Each transition checks the current tag against its allowed sources; on a match it
-returns a copy with the new tag, otherwise it raises `IllegalTransition`.
-
 ## Machines vs. atoms
 
 A machine value is **immutable and explicit** — every move produces a new value

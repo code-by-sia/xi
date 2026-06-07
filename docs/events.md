@@ -154,15 +154,6 @@ element by element. (Arrays of *primitive numbers/bools* in a payload await the
 language's general primitive-array-in-struct support; `String[]` and arrays of
 `event` types work today.)
 
-## Lowering
-
-`events.publish(topic, dto)` wraps the DTO into an envelope (`xc_wrap_T` heap-copies
-the value — no serialization) and hands it to the bound `PublisherService`.
-`Events.dispatch` is a generated topic/type switch that casts the payload back to
-the listener's type and calls it. `encode`/`decode` are generated switches over
-the derived `toJson`/`fromJson`. Nothing is serialized unless a transport calls
-`encode`/`decode`.
-
 ## Notes & limits
 
 - `Events.run()` delivers **synchronously** on the calling thread;
