@@ -2371,3 +2371,37 @@ xc_Json_t xstd_config_parse(xc_string_t path) {
     if (L >= 4 && memcmp(d + L - 4, ".xml",  4) == 0) return xstd_xml_parse(src);
     return xstd_yaml_parse(src);   /* .yaml / .yml / default */
 }
+
+/* ─── std/config: background file watcher -> ConfigChanged event ─────────────
+ * Polls the file's mtime; on change pushes a `ConfigChanged { file: String }`
+ * event on the given topic. The payload layout is a single xc_string_t, which
+ * matches xc_ConfigChanged_t, so the generated dispatch reads `.file` directly. */
+typedef struct { xc_string_t path; xc_string_t topic; xc_integer_t mtime; } xc_cfg_watch_t;
+
+static void* xc_config_watch_thread(void* arg) {
+    xc_cfg_watch_t* w = (xc_cfg_watch_t*)arg;
+    for (;;) {
+        struct timespec ts; ts.tv_sec = 1; ts.tv_nsec = 0;
+        nanosleep(&ts, NULL);
+        xc_integer_t m = xstd_mtime(w->path);
+        if (m != 0 && m != w->mtime) {
+            w->mtime = m;
+            xc_string_t* pl = (xc_string_t*)malloc(sizeof(xc_string_t));
+            if (pl) {
+                *pl = w->path;                              /* ConfigChanged.file */
+                xstd_eventq_push(xstd_event_make(w->topic, xc_string_from_cstr("ConfigChanged"), pl));
+            }
+        }
+    }
+    return NULL;
+}
+
+void xstd_config_watch(xc_string_t path, xc_string_t topic) {
+    xc_cfg_watch_t* w = (xc_cfg_watch_t*)malloc(sizeof(xc_cfg_watch_t));
+    if (!w) return;
+    w->path  = xc_str_copy(path.data, path.len);
+    w->topic = xc_str_copy(topic.data, topic.len);
+    w->mtime = xstd_mtime(path);
+    pthread_t th;
+    if (pthread_create(&th, NULL, xc_config_watch_thread, w) == 0) pthread_detach(th);
+}

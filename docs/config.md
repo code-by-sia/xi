@@ -66,6 +66,35 @@ missing key is the zero value.
 - A **missing key yields the type's zero value** (empty string, `0`, `false`,
   all-zero compound) — it never crashes.
 
+## Live reload — `ApplicationConfig`
+
+`std/config` ships an `ApplicationConfig` service (default impl
+`FileApplicationConfig`). Inject it and call `watch(file, topic)`; a background
+watcher polls the file's mtime and publishes a `ConfigChanged { file }` event
+(via [std/events](events.md)) whenever it's edited — re-read the config in a
+`listener` to hot-reload:
+
+```x
+import "std/config.xi"
+
+class Reloader {
+    deps {}
+    listener onChange(e: ConfigChanged) on "config.changed" {
+        let cfg = readConfig<AppConfig>(e.file)     // pick up the new values
+        ...
+    }
+}
+
+async entry (cfg: ApplicationConfig) main(args: String[]) -> Integer {
+    cfg.watch("application.yaml", "config.changed")
+    let pump = Events.runAsync()                     // deliver events on a worker
+    ...
+}
+```
+
+Bind your own `ApplicationConfig` (an OS-native watcher, or a no-op in tests) to
+change the watching strategy — callers don't change.
+
 ## Test configuration
 
 In a test build (`xi test`), a `bind` inside `module Test` **wins** over

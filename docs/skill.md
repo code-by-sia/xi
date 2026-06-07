@@ -405,6 +405,9 @@ Or read one file into a value generically (JSON/YAML/XML by extension):
 let tax = readConfig<Tax>("tax.yaml")
 ```
 
+Hot-reload: inject `ApplicationConfig`, call `cfg.watch("app.yaml", "config.changed")`,
+run `Events.runAsync()`, and handle `ConfigChanged` in a `listener`.
+
 ## A complete program
 
 ```x
