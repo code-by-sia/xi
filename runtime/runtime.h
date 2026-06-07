@@ -369,6 +369,7 @@ typedef struct { bool has_value; xc_size_t    value; } xc_opt_size_t;
  * records a failure and aborts only the current test (the rest still run).       */
 extern const char* xc_src_file;                       /* defined in generated C */
 xc_Json_t xstd_config_parse(xc_string_t path);        /* read + parse by extension (json/yaml/xml) */
+void      xstd_config_watch(xc_string_t path, xc_string_t topic);  /* poll mtime -> ConfigChanged event */
 void xc_assert(xc_bool_t cond, const char* text, const char* file, long long line);
 void xc_test_run(const char* name, void (*fn)(void)); /* run one test, isolated */
 int  xc_test_summary(void);                           /* print totals; nonzero if any failed */
