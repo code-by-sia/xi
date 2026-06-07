@@ -65,6 +65,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `module` metadata (`id`/`name`/`description`/`version`/`license`); `id` sets the binary name | ✓ |
 | Typed config — `bind I -> readConfig("file.yaml")` auto-deserializes into an interface (`std/config`) | ✓ |
 | Module source sets — `includes`/`excludes` globs gather a module's files; multiple modules per folder build separately | ✓ |
+| `xc --all` — discover and build every module in the project | ✓ |
 
 ## Modules & interop
 
