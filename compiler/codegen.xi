@@ -1225,6 +1225,12 @@ predicate isListFunc(fld: String) {
     if fld == "first"    { return true }
     if fld == "last"     { return true }
     if fld == "toSet"    { return true }
+    if fld == "find"     { return true }
+    if fld == "firstOrNone" { return true }
+    if fld == "lastOrNone"  { return true }
+    if fld == "maxByOrNone" { return true }
+    if fld == "minByOrNone" { return true }
+    if fld == "average"  { return true }
     return false
 }
 // index of the top-level `=>` (kind 110) within (start, close), or -1.
@@ -1305,6 +1311,16 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     }
     if fld == "last" {
         return ExprRes { code: "({ " + declSv + "*(" + elem + "*)xstd_list_at(" + sv + ", xstd_list_len(" + sv + ") - 1); })", pos: q, xtyp: elemX }
+    }
+    if fld == "firstOrNone" {
+        let code = "({ " + declSv + "xc_opt_" + suf + "_t " + rv + "; " + rv + ".has_value = 0;\n"
+                 + "      if (xstd_list_len(" + sv + ") > 0) { " + rv + ".has_value = 1; " + rv + ".value = *(" + elem + "*)xstd_list_at(" + sv + ", 0); } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "opt_" + suf }
+    }
+    if fld == "lastOrNone" {
+        let code = "({ " + declSv + "xc_opt_" + suf + "_t " + rv + "; " + rv + ".has_value = 0;\n"
+                 + "      if (xstd_list_len(" + sv + ") > 0) { " + rv + ".has_value = 1; " + rv + ".value = *(" + elem + "*)xstd_list_at(" + sv + ", xstd_list_len(" + sv + ") - 1); } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "opt_" + suf }
     }
 
     // ── lambda methods:  { [params =>] body } ──
@@ -1427,6 +1443,30 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
                  + "        xc_List_t _sub" + u + " = (" + body.code + ");\n"
                  + "        for (xc_integer_t " + jv + " = 0; " + jv + " < xstd_list_len(_sub" + u + "); " + jv + " = " + jv + " + 1) xstd_list_push(" + rv + ", xstd_list_at(_sub" + u + ", " + jv + ")); } " + rv + "; })"
         return ExprRes { code: code, pos: close + 1, xtyp: body.xtyp }
+    }
+    if fld == "find" {
+        // first element matching the predicate, as an optional
+        let code = "({ " + declSv + "xc_opt_" + suf + "_t " + rv + "; " + rv + ".has_value = 0;\n      " + loopOpen
+                 + "        if ((" + body.code + ")) { " + rv + ".has_value = 1; " + rv + ".value = " + p0 + "; break; } } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "opt_" + suf }
+    }
+    if fld == "maxByOrNone" or fld == "minByOrNone" {
+        // element with the max/min numeric key, as an optional
+        let keyC = xnameToCtype(body.xtyp)
+        let cmp = " > "
+        if fld == "minByOrNone" { cmp = " < " }
+        let bk = "_best" + u
+        let code = "({ " + declSv + "xc_opt_" + suf + "_t " + rv + "; " + rv + ".has_value = 0; " + keyC + " " + bk + " = 0;\n      " + loopOpen
+                 + "        " + keyC + " _k" + u + " = (" + body.code + ");\n"
+                 + "        if (!" + rv + ".has_value || _k" + u + cmp + bk + ") { " + rv + ".has_value = 1; " + rv + ".value = " + p0 + "; " + bk + " = _k" + u + "; } } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "opt_" + suf }
+    }
+    if fld == "average" {
+        // mean of a numeric projection (0.0 for an empty list)
+        let code = "({ " + declSv + "xc_number_t _sum" + u + " = 0;\n      " + loopOpen
+                 + "        _sum" + u + " = _sum" + u + " + (" + body.code + "); }"
+                 + " xstd_list_len(" + sv + ") > 0 ? _sum" + u + " / (xc_number_t)xstd_list_len(" + sv + ") : 0.0; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "Number" }
     }
     // joinToString(sep) { it => <string> }
     let sep = argCode
@@ -2131,7 +2171,10 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let e = genExpr(toks, p2, ctx)
         let pe = e.pos
         let close = matchBrace(toks, pe)
-        let bctx = addSym(ctx, nm, "")
+        // infer the unwrapped element's xtype from an "opt_<suffix>" optional
+        let nmType = ""
+        if startsWith2(e.xtyp, "opt_") { nmType = xnameFromArrSuffix(string_slice(e.xtyp, 4, string_len(e.xtyp))) }
+        let bctx = addSym(ctx, nm, nmType)
         let body = "        __auto_type " + nm + " = (" + e.code + ").value;\n" + genStmts(toks, pe + 1, close, bctx)
         let code = "    if ((" + e.code + ").has_value) {\n" + body + "    }\n"
         return StmtRes { code: code, ctx: ctx, pos: close + 1 }
