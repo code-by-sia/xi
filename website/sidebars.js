@@ -9,6 +9,7 @@ const sidebars = {
     'skill',
     'language-guide',
     'dependency-injection',
+    'config',
     'testing',
     'multi-file',
     'error-handling',

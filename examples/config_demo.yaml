@@ -1,0 +1,7 @@
+projectName: Ledger
+tax:
+  percent: 20.0
+  rate: 3
+flags:
+  calcTax: true
+  maxSalary: 100000.0

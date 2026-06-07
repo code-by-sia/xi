@@ -251,7 +251,8 @@ type ClassSpec = {
 type BindSpec = {
     ifaceName:    String,
     concreteName: String,
-    scopeKind:    String
+    scopeKind:    String,
+    configPath:   String    // non-empty for `bind I -> readConfig("file")`
 }
 
 // A module — DI container plus optional package metadata.
@@ -1435,6 +1436,17 @@ mapper parseModule(ps: PState) -> ModuleResult {
                     if peek(ps2).kind == 104 {  // [list]
                         ps2 = skipBlock(ps2)
                     } else {
+                    if peek(ps2).kind == 1 and peek(ps2).text == "readConfig" and peekAt(ps2, 1).kind == 100 {
+                        // bind I -> readConfig("path") — config-backed implementor
+                        let cp = ""
+                        ps2 = advance(ps2)                                  // readConfig
+                        if peek(ps2).kind == 100 { ps2 = advance(ps2) }    // (
+                        if peek(ps2).kind == 4 { cp = peek(ps2).text  ps2 = advance(ps2) }
+                        if peek(ps2).kind == 101 { ps2 = advance(ps2) }    // )
+                        bindings = appendBindSpec(bindings, BindSpec {
+                            ifaceName: ifName, concreteName: "", scopeKind: "singleton", configPath: cp
+                        })
+                    } else {
                         let concName = peek(ps2).text
                         ps2 = advance(ps2)
                         let scopeVal = "transient"
@@ -1447,8 +1459,9 @@ mapper parseModule(ps: PState) -> ModuleResult {
                             ps2 = advance(ps2)
                         }
                         bindings = appendBindSpec(bindings, BindSpec {
-                            ifaceName: ifName, concreteName: concName, scopeKind: scopeVal
+                            ifaceName: ifName, concreteName: concName, scopeKind: scopeVal, configPath: ""
                         })
+                    }
                     }
                 }
             } else {

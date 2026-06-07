@@ -378,6 +378,24 @@ module Test { bind Clock -> FakeClock } // layered over App; ignored in normal b
 - `xi test` exits nonzero if any test fails. `test` cases are excluded from normal
   `xc` builds. Put tests in `*_test.xi` files.
 
+## Typed configuration (std/config)
+
+Describe config as an interface and bind it to a file; the compiler loads +
+deserializes it (primitives directly, compounds via codec; YAML or JSON):
+
+```x
+import "std/config.xi"
+type TaxConfig = { percent: Number, rate: Integer }
+interface AppConfig {
+    mapper projectName() -> String      // method name = top-level key
+    mapper tax() -> TaxConfig
+}
+module App  { bind AppConfig -> readConfig("application.yaml") }
+module Test { bind AppConfig -> readConfig("application-test.yaml") }   // wins under `xi test`
+```
+
+Inject `AppConfig` like any dependency. A missing key yields the zero value.
+
 ## A complete program
 
 ```x
