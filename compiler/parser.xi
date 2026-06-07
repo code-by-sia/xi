@@ -113,9 +113,16 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
                 if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
                 base = "xc_List_" + ctypeSuffix(elem.ctype) + "_t"
             } else {
+            if t.text == "Set" and peekAt(ps, 1).kind == 114 {   // Set<T>
+                let ep = advance(advance(ps))
+                let elem = parseTypeExpr(ep)
+                ps2 = elem.ps
+                if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
+                base = "xc_Set_" + ctypeSuffix(elem.ctype) + "_t"
+            } else {
                 base = identToCtype(t.text)
                 ps2 = advance(ps)
-            }
+            } }
         } else {
             return TypeResult { ctype: "void", ps: ps }
         }

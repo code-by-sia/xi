@@ -1,5 +1,7 @@
-// List<T> — a growable, typed list. It's a built-in generic (like T[] arrays):
-// create one with `empty List<T>`, then push/get/set/etc. No import needed.
+// Collections — built-in generics (like T[] arrays), created with `empty`:
+//   List<T>  growable ordered list (push/get/set/len/removeAt/...)
+//   Set<T>   hash set of unique elements (add/contains/remove/items/...)
+// No import needed for the collections themselves.
 //
 //   xc examples/collections_demo.xi && ./build/collections_demo
 import "std/log.xi"
@@ -31,6 +33,18 @@ async entry (logger: Logger) main(args: String[]) -> Integer {
     items.push(Item { name: "pen", qty: 2 })
     items.push(Item { name: "book", qty: 5 })
     logger.print("qty   = " + int_to_string(totalQty(items))) // 7
+
+    // Set<T> — unique elements; add is idempotent, contains/remove are O(1) avg.
+    let tags = empty Set<String>
+    tags.add("new")
+    tags.add("sale")
+    tags.add("new")                                                    // duplicate ignored
+    logger.print("tags  = " + int_to_string(tags.len()))      // 2
+    logger.print("has?  = " + tags.contains("sale"))          // true (Bool coerces in +)
+    tags.remove("sale")
+    let listed = ""
+    for t in tags { listed = listed + t + " " }               // iterate the set
+    logger.print("kept  = " + listed)                         // new
     return 0
 }
 

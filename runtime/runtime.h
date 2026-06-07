@@ -272,6 +272,23 @@ xc_integer_t xstd_list_len(xc_List_t);
 void         xstd_list_removeat(xc_List_t, xc_integer_t i);
 void         xstd_list_clear(xc_List_t);
 
+/* ─── Set<T> (std/collections) ───────────────────────────────────────────────
+ * A hash set of unique elements. Element-type-erased like List; `is_str` tells
+ * the runtime to hash/compare String elements by content rather than by bytes. */
+typedef struct xc_set* xc_Set_t;
+typedef xc_Set_t xc_Set_integer_t;
+typedef xc_Set_t xc_Set_number_t;
+typedef xc_Set_t xc_Set_bool_t;
+typedef xc_Set_t xc_Set_string_t;
+typedef xc_Set_t xc_Set_char_t;
+xc_Set_t     xstd_set_new(xc_size_t elem, int is_str);
+void         xstd_set_add(xc_Set_t, const void* e);       /* no-op if present */
+xc_bool_t    xstd_set_contains(xc_Set_t, const void* e);
+void         xstd_set_remove(xc_Set_t, const void* e);    /* no-op if absent */
+xc_integer_t xstd_set_len(xc_Set_t);
+void         xstd_set_clear(xc_Set_t);
+xc_List_t    xstd_set_items(xc_Set_t);                    /* live elements, as a List */
+
 /* ─── Optional helpers ───────────────────────────────────────────────────── */
 
 typedef struct { bool has_value; xc_number_t  value; } xc_opt_number_t;

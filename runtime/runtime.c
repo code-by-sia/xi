@@ -2162,3 +2162,80 @@ void xstd_list_removeat(xc_List_t l, xc_integer_t i) {
     l->len -= 1;
 }
 void xstd_list_clear(xc_List_t l) { l->len = 0; }
+
+/* ─── hashing shared by Set and Map ─────────────────────────────────────────
+ * Keys are hashed/compared by raw bytes, except String keys (is_str) which are
+ * hashed/compared by content (xc_string_t is {data,len}, not NUL-terminated).  */
+static uint64_t xc_hash_bytes(const void* p, xc_size_t n) {
+    const unsigned char* b = (const unsigned char*)p;
+    uint64_t h = 1469598103934665603ULL;             /* FNV-1a */
+    for (xc_size_t i = 0; i < n; i++) { h ^= b[i]; h *= 1099511628211ULL; }
+    return h;
+}
+static uint64_t xc_hash_key(const void* slot, xc_size_t sz, int is_str) {
+    if (is_str) { const xc_string_t* s = (const xc_string_t*)slot; return xc_hash_bytes(s->data, s->len); }
+    return xc_hash_bytes(slot, sz);
+}
+static int xc_key_eq(const void* a, const void* b, xc_size_t sz, int is_str) {
+    if (is_str) {
+        const xc_string_t* x = (const xc_string_t*)a; const xc_string_t* y = (const xc_string_t*)b;
+        return x->len == y->len && (x->len == 0 || memcmp(x->data, y->data, x->len) == 0);
+    }
+    return memcmp(a, b, sz) == 0;
+}
+
+/* ─── Set<T> ─────────────────────────────────────────────────────────────────
+ * Open-addressed hash set: state[i] is 0 empty, 1 full, 2 tombstone.           */
+struct xc_set { char* slots; unsigned char* state; xc_size_t cap, len, used, elem; int is_str; };
+
+xc_Set_t xstd_set_new(xc_size_t elem, int is_str) {
+    struct xc_set* s = (struct xc_set*)malloc(sizeof(*s)); if (!s) abort();
+    s->slots = NULL; s->state = NULL; s->cap = 0; s->len = 0; s->used = 0;
+    s->elem = elem ? elem : 1; s->is_str = is_str;
+    return s;
+}
+/* Slot for e: returns its index; *found=1 if present, else first free/tombstone. */
+static xc_size_t xc_set_probe(struct xc_set* s, const void* e, int* found) {
+    xc_size_t mask = s->cap - 1;
+    xc_size_t i = (xc_size_t)xc_hash_key(e, s->elem, s->is_str) & mask;
+    xc_size_t tomb = (xc_size_t)-1;
+    for (;;) {
+        if (s->state[i] == 0) { *found = 0; return tomb != (xc_size_t)-1 ? tomb : i; }
+        if (s->state[i] == 2) { if (tomb == (xc_size_t)-1) tomb = i; }
+        else if (xc_key_eq(s->slots + i * s->elem, e, s->elem, s->is_str)) { *found = 1; return i; }
+        i = (i + 1) & mask;
+    }
+}
+static void xc_set_resize(struct xc_set* s, xc_size_t ncap) {
+    char* os = s->slots; unsigned char* ost = s->state; xc_size_t ocap = s->cap;
+    s->slots = (char*)calloc(ncap, s->elem); s->state = (unsigned char*)calloc(ncap, 1);
+    if (!s->slots || !s->state) abort();
+    s->cap = ncap; s->len = 0; s->used = 0;
+    for (xc_size_t i = 0; i < ocap; i++) if (ost[i] == 1) {
+        int f; xc_size_t j = xc_set_probe(s, os + i * s->elem, &f);
+        memcpy(s->slots + j * s->elem, os + i * s->elem, s->elem);
+        s->state[j] = 1; s->len++; s->used++;
+    }
+    free(os); free(ost);
+}
+void xstd_set_add(xc_Set_t s, const void* e) {
+    if (s->cap == 0) xc_set_resize(s, 8);
+    else if ((s->used + 1) * 4 >= s->cap * 3) xc_set_resize(s, s->cap * 2);
+    int f; xc_size_t i = xc_set_probe(s, e, &f); if (f) return;
+    if (s->state[i] == 0) s->used++;
+    memcpy(s->slots + i * s->elem, e, s->elem); s->state[i] = 1; s->len++;
+}
+xc_bool_t xstd_set_contains(xc_Set_t s, const void* e) {
+    if (s->cap == 0) return false; int f; xc_set_probe(s, e, &f); return f ? true : false;
+}
+void xstd_set_remove(xc_Set_t s, const void* e) {
+    if (s->cap == 0) return; int f; xc_size_t i = xc_set_probe(s, e, &f);
+    if (!f) return; s->state[i] = 2; s->len--;
+}
+xc_integer_t xstd_set_len(xc_Set_t s) { return (xc_integer_t)s->len; }
+void xstd_set_clear(xc_Set_t s) { if (s->state) memset(s->state, 0, s->cap); s->len = 0; s->used = 0; }
+xc_List_t xstd_set_items(xc_Set_t s) {
+    xc_List_t l = xstd_list_new(s->elem);
+    for (xc_size_t i = 0; i < s->cap; i++) if (s->state[i] == 1) xstd_list_push(l, s->slots + i * s->elem);
+    return l;
+}
