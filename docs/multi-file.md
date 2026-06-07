@@ -82,3 +82,46 @@ $ xc app.xi && ./build/app
 
 `import` merges all the parts into one compilation unit (recursively, with
 duplicates resolved once), so you compile just the entry file.
+
+## Module source sets (`includes` / `excludes`)
+
+Instead of listing every `import`, a `module` can declare which files belong to
+it with `includes` / `excludes` globs. When set, `xc <entry.xi>` gathers every
+matching `.xi` file under the entry's directory and compiles them as one unit.
+Each module owns its `entry main`, so **several modules can live in one folder and
+build separately**:
+
+```x title="server.xi"
+import "std/log.xi"
+async entry (logger: Logger) main(args: String[]) -> Integer {
+    logger.info(banner("server"))      // banner() comes from shared.xi, auto-gathered
+    return 0
+}
+module App {
+    id       = "server"
+    includes = ["./**"]                 // default: every .xi under this dir
+    excludes = ["client.xi"]            // ...but not the other module's entry
+}
+```
+
+```x title="client.xi"
+import "std/log.xi"
+async entry (logger: Logger) main(args: String[]) -> Integer {
+    logger.info(banner("client"))
+    return 0
+}
+module App { id = "client"  includes = ["./**"]  excludes = ["server.xi"] }
+```
+
+```console
+$ xc server.xi && ./build/server     # gathers shared.xi, not client.xi
+$ xc client.xi && ./build/client
+```
+
+- `includes` defaults to `["./**"]` (the whole directory tree) and `excludes` to
+  `[]`. Globs: `**`/`dir/**` (subtree), `dir/*` (one level), `*.ext`, or an exact
+  file/basename.
+- The feature is **opt-in**: a module with neither field keeps the classic
+  "entry file + its explicit `import`s" behavior.
+- Combine with `id` (see [DI › module metadata](dependency-injection.md#module-metadata))
+  to name each module's binary.

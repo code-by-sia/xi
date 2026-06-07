@@ -302,8 +302,108 @@ mapper strArrIndexOf(arr: String[], s: String) -> Integer {
     return 0 - 1
 }
 
+// ── Module includes/excludes: glob-gather a module's source files ───────────
+mapper baseNameOf(p: String) -> String {
+    let n = string_len(p)
+    let s = 0
+    let i = 0
+    while i < n { if string_char_at(p, i) == 47 { s = i + 1 }  i = i + 1 }
+    return string_slice(p, s, n)
+}
+// A small glob matcher: `**`/`*` = all; `dir/**` = subtree; `dir/*` = one level;
+// `*.ext` = by extension; otherwise an exact path or basename.
+predicate globMatch(pat: String, rel: String) {
+    let p = pat
+    if startsWith2(p, "./") { p = string_slice(p, 2, string_len(p)) }
+    if p == "**" or p == "*" or string_len(p) == 0 { return true }
+    if endsWith2(p, "/**") {
+        let pre = string_slice(p, 0, string_len(p) - 3)
+        if rel == pre { return true }
+        return startsWith2(rel, pre + "/")
+    }
+    if endsWith2(p, "/*") {
+        return startsWith2(rel, string_slice(p, 0, string_len(p) - 1))
+    }
+    if startsWith2(p, "*.") {
+        return endsWith2(rel, string_slice(p, 1, string_len(p)))
+    }
+    if p == rel { return true }
+    if baseNameOf(rel) == p { return true }
+    return false
+}
+predicate matchesAny(pats: String[], rel: String) {
+    let i = 0
+    let n = stringArrLen(pats)
+    while i < n { if globMatch(stringArrGet(pats, i), rel) { return true }  i = i + 1 }
+    return false
+}
+mapper splitLines(s: String) -> String[] {
+    let out: String[] = []
+    let n = string_len(s)
+    let start = 0
+    let i = 0
+    while i < n {
+        if string_char_at(s, i) == 10 {
+            if i > start { out = appendString(out, string_slice(s, start, i)) }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    if n > start { out = appendString(out, string_slice(s, start, n)) }
+    return out
+}
+mapper relPath(base: String, path: String) -> String {
+    let pre = base + "/"
+    if startsWith2(path, pre) { return string_slice(path, string_len(pre), string_len(path)) }
+    if startsWith2(path, "./") { return string_slice(path, 2, string_len(path)) }
+    return path
+}
+// Union of includes / excludes declared by the program's (non-Test) modules.
+mapper moduleGlobs(prog: Program, which: Integer) -> String[] {
+    let out: String[] = []
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        if mod.name != "Test" {
+            let lst = mod.includes
+            if which == 1 { lst = mod.excludes }
+            out = concatStrings(out, lst)
+        }
+        i = i + 1
+    }
+    return out
+}
+// Re-load `srcPath` (+ its imports) plus every .xi under its directory that
+// matches `inc` and not `exc`. Returns the merged LoadResult.
+creator gatherSources(srcPath: String, inc: String[], exc: String[]) -> LoadResult {
+    let base = dirOf(srcPath)
+    run_command("find '" + base + "' -name '*.xi' > /tmp/xi-srcs.txt 2>/dev/null")
+    let files = splitLines(file_read_all("/tmp/xi-srcs.txt"))
+    let acc = loadModule(srcPath, emptyStrings())
+    let toks = acc.tokens
+    let visited = acc.visited
+    let qn = acc.qnames
+    let qr = acc.qrepl
+    let i = 0
+    let n = stringArrLen(files)
+    while i < n {
+        let f = stringArrGet(files, i)
+        let rel = relPath(base, f)
+        if f != srcPath and not strArrContains(visited, f) and matchesAny(inc, rel) and not matchesAny(exc, rel) {
+            let sub = loadModule(f, visited)
+            visited = sub.visited
+            toks = concatTokens(toks, sub.tokens)
+            qn = concatStrings(qn, sub.qnames)
+            qr = concatStrings(qr, sub.qrepl)
+        }
+        i = i + 1
+    }
+    return LoadResult { tokens: toks, visited: visited, qnames: qn, qrepl: qr }
+}
+
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
-mapper xcVersion() -> String { return "0.0.62" }
+mapper xcVersion() -> String { return "0.0.63" }
 
 async entry main(args: String[]) -> Integer {
     if args.len < 2 {
@@ -325,6 +425,20 @@ async entry main(args: String[]) -> Integer {
     system.stdout.writeln("xc: parsing ...")
     diag_set_file(srcPath)           // parse errors report the main source
     let prog = parseProgram(tokens)
+
+    // Module source set: if a module declares includes/excludes, glob-gather the
+    // matching .xi files under the source's directory and re-parse the merged set.
+    let inc = moduleGlobs(prog, 0)
+    let exc = moduleGlobs(prog, 1)
+    if stringArrLen(inc) > 0 or stringArrLen(exc) > 0 {
+        if stringArrLen(inc) == 0 { inc = ["./**"] }   // default when only excludes given
+        system.stdout.writeln("xc: gathering module sources ...")
+        let lr2 = gatherSources(srcPath, inc, exc)
+        let collapsed2 = collapseQualified(lr2.tokens, lr2.qnames, lr2.qrepl)
+        let tokens2 = appendToken(collapsed2, Token { kind: 0, text: "", line: 0 })
+        diag_set_file(srcPath)
+        prog = parseProgram(tokens2)
+    }
 
     checkMachines(prog)              // static machine-graph validation
 

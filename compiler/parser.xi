@@ -263,7 +263,9 @@ type ModuleSpec = {
     title:       String,    // the `name = "..."` field (display name)
     description: String,
     version:     String,
-    license:     String
+    license:     String,
+    includes:    String[],  // source globs for this module (default ["./**"])
+    excludes:    String[]   // globs to drop (default [])
 }
 
 // A top-level function or creator
@@ -1416,6 +1418,8 @@ mapper parseModule(ps: PState) -> ModuleResult {
     let mDesc = ""
     let mVer = ""
     let mLic = ""
+    let mIncludes: String[] = []    // unset -> file+imports only; set -> glob-gather
+    let mExcludes: String[] = []
     while peek(ps2).kind != 103 and peek(ps2).kind != 0 {
         // import, bind, or a metadata field (key = "value")
         if peek(ps2).kind == 244 {  // import
@@ -1465,9 +1469,21 @@ mapper parseModule(ps: PState) -> ModuleResult {
                     }
                 }
             } else {
-                // metadata field:  key = "value"
+                // metadata field:  key = "value"   or   key = ["a", "b"]
                 let key = peek(ps2).text
-                if peekAt(ps2, 1).kind == 111 {              // `=`
+                if peekAt(ps2, 1).kind == 111 and peekAt(ps2, 2).kind == 104 {
+                    // list value: includes / excludes
+                    let items: String[] = []
+                    ps2 = advance(advance(advance(ps2)))     // past key = [
+                    while peek(ps2).kind != 105 and peek(ps2).kind != 0 {
+                        if peek(ps2).kind == 4 { items = appendString(items, peek(ps2).text) }
+                        ps2 = advance(ps2)
+                    }
+                    if peek(ps2).kind == 105 { ps2 = advance(ps2) }   // ]
+                    if key == "includes" { mIncludes = items }
+                    if key == "excludes" { mExcludes = items }
+                } else {
+                if peekAt(ps2, 1).kind == 111 {              // `=` "value"
                     let val = peekAt(ps2, 2).text
                     if key == "id"          { mId = val }
                     if key == "name"        { mTitle = val }
@@ -1479,6 +1495,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
                 } else {
                     ps2 = advance(ps2)
                 }
+                }
             }
         }
     }
@@ -1486,7 +1503,8 @@ mapper parseModule(ps: PState) -> ModuleResult {
 
     let spec = ModuleSpec {
         name: name, bindings: bindings,
-        id: mId, title: mTitle, description: mDesc, version: mVer, license: mLic
+        id: mId, title: mTitle, description: mDesc, version: mVer, license: mLic,
+        includes: mIncludes, excludes: mExcludes
     }
     return ModuleResult { spec: spec, ps: ps2 }
 }
