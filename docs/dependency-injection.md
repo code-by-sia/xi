@@ -161,6 +161,23 @@ module App { bind Cache -> LruCache as singleton }
 Singletons live for the whole process (and are never freed by design); transients
 are created where needed.
 
+## Module metadata
+
+The `module` block can also carry package metadata. `id` sets the **compiled
+binary's name** (otherwise it's the source file name); `name`/`description`/
+`version`/`license` are descriptive. The block may be named (`module App { … }`)
+or anonymous (`module { … }`), and metadata can sit alongside `bind`s.
+
+```x
+module {
+    id          = "file-server"     // -> binary named `file-server`
+    name        = "File Server"
+    description = "a simple file server"
+    version     = "0.12"
+    license     = "MIT"
+}
+```
+
 ## How it lowers
 
 No runtime container. Each interface becomes a fat pointer

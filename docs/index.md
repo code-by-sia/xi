@@ -21,9 +21,10 @@ slug: /
   </p>
 </div>
 
-The compiler is **written in Xi itself** (`compiler/xc.xi`) and is **self-hosting** —
-it compiles its own source to a byte-identical fixpoint. The only non-Xi code is a
-small C runtime (the equivalent of a language's libc/libcore).
+Xi is **self-hosting** — its compiler is written in Xi and compiles its own source
+to a byte-identical fixpoint. The only non-Xi code is a small C runtime (the
+equivalent of a language's libc/libcore). You don't need any of that to write
+Xi — [install the toolchain](getting-started.md) and go.
 
 ## Highlights
 
@@ -64,7 +65,7 @@ async entry (logger: Logger) main(args: String[]) -> Integer {
 ```
 
 ```console
-$ ./compiler/xc examples/greeting.xi && ./examples/greeting
+$ xc greeting.xi && ./build/greeting
 ```
 
 Ready? Head to [Getting started](getting-started.md).

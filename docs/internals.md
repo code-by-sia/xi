@@ -1,4 +1,9 @@
-# How it works (self-hosting)
+# Compiler internals (for contributors)
+
+> You don't need this page to **write** Xi — it's about how the toolchain itself
+> is built. See [Getting started](getting-started.md) and the
+> [Language guide](language-guide.md) to use the language. This page is for people
+> hacking on the compiler.
 
 ## The compiler is written in Xi
 

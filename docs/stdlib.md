@@ -20,12 +20,11 @@ Import everything at once with `import "std/all.xi"`.
 ## Resolving imports
 
 `import "std/<mod>.xi"` is resolved first relative to the importing file, then
-relative to `$XC_STD` (default `.`, the current directory). Running the compiler
-from the project root finds `std/` automatically. To use the library from
-elsewhere, point `XC_STD` at the directory that contains `std/`:
+relative to `$XC_STD`. The installed toolchain points `XC_STD` at its bundled
+standard library automatically, so `import "std/..."` just works:
 
 ```console
-$ XC_STD=/path/to/x ./compiler/xc myapp.xi
+$ xc myapp.xi
 ```
 
 ## Modules

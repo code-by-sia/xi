@@ -1,42 +1,49 @@
 # CLI & REPL
 
+The toolchain has two commands, installed on your `PATH` (see
+[Getting started](getting-started.md)): `xc` compiles, `xi` runs and more.
+
 ## `xc` — the compiler
 
 ```console
-$ ./compiler/xc <source.xi>
+$ xc <source.xi>
 ```
 
 Pipeline: resolve `import`s → lex → parse → generate C → invoke `cc` →
 **native executable**. The binary is written to the output directory `$XC_OUT`
 (default `build/`). It's named after the source file, unless the program's
-`module` declares an `id` (see below), in which case `id` is used. The intermediate `<name>.gen.c` is generated there and then
-**deleted after a successful build** — set `XC_KEEP_C=1` to keep it (e.g. to
-inspect the generated C or diff the self-hosting output).
-
-| Environment variable | Meaning | Default |
-|----------------------|---------|---------|
-| `XC_RUNTIME` | directory containing `runtime.h` / `runtime.c` | `runtime` |
-| `XC_OUT` | output directory for the built binary (and the transient generated C) | `build` |
-| `XC_KEEP_C` | keep the generated `<name>.gen.c` instead of deleting it | unset |
-| `XC_STD` | search root for `import "std/..."` | `.` |
-| `XC_HELPERS` | C file appended to the output (only needed when compiling the compiler itself) | unset |
+`module` declares an `id` (see [module metadata](dependency-injection.md#module-metadata)),
+in which case `id` is used. The intermediate generated C is deleted after a successful
+build — set `XC_KEEP_C=1` to keep it for inspection.
 
 ```console
-$ export XC_RUNTIME="$PWD/runtime"
-$ ./compiler/xc examples/greeting.xi     # -> build/greeting
+$ xc greeting.xi     # -> build/greeting
 $ ./build/greeting
 Good day, Ada.
 ```
 
-## `x` — run tool & REPL
+A C compiler (`cc`) must be on your `PATH`, since `xc` builds the native binary by
+compiling generated C.
 
-`x` is a native binary (compiled from `compiler/repl.xi`). It finds the compiler
-via the `XC` env var (default `compiler/xc`) and the runtime via `XC_RUNTIME`.
+| Environment variable | Meaning | Default |
+|----------------------|---------|---------|
+| `XC_OUT` | output directory for the built binary | `build` |
+| `XC_KEEP_C` | keep the generated C instead of deleting it | unset |
+| `XC_RUNTIME` | C runtime location (set by the installed wrapper) | bundled |
+| `XC_STD` | search root for `import "std/..."` (set by the wrapper) | bundled |
+
+> The installed `xc`/`xi` wrappers set `XC_RUNTIME` and `XC_STD` for you, so you
+> normally only touch `XC_OUT`.
+
+## `xi` — run tool & REPL
+
+`xi` compiles and runs a file, hosts the REPL, and provides `test` / `skill` /
+`update` / `version` subcommands.
 
 ### Run a file
 
 ```console
-$ ./bin/xi examples/hello.xi
+$ xi hello.xi
 Hello World!
 ```
 
@@ -102,7 +109,7 @@ override the source with `XI_SKILL_URL` (or `XI_SKILL_REPO` / `XI_SKILL_REF`).
 ### Interactive REPL
 
 ```console
-$ ./bin/xi
+$ xi
 Xi REPL — :help for commands, :quit to exit
 x> let n = 21
 x> print("n = " + n)
@@ -131,7 +138,11 @@ The REPL is a **compile-and-run loop**:
 | `:dump`  | print the accumulated program |
 | `:quit`  | exit |
 
-!!! tip "Putting `x` on your PATH"
-    `x` uses relative defaults (`compiler/xc`, `runtime`), so it's simplest to
-    run it from the project root. To install globally, copy `x`, `compiler/xc`,
-    and `runtime/` somewhere and set `XC` and `XC_RUNTIME` to absolute paths.
+## Other `xi` subcommands
+
+| Command | Effect |
+|---------|--------|
+| `xi test <file.xi>` | compile in test mode and run the `test` cases ([Testing](testing.md)) |
+| `xi skill` | print the AI-agent language guide ([skill](skill.md)) |
+| `xi update` | self-update the toolchain to the latest release |
+| `xi version` | print the toolchain version |
