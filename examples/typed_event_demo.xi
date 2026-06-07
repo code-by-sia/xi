@@ -11,6 +11,7 @@
 //     using Events.encode / Events.decode — JSON lives only inside that transport.
 import "std/json.xi"
 import "std/events.xi"
+import "std/log.xi"
 
 event OrderPaid { id: String, item: String, total: Number }
 
@@ -37,8 +38,8 @@ class Receipts {
     }
 }
 class Audit {
-    deps {}
-    listener log(e: OrderPaid) on "order.paid" { system.stdout.writeln("[audit] " + e.id + " " + e.item) }
+    deps { logger: Logger }
+    listener log(e: OrderPaid) on "order.paid" { logger.print("[audit] " + e.id + " " + e.item) }
 }
 
 async entry main(args: String[]) -> Integer {

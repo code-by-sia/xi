@@ -1,19 +1,21 @@
 # Proposal: Collections, sequences & generic data structures
 
 > **Status: draft / design.** Decides the *shape* of Ξ's collection and lazy-
-> sequence APIs (modelled on **Kotlin's** collections) and the two language
-> features they rest on. **Nothing here is implemented yet.**
+> sequence APIs and the two language features they rest on. The design takes
+> inspiration from several modern collection libraries but is tailored to Ξ —
+> value semantics, no `null` (optionals via `T?` / `none`), and a C99 backend.
+> **Nothing here is implemented yet.**
 
 ## Goal
 
-Give Ξ a **Kotlin-style** data-structure layer — read-only and mutable lists,
-maps, and sets; a rich functional API; and lazy **sequences** — that honours the
-three commitments:
+Give Ξ a complete data-structure layer — read-only and mutable lists, maps, and
+sets; a rich functional API; and lazy **sequences** — that honours the three
+commitments:
 
 - **Fast** — zero-cost: monomorphized (no boxing), closures inlined, lazy chains
   fused into a single loop; close to hand-written C.
 - **Least dependency** — pure Ξ → C99 over libc; no container/iterator runtime.
-- **Easy** — the familiar Kotlin surface: `listOf(...)`, `xs.map { ... }`,
+- **Easy** — a fluent, familiar surface: `listOf(...)`, `xs.map { ... }`,
   `asSequence()`, `for x in xs`.
 
 ## The two prerequisites (decided)
@@ -31,7 +33,7 @@ events/channels (which currently round-trip through JSON).
 ### 2. Closures / lambdas — *for the functional API*
 
 The functional operators carry behaviour, so we need function values. Two forms,
-matching Kotlin's feel while reusing Ξ's `=>`:
+reusing Ξ's `=>`:
 
 ```x
 xs.map(o => o.total)            // explicit parameter
@@ -45,7 +47,7 @@ is **by value** (matches Ξ's value semantics, stays share-nothing-friendly). A
 closure passed to a *fused* sequence never escapes → **zero allocation**; an
 escaping one follows the [memory-management plan](memory-management.md).
 
-## Read-only vs mutable (the Kotlin model)
+## Read-only vs mutable
 
 Collections come in a read-only interface and a mutable sub-interface. Most code
 takes the read-only type; only code that needs to grow it asks for the mutable
@@ -58,7 +60,7 @@ interface Set<T>           { ... }          interface MutableSet<T> extends Set<
 interface Map<K, V>        { ... }          interface MutableMap<K, V> extends Map<K, V>
 ```
 
-**Builders** (also Kotlin-style):
+**Builders:**
 
 ```x
 let a = listOf(1, 2, 3)              // List<Integer> (read-only)
@@ -73,11 +75,13 @@ let built = buildList { it.add(1); it.add(2) }   // build then freeze
 
 ## The functional API (eager, on `List`/`Iterable`)
 
-The Kotlin operator set, returning new collections (eager). A representative slice:
+A broad functional operator set, returning new collections (eager). Names that
+elsewhere reference `null` are tailored to Ξ optionals (e.g. `mapNotNone`,
+`filterNotNone`, `firstOrNone` returning `T?`). A representative slice:
 
 ```x
-xs.map { it * 2 } / mapIndexed / mapNotNull
-xs.filter { it > 0 } / filterNot / filterNotNull
+xs.map { it * 2 } / mapIndexed / mapNotNone
+xs.filter { it > 0 } / filterNot / filterNotNone
 xs.forEach { ... } / forEachIndexed
 xs.fold(0) { a, x => a + x } / reduce / runningFold(=scan)
 xs.flatMap { it.tags } / flatten
@@ -85,10 +89,10 @@ xs.groupBy { it.kind } / associateBy / associateWith / partition { it.active }
 xs.chunked(3) / windowed(2) / zip(ys) / unzip
 xs.distinct / distinctBy { it.id } / sorted / sortedBy { it.age } / reversed
 xs.take(3) / takeLast / takeWhile { ... } / drop / dropWhile / slice(1..3)
-xs.first / firstOrNull / last / lastOrNull / find { ... } / single
+xs.first / firstOrNone / last / lastOrNone / find { ... } / single
 xs.any { ... } / all / none / count { ... }
-xs.sumOf { it.total } / maxByOrNull { it.age } / minOf / average
-xs.joinToString(", ") { it.name } / contains / indexOf / elementAtOrNull
+xs.sumOf { it.total } / maxByOrNone { it.age } / minOf / average
+xs.joinToString(", ") { it.name } / contains / indexOf / elementAtOrNone
 xs + ys / xs - zs                  // plus / minus
 ```
 
@@ -153,20 +157,21 @@ growable layer over it.
 - **Fast:** monomorphization + inlined closures + sequence fusion = real zero-cost
   abstractions, the way `T[]` already is.
 - **Least dependency:** all generated Ξ/C over libc — no collections runtime.
-- **Easy:** it's the Kotlin API people already know — `listOf`, `xs.map { it }`,
-  `asSequence()`, ranges — with no lifetimes to learn.
+- **Easy:** a fluent, familiar API — `listOf`, `xs.map { it }`, `asSequence()`,
+  ranges — with no lifetimes to learn.
 
 ## Open questions
 
 - **Read-only enforcement:** is `List<T>` a genuinely separate interface from
   `MutableList<T>` (compile-time read-only), or one type with a runtime/`val`
-  convention? (Leaning: separate interfaces, Kotlin-style.)
+  convention? (Leaning: separate interfaces.)
 - **Map key bounds:** built-in hashing for primitives/`String` + a `Hashable`
   (`hash()` + `eq()`) interface bound for user keys.
-- **`it` and trailing lambdas:** adopt Kotlin's `{ it }` / `{ a, b => ... }`
+- **`it` and trailing lambdas:** adopt `{ it }` / `{ a, b => ... }`
   trailing-lambda call sugar, or stick to explicit `(x) => ...`?
 - **Generic bounds** from day one (needed for `Map` keys / `PriorityQueue`) vs
   later.
 - **Destructuring** (`let (k, v) = pair`, `for (k, v) in m`) — include with Pairs?
-- **Null vs Result** in the API (`getOrNull` returning `T?` — already idiomatic
-  via Ξ optionals).
+- **Optional vs Result** in the API: lookups that can miss return `T?` and are
+  unwrapped with `if let` (Ξ has no `null` — `none` is the empty optional);
+  reserve `Result` (`T!`) for genuine failures.

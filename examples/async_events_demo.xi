@@ -7,6 +7,7 @@ import "std/time.xi"
 import "std/events.xi"
 import "std/convert.xi"
 import "std/thread.xi"
+import "std/log.xi"
 
 event Job { id: Integer }
 
@@ -17,15 +18,15 @@ class Producer implements Queue {
 }
 
 class Worker {
-    deps {}
+    deps { logger: Logger }
     listener onJob(e: Job) on "jobs" {
-        system.stdout.writeln("handled job " + int_to_string(e.id))
+        logger.print("handled job " + int_to_string(e.id))
     }
 }
 
 module App {}
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let pump = Events.runAsync()        // deliver on a background thread
     let q = App.resolve(Queue)
     let i = 0
@@ -34,6 +35,6 @@ async entry main(args: String[]) -> Integer {
     time.sleepMs(200)                   // let the worker drain the queue
     Events.stop()                       // close the queue -> the pump returns
     pump.wait()                         // join the worker
-    system.stdout.writeln("done")
+    logger.print("done")
     return 0
 }

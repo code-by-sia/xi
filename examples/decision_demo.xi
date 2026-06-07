@@ -5,6 +5,7 @@
 // dependencies). `hit first` (the default) returns the first matching arm.
 
 // Standalone decision.
+import "std/log.xi"
 decision creditTier(score: Number, income: Number) -> String {
     hit first
     when score >= 750                      => "gold"
@@ -36,17 +37,17 @@ class StdPricing implements Pricing {
     }
 }
 
-async entry main(args: String[]) -> Integer {
-    system.stdout.writeln("tier 800/0     = " + creditTier(800, 0))
-    system.stdout.writeln("tier 700/60000 = " + creditTier(700, 60000))
-    system.stdout.writeln("tier 700/10000 = " + creditTier(700, 10000))
-    system.stdout.writeln("tier 500/0     = " + creditTier(500, 0))
+async entry (logger: Logger) main(args: String[]) -> Integer {
+    logger.print("tier 800/0     = " + creditTier(800, 0))
+    logger.print("tier 700/60000 = " + creditTier(700, 60000))
+    logger.print("tier 700/10000 = " + creditTier(700, 10000))
+    logger.print("tier 500/0     = " + creditTier(500, 0))
 
     let p = App.resolve(Pricing)
-    system.stdout.writeln("quote risky    = " + p.quote(500, 100))
-    system.stdout.writeln("quote vip      = " + p.quote(950, 100))
-    system.stdout.writeln("quote good     = " + p.quote(750, 100))
-    system.stdout.writeln("quote base     = " + p.quote(650, 100))
+    logger.print("quote risky    = " + p.quote(500, 100))
+    logger.print("quote vip      = " + p.quote(950, 100))
+    logger.print("quote good     = " + p.quote(750, 100))
+    logger.print("quote base     = " + p.quote(650, 100))
     return 0
 }
 

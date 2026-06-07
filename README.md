@@ -150,7 +150,7 @@ A Tree-sitter grammar plus **Zed** and **Vim** integrations live in
 ## License
 
 Xi is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) and
-[NOTICE](NOTICE) (the same license Kotlin uses). It is provided **"AS IS",
+[NOTICE](NOTICE). It is provided **"AS IS",
 without warranties of any kind, and with no obligation of support**
 (Apache-2.0 §7–§8). It's an experimental personal project — issues/PRs are
 welcome, but no support or maintenance is guaranteed. See

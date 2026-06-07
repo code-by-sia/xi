@@ -77,11 +77,11 @@ module App {
 }
 
 // --- entry point ---
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let greeter = App.resolve(Greeter)
     let user = User { name: "Ada", age: 36, email: "ada@example.com" }
     if isAdult(user) {
-        system.stdout.writeln(greeter.greet(user))
+        logger.log("info", greeter.greet(user))
     }
     return 0
 }

@@ -48,10 +48,10 @@ mapper { logger: Logger } describe(name: String) -> String {
     return "<" + name + ">"
 }
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let svc = App.resolve(Service)   // auto-wired; no bind needed
     svc.run()
-    system.stdout.writeln(describe("widget"))
+    logger.log(describe("widget"))
     return 0
 }
 

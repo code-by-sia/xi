@@ -3,9 +3,10 @@
 // channels (thread-safe FIFOs of strings, copied across the boundary).
 //
 //   xc examples/thread_demo.xi && ./build/thread_demo
+import "std/log.xi"
 import "std/thread.xi"
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let jobs    = thread.channel()
     let results = thread.channel()
 
@@ -32,7 +33,7 @@ async entry main(args: String[]) -> Integer {
     let i = 0
     while i < 5 { jobs.send(int_to_string(i)) i = i + 1 }
     let got = 0
-    while got < 5 { system.stdout.writeln(results.recv()) got = got + 1 }
+    while got < 5 { logger.print(results.recv()) got = got + 1 }
 
     // Cooperative shutdown: ask them to stop, then unblock their recv with a
     // close, then join.
@@ -42,7 +43,7 @@ async entry main(args: String[]) -> Integer {
     w1.wait()
     w2.wait()
 
-    if w1.running() { system.stdout.writeln("w1 still running?!") } else { system.stdout.writeln("all workers joined") }
+    if w1.running() { logger.print("w1 still running?!") } else { logger.print("all workers joined") }
     return 0
 }
 
