@@ -26,7 +26,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Result type `T!` with `ok`/`err` and `?` propagation | ✓ |
 | Interfaces with vtable dispatch | ✓ |
 | `entry` / function / method dependency injection (`(dep: I)` simple or `{ dep: I where … }` form) | ✓ |
-| `Logger` interface + `ConsoleLogger` default (`std/log`) | ✓ |
+| Leveled `Logger` interface (`print`/`debug`/`info`/`warn`/`error`/`fatal`/`audit`) + `ConsoleLogger` default (`std/log`) | ✓ |
 | Interface **default methods** (method bodies inherited unless overridden) | ✓ |
 | Generics | ✗ (planned) |
 

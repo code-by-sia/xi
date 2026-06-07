@@ -61,6 +61,8 @@ makes the whole *policy* injectable — swap one decision-backed implementation
 for another without touching call sites.
 
 ```x
+import "std/log.xi"
+
 interface RiskModel { predicate risky(score: Number) }
 class SimpleRisk implements RiskModel {
     deps {}
@@ -78,9 +80,9 @@ class StdPricing implements Pricing {
     }
 }
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let p = App.resolve(Pricing)              // auto-wired, decision-backed
-    system.stdout.writeln("quote = " + p.quote(500, 100))
+    logger.info("quote = " + p.quote(500, 100))
     return 0
 }
 module App {}

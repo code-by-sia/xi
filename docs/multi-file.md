@@ -23,11 +23,12 @@ mapper shout(s: String) -> String { return s + "!" }
 ```x title="examples/proj/main.xi"
 import "math.xi"
 import "text.xi"
+import "std/log.xi"
 
-async entry main(args: String[]) -> Integer {
-    system.stdout.writeln(text.shout("hello multi-file"))
-    system.stdout.writeln("2 + 3 = " + math.add(2, 3))
-    system.stdout.writeln("4^2 = "  + math.square(4))
+async entry (logger: Logger) main(args: String[]) -> Integer {
+    logger.info(text.shout("hello multi-file"))
+    logger.info("2 + 3 = " + math.add(2, 3))
+    logger.info("4^2 = "  + math.square(4))
     return 0
 }
 ```
