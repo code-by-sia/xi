@@ -2361,3 +2361,13 @@ int xc_test_summary(void) {
     fflush(stdout);
     return failed == 0 ? 0 : 1;
 }
+
+/* ─── std/config: read + parse a config file by extension ───────────────────── */
+xc_Json_t xstd_config_parse(xc_string_t path) {
+    xc_string_t src = file_read_all(path);
+    const char* d = path.data;
+    xc_size_t L = path.len;
+    if (L >= 5 && memcmp(d + L - 5, ".json", 5) == 0) return xstd_json_parse(src);
+    if (L >= 4 && memcmp(d + L - 4, ".xml",  4) == 0) return xstd_xml_parse(src);
+    return xstd_yaml_parse(src);   /* .yaml / .yml / default */
+}

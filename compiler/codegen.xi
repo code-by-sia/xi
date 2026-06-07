@@ -425,9 +425,40 @@ mapper configPathFor(prog: Program, ifn: String) -> String {
     return found
 }
 
+// Does any function/entry/test/method body call `readConfig<T>(...)`?
+predicate tokensHaveIdent(toks: Token[], name: String) {
+    let i = 0
+    let n = tokenArrLen(toks)
+    while i < n {
+        let t = tokenArrGet(toks, i)
+        if t.kind == 1 and t.text == name { return true }
+        i = i + 1
+    }
+    return false
+}
+predicate progUsesReadConfig(prog: Program) {
+    if tokensHaveIdent(prog.entrySpec.bodyTokens, "readConfig") { return true }
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n { if tokensHaveIdent(funcSpecGet(prog.functions, i).bodyTokens, "readConfig") { return true }  i = i + 1 }
+    let ti = 0
+    let tn = funcSpecLen(prog.tests)
+    while ti < tn { if tokensHaveIdent(funcSpecGet(prog.tests, ti).bodyTokens, "readConfig") { return true }  ti = ti + 1 }
+    let ci = 0
+    let cn = classSpecLen(prog.classes)
+    while ci < cn {
+        let cs = classSpecGet(prog.classes, ci)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn { if tokensHaveIdent(methodSpecGet(cs.methList, mi).bodyTokens, "readConfig") { return true }  mi = mi + 1 }
+        ci = ci + 1
+    }
+    return false
+}
+
 predicate hasCodec(prog: Program, xn: String) {
     if isEventTypeC(prog, xn) { return true }
-    if isCompoundTypeC(prog, xn) and (webEnabled(prog) or usesThreads(prog) or usesConfig(prog)) { return true }
+    if isCompoundTypeC(prog, xn) and (webEnabled(prog) or usesThreads(prog) or usesConfig(prog) or progUsesReadConfig(prog)) { return true }
     return false
 }
 
@@ -1082,6 +1113,20 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     }
     // ── builders: listOf(a, b, ...) / setOf(a, b, ...) / mapOf(k to v, ...) ──
     // Element/key types are inferred from the first argument (homogeneous).
+    // readConfig<T>("file.{json,yaml,xml}") — read + decode a config file into T
+    if k == 1 and txt == "readConfig" and gkind(toks, pos + 1) == 114 {
+        let tname = gtext(toks, pos + 2)         // T
+        let q = pos + 3
+        if gkind(toks, q) == 115 { q = q + 1 }   // >
+        if gkind(toks, q) == 100 { q = q + 1 }   // (
+        let pe = genExpr(toks, q, ctx)           // the path expression
+        q = pe.pos
+        if gkind(toks, q) == 101 { q = q + 1 }   // )
+        return ExprRes {
+            code: "xc_fromjson_" + tname + "(xstd_config_parse(" + pe.code + "))",
+            pos: q, xtyp: tname
+        }
+    }
     if k == 1 and txt == "listOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
         let first = genExpr(toks, pos + 2, ctx)
         let ec = xnameToCtype(first.xtyp)
@@ -4400,7 +4445,7 @@ mapper genEventCodecs(prog: Program) -> String {
         types = appendString(types, stringArrGet(prog.eventTypes, ei))
         ei = ei + 1
     }
-    if webEnabled(prog) or usesThreads(prog) or usesConfig(prog) {
+    if webEnabled(prog) or usesThreads(prog) or usesConfig(prog) or progUsesReadConfig(prog) {
         let ti = 0
         let tn = typeSpecLen(prog.types)
         while ti < tn {
