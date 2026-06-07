@@ -45,15 +45,17 @@ mapper classify(n: Number) -> String! {
 `isOk(r)` / `isErr(r)` test a result; `.value` and `.err` read its parts.
 
 ```x
-consumer report(label: String, r: String!) {
-    if isOk(r) { system.stdout.writeln(label + " -> " + r.value) }
-    else       { system.stdout.writeln(label + " -> error: " + r.err) }
+import "std/log.xi"
+
+consumer (logger: Logger) report(label: String, r: String!) {
+    if isOk(r) { logger.info(label + " -> " + r.value) }
+    else       { logger.error(label + " -> " + r.err) }
 }
 
 async entry main(args: String[]) -> Integer {
-    report("25",  classify(25))    // 25 -> adult
-    report("200", classify(200))   // 200 -> error: age too large
-    report("-5",  classify(-5))    // -5 -> error: age is negative
+    report("25",  classify(25))    // [info]  25 -> adult
+    report("200", classify(200))   // [error] 200 -> age too large
+    report("-5",  classify(-5))    // [error] -5 -> age is negative
     return 0
 }
 ```

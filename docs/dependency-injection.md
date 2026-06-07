@@ -18,6 +18,8 @@ and it all resolves at compile time into plain vtable calls.
 In Ξ the unit of substitution is an **interface**, and the wiring is automatic.
 
 ```x
+import "std/log.xi"
+
 interface Greeter { mapper greet(name: String) -> String }
 
 class FriendlyGreeter implements Greeter {
@@ -25,9 +27,9 @@ class FriendlyGreeter implements Greeter {
     mapper greet(name: String) -> String => "Hey " + name + "!"
 }
 
-// Ask for the capability by interface; the compiler injects FriendlyGreeter.
-async entry (greeter: Greeter) main(args: String[]) -> Integer {
-    system.stdout.writeln(greeter.greet("Ada"))
+// Ask for the capabilities by interface; the compiler injects the implementors.
+async entry (greeter: Greeter, logger: Logger) main(args: String[]) -> Integer {
+    logger.info(greeter.greet("Ada"))
     return 0
 }
 ```
@@ -58,7 +60,7 @@ import "std/log.xi"
 
 class OrderService {
     deps { logger: Logger }
-    consumer place(id: String) { logger.print("placing order " + id) }
+    consumer place(id: String) { logger.info("placing order " + id) }
 }
 ```
 

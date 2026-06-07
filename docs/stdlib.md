@@ -6,10 +6,11 @@ primitives. Import a module and call it through its namespace:
 ```x
 import "std/math.xi"
 import "std/text.xi"
+import "std/log.xi"
 
-async entry main(args: String[]) -> Integer {
-    system.stdout.writeln("sqrt(2) = " + math.sqrt(2.0))
-    system.stdout.writeln(text.toUpper("hello"))
+async entry (logger: Logger) main(args: String[]) -> Integer {
+    logger.info("sqrt(2) = " + math.sqrt(2.0))
+    logger.info(text.toUpper("hello"))
     return 0
 }
 ```
@@ -218,14 +219,22 @@ receive). See [Events](events.md).
 
 ### `log` — `std/log.xi`
 
-A `Logger` interface with a `ConsoleLogger` default (DI picks it as the sole
-implementor). Inject `Logger` anywhere deps are wired — classes, functions, and
-`entry` — and bind your own implementor to redirect output.
+A leveled `Logger` interface with a `ConsoleLogger` default (DI picks it as the
+sole implementor). Inject `Logger` anywhere deps are wired — classes, functions,
+and `entry` — and bind your own implementor to redirect output.
 
-| Name | Kind / Signature |
-|------|------------------|
-| `Logger` | interface — `consumer print(msg: String)` / `consumer error(msg: String)` |
-| `ConsoleLogger` | default impl: `print` -> stdout, `error` -> stderr |
+| Method | Level / Destination |
+|--------|---------------------|
+| `print(msg)` | unprefixed line → stdout |
+| `debug(msg)` | `[debug]` → stdout |
+| `info(msg)`  | `[info]` → stdout |
+| `warn(msg)`  | `[warn]` → stderr |
+| `error(msg)` | `[error]` → stderr |
+| `fatal(msg)` | `[fatal]` → stderr |
+| `audit(msg)` | `[audit]` → stdout (security/compliance trail) |
+
+`ConsoleLogger` is the default implementor; bind your own `Logger` (file,
+structured JSON, a test buffer, …) to redirect any of these.
 
 ### `fs` — `std/fs.xi`
 

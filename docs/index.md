@@ -45,6 +45,8 @@ small C runtime (the equivalent of a language's libc/libcore).
 ## A taste
 
 ```x
+import "std/log.xi"
+
 type Age   = Number where value >= 0 and value <= 130
 type User  = { name: String, age: Age }
 
@@ -54,9 +56,9 @@ mapper describe(u: User) -> String {
     return u.name + " (" + u.age + ")"
 }
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let u = User { name: "Ada", age: 36 }
-    if isAdult(u) { system.stdout.writeln(describe(u)) }
+    if isAdult(u) { logger.info(describe(u)) }
     return 0
 }
 ```
