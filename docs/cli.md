@@ -69,6 +69,23 @@ It no-ops with "already up to date" when you're on the latest version. Notes:
 - Requires `curl` and `tar` on `PATH`. Override the source repo with
   `XI_UPDATE_REPO=owner/name`.
 
+### AI agent skill
+
+`xi skill` downloads the latest **[Xi agent guide](skill.md)** (a single markdown
+file that teaches an AI how to write Xi) and writes it locally:
+
+```console
+$ xi skill                 # writes ./skill.md
+xi skill: downloading the Xi agent guide ...
+xi skill: wrote skill.md — give this file to your AI agent so it can write Xi.
+
+$ xi skill docs/XI.md      # or pick the output path
+```
+
+Hand the resulting file to your coding agent (e.g. as a project skill / context
+file). Requires `curl`; override the source with `XI_SKILL_URL` (or
+`XI_SKILL_REPO` / `XI_SKILL_REF`).
+
 ### Interactive REPL
 
 ```console

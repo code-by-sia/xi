@@ -101,6 +101,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `file:line` diagnostics on lexer/parser errors | ✓ (initial) |
 | REPL / run tool (`xi`) | ✓ |
 | `xi version` and `xi update` (self-update from GitHub releases) | ✓ |
+| `xi skill` — download the AI-agent language guide (`docs/skill.md`) | ✓ |
 | Editor support: Tree-sitter grammar, Zed, Vim | ✓ |
 | Full ownership / borrow checking | ✗ (relies on C; planned) |
 | LLVM backend | ✗ (uses C as the intermediate) |

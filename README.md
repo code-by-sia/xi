@@ -101,6 +101,7 @@ xi hello.xi        # compile and run
 xi                 # interactive REPL
 xi version         # print the toolchain version
 xi update          # self-update to the latest release
+xi skill           # download the AI-agent guide -> ./skill.md
 ```
 
 Once installed, `xi update` upgrades the toolchain in place (downloads the latest

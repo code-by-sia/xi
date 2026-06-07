@@ -98,7 +98,7 @@ mapper buildProgram(decls: String, stmts: String) -> String {
 }
 
 // The toolchain version. Bump this when cutting a release (matches the tag).
-mapper xiVersion() -> String { return "0.0.50" }
+mapper xiVersion() -> String { return "0.0.51" }
 
 // Directory part of a path (everything before the last '/'); "." if none.
 mapper dirOf(path: String) -> String {
@@ -153,6 +153,25 @@ consumer doUpdate(progPath: String) {
     system.stdout.writeln("xi update: checking " + repo + " ...")
     flush_out()
     run_command("sh /tmp/xi-update.sh '" + repo + "' '" + root + "' '" + xiVersion() + "'")
+}
+
+// `xi skill [out]` — download the latest Xi agent guide (docs/skill.md) from
+// GitHub and write it locally, so it can be handed to an AI coding agent.
+consumer doSkill(outPath: String) {
+    let repo = get_env("XI_SKILL_REPO", "code-by-sia/x")
+    let ref = get_env("XI_SKILL_REF", "main")
+    let url = get_env("XI_SKILL_URL",
+        "https://raw.githubusercontent.com/" + repo + "/" + ref + "/docs/skill.md")
+    system.stdout.writeln("xi skill: downloading the Xi agent guide ...")
+    flush_out()
+    let rc = run_command("curl -fsSL '" + url + "' -o '" + outPath + "'")
+    if rc != 0 {
+        system.stdout.writeln("xi skill: download failed (" + url + ")")
+        system.stdout.writeln("  needs curl on PATH; override the source with XI_SKILL_URL.")
+    } else {
+        system.stdout.writeln("xi skill: wrote " + outPath
+            + " — give this file to your AI agent so it can write Xi.")
+    }
 }
 
 // Base name of a path: drop the directory and a trailing ".x".
@@ -272,6 +291,12 @@ async entry main(args: String[]) -> Integer {
         }
         if sub == "update" {
             doUpdate(args.data[0])
+            return 0
+        }
+        if sub == "skill" {
+            let out = "skill.md"
+            if args.len >= 3 { out = args.data[2] }
+            doSkill(out)
             return 0
         }
         runFile(xc, rt, sub)
