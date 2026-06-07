@@ -6,6 +6,7 @@ const sidebars = {
     'index',
     'getting-started',
     'cli',
+    'skill',
     'language-guide',
     'dependency-injection',
     'multi-file',
