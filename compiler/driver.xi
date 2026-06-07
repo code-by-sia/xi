@@ -322,7 +322,7 @@ async entry main(args: String[]) -> Integer {
     checkMachines(prog)              // static machine-graph validation
 
     system.stdout.writeln("xc: generating C ...")
-    let cSource = genAll(prog)
+    let cSource = genAll(prog, srcPath)
 
     // Build artifacts go to the output directory ($XC_OUT, default "build"),
     // keeping source trees clean.

@@ -355,6 +355,29 @@ machine Door {
 `net`, `http`, `process`, `time`, `log`. Namespaced calls, e.g.
 `math.sqrt(2.0)`, `text.toUpper("hi")`, `json.stringify(v)`.
 
+## Testing
+
+Built-in. Write `test "name" { assert <expr> }`; run with `xi test file.xi`.
+
+```x
+mapper add(a: Integer, b: Integer) -> Integer { return a + b }
+
+test "addition" {
+    assert add(2, 3) == 5
+}
+
+test "uses a fake" (clock: Clock) {     // deps injected; Test doubles below
+    assert clock.now() == 42
+}
+
+module Test { bind Clock -> FakeClock } // layered over App; ignored in normal builds
+```
+
+- `assert <expr>` works anywhere: in a `test` a failure aborts just that test and
+  the run continues; in normal code it prints `file:line` and aborts the process.
+- `xi test` exits nonzero if any test fails. `test` cases are excluded from normal
+  `xc` builds. Put tests in `*_test.xi` files.
+
 ## A complete program
 
 ```x

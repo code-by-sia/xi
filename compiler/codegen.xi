@@ -25,6 +25,27 @@ type StmtRes = { code: String, ctx: GCtx, pos: Integer }
 mapper gkind(toks: Token[], i: Integer) -> Integer => tokenArrGet(toks, i).kind
 mapper gtext(toks: Token[], i: Integer) -> String => tokenArrGet(toks, i).text
 
+// Escape a string for embedding in a C string literal (backslash and quote).
+mapper cEscape(s: String) -> String {
+    let n = string_len(s)
+    let out = ""
+    let runStart = 0
+    let i = 0
+    while i < n {
+        let c = string_char_at(s, i)
+        if c == 34 or c == 92 {     // " or backslash
+            out = out + string_slice(s, runStart, i) + "\\" + string_slice(s, i, i + 1)
+            runStart = i + 1
+        }
+        i = i + 1
+    }
+    return out + string_slice(s, runStart, n)
+}
+
+// Test build? `xi test` sets XC_TEST=1; in test mode the synthesized main runs
+// the `test` cases and DI prefers `module Test` bindings over `module App`.
+predicate inTestMode() { return string_len(get_env("XC_TEST", "")) > 0 }
+
 // index of the } matching the { at openIdx
 mapper matchBrace(toks: Token[], openIdx: Integer) -> Integer {
     let depth = 0
@@ -2013,6 +2034,20 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     if k == 283 { return genTry(toks, pos, ctx) }      // try {..} catch e: T {..}
     if k == 286 { return StmtRes { code: "    return 0;\n", ctx: ctx, pos: pos + 1 } }  // skip
     if k == 285 { return StmtRes { code: "    return 1;\n", ctx: ctx, pos: pos + 1 } }  // recover (resolution)
+    if k == 300 {   // assert <bool-expr>
+        let e = genExpr(toks, pos + 1, ctx)
+        let txt = ""
+        let j = pos + 1
+        while j < e.pos {
+            if j > pos + 1 { txt = txt + " " }
+            txt = txt + gtext(toks, j)
+            j = j + 1
+        }
+        let line = tokenArrGet(toks, pos).line
+        let code = "    xc_assert((" + e.code + "), \"" + cEscape(txt) + "\", xc_src_file, "
+                 + int_to_string(line) + "LL);\n"
+        return StmtRes { code: code, ctx: ctx, pos: e.pos }
+    }
     let e = genExpr(toks, pos, ctx)
     let p = e.pos
     let ak = gkind(toks, p)
@@ -2692,20 +2727,28 @@ mapper implementorsOf(prog: Program, iface: String) -> String[] {
 
 // Concrete class explicitly bound to I in any module, or "".
 mapper bindFor(prog: Program, iface: String) -> String {
+    // `module Test` bindings are ignored in normal builds and take precedence in
+    // test builds (XC_TEST), layered over `module App` (and any other module).
+    let testMode = inTestMode()
     let i = 0
     let n = moduleSpecLen(prog.modules)
     let found = ""
+    let testFound = ""
     while i < n {
         let mod = moduleSpecGet(prog.modules, i)
+        let isTest = (mod.name == "Test")
         let j = 0
         let m = bindSpecLen(mod.bindings)
         while j < m {
             let b = bindSpecGet(mod.bindings, j)
-            if b.ifaceName == iface { found = b.concreteName }
+            if b.ifaceName == iface {
+                if isTest { testFound = b.concreteName } else { found = b.concreteName }
+            }
             j = j + 1
         }
         i = i + 1
     }
+    if testMode and string_len(testFound) > 0 { return testFound }
     return found
 }
 
@@ -3910,9 +3953,48 @@ mapper genWebDispatch(prog: Program) -> String {
     return out
 }
 
-mapper genEntry(prog: Program) -> String {
+// The source file path, so `assert` failures can report file:line.
+mapper genSrcFileDef(srcPath: String) -> String {
+    return "const char* xc_src_file = \"" + cEscape(srcPath) + "\";\n"
+}
+
+// `xi test` (XC_TEST=1) replaces the entry with a runner over the `test` cases:
+// each runs isolated (a failed assert aborts that test, the rest continue),
+// then a summary + nonzero exit on any failure.
+mapper genTestRunner(prog: Program, srcPath: String) -> String {
+    let out = genSrcFileDef(srcPath)
+    let n = funcSpecLen(prog.tests)
+    let i = 0
+    while i < n {
+        let t = funcSpecGet(prog.tests, i)
+        out = out + hoistCatches(prog, t.bodyTokens, "test" + int_to_string(i))
+        out = out + hoistParallel(prog, t.bodyTokens, "test" + int_to_string(i))
+        out = out + "static void xc_test_body_" + int_to_string(i) + "(void) {\n"
+        out = out + funcDepPrologue(prog, t.fnDeps)
+        let ctx = withTag(seedFuncDeps(mkGCtx(prog), t.fnDeps), "test" + int_to_string(i))
+        out = out + genBody2(t.bodyTokens, ctx)
+        out = out + "}\n"
+        i = i + 1
+    }
+    out = out + "/* === Test runner === */\n"
+    out = out + "int main(int argc, char** argv) {\n"
+    out = out + "    xc_init_singletons();\n"
+    out = out + "    xc_atoms_init();\n"
+    let j = 0
+    while j < n {
+        let t = funcSpecGet(prog.tests, j)
+        out = out + "    xc_test_run(\"" + cEscape(t.name) + "\", xc_test_body_" + int_to_string(j) + ");\n"
+        j = j + 1
+    }
+    out = out + "    return xc_test_summary();\n"
+    out = out + "}\n"
+    return out
+}
+
+mapper genEntry(prog: Program, srcPath: String) -> String {
     let es = prog.entrySpec
-    let out = hoistCatches(prog, es.bodyTokens, "entry")
+    let out = genSrcFileDef(srcPath)
+    out = out + hoistCatches(prog, es.bodyTokens, "entry")
     out = out + hoistParallel(prog, es.bodyTokens, "entry")
     out = out + "/* === Entry point === */\n"
     out = out + "int main(int argc, char** argv) {\n"
@@ -4243,7 +4325,9 @@ mapper genMachineDefs(prog: Program) -> String {
     return out + "\n"
 }
 
-mapper genAll(prog: Program) -> String {
+mapper genAll(prog: Program, srcPath: String) -> String {
+    let tail = genEntry(prog, srcPath)
+    if inTestMode() and funcSpecLen(prog.tests) > 0 { tail = genTestRunner(prog, srcPath) }
     return genHeader()
          + genInterruptDefs(prog)
          + genForwardDecls(prog)
@@ -4276,6 +4360,6 @@ mapper genAll(prog: Program) -> String {
          + genClassMethods(prog)
          + genEventDispatch(prog)
          + genWebDispatch(prog)
-         + genEntry(prog)
+         + tail
 }
 

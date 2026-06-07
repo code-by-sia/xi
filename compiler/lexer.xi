@@ -238,6 +238,8 @@ mapper kwKind(word: String) -> Integer {
         "listener"    -> 295
         "event"       -> 296
         "action"      -> 298
+        "test"        -> 299
+        "assert"      -> 300
         "Number"      -> 260
         "Integer"     -> 261
         "Bool"        -> 262

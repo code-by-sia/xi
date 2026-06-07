@@ -2319,3 +2319,45 @@ xc_List_t xstd_map_values(xc_Map_t m) {
     for (xc_size_t i = 0; i < m->cap; i++) if (m->state[i] == 1) xstd_list_push(l, m->vslots + i * m->vsize);
     return l;
 }
+
+/* ─── assert + test runner ───────────────────────────────────────────────── */
+static jmp_buf     xc_test_buf;       /* abort-current-test target */
+static int         xc_test_active = 0;
+static const char* xc_test_name = "";
+static long        xc_test_total = 0;
+static long        xc_test_passed = 0;
+
+void xc_assert(xc_bool_t cond, const char* text, const char* file, long long line) {
+    if (cond) return;
+    if (xc_test_active) {
+        fprintf(stdout, "not ok - %s\n    assert %s  (%s:%lld)\n",
+                xc_test_name, text, file, (long long)line);
+        fflush(stdout);
+        longjmp(xc_test_buf, 1);     /* abandon this test, run the next */
+    }
+    fprintf(stderr, "xc: assertion failed: %s  (%s:%lld)\n", text, file, (long long)line);
+    abort();
+}
+
+void xc_test_run(const char* name, void (*fn)(void)) {
+    xc_test_total += 1;
+    xc_test_name = name;
+    if (setjmp(xc_test_buf) == 0) {
+        xc_test_active = 1;
+        fn();
+        xc_test_active = 0;
+        xc_test_passed += 1;
+        fprintf(stdout, "ok - %s\n", name);
+    } else {
+        xc_test_active = 0;          /* failure already reported by xc_assert */
+    }
+    fflush(stdout);
+}
+
+int xc_test_summary(void) {
+    long failed = xc_test_total - xc_test_passed;
+    fprintf(stdout, "\n%ld tests, %ld passed, %ld failed\n",
+            xc_test_total, xc_test_passed, failed);
+    fflush(stdout);
+    return failed == 0 ? 0 : 1;
+}

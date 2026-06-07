@@ -353,6 +353,15 @@ typedef struct { bool has_value; xc_size_t    value; } xc_opt_size_t;
         abort(); \
     } while (0)
 
+/* ─── assert + test runner ───────────────────────────────────────────────────
+ * `assert <expr>` lowers to xc_assert(cond, "<source>", xc_src_file, line). In a
+ * normal program a failed assert prints and aborts; under the `xi test` runner it
+ * records a failure and aborts only the current test (the rest still run).       */
+extern const char* xc_src_file;                       /* defined in generated C */
+void xc_assert(xc_bool_t cond, const char* text, const char* file, long long line);
+void xc_test_run(const char* name, void (*fn)(void)); /* run one test, isolated */
+int  xc_test_summary(void);                           /* print totals; nonzero if any failed */
+
 /* ─── System I/O ─────────────────────────────────────────────────────────── */
 
 static inline void xc_stdout_writeln(xc_string_t s) {

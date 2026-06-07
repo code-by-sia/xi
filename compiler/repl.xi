@@ -98,7 +98,7 @@ mapper buildProgram(decls: String, stmts: String) -> String {
 }
 
 // The toolchain version. Bump this when cutting a release (matches the tag).
-mapper xiVersion() -> String { return "0.0.53" }
+mapper xiVersion() -> String { return "0.0.54" }
 
 // Directory part of a path (everything before the last '/'); "." if none.
 mapper dirOf(path: String) -> String {
@@ -213,6 +213,22 @@ mapper builtPath(log: String) -> String {
     return ""
 }
 
+// `xi test file.xi` — compile in test mode (XC_TEST=1) and run the test runner,
+// forwarding its output and exit code (nonzero if any test failed).
+producer runTests(xc: String, rt: String, path: String) -> Integer {
+    let cmd = "XC_TEST=1 XC_OUT=/tmp XC_RUNTIME='" + rt + "' '" + xc + "' '" + path + "' >/tmp/xtest.log 2>&1"
+    let rc = run_command(cmd)
+    let log = file_read_all("/tmp/xtest.log")
+    if rc != 0 {
+        system.stdout.writeln("xi test: compilation failed:")
+        system.stdout.writeln(log)
+        return 1
+    }
+    let bin = builtPath(log)
+    if string_len(bin) == 0 { bin = "/tmp/" + baseName(path) }
+    return run_command("'" + bin + "'")
+}
+
 consumer runFile(xc: String, rt: String, path: String) {
     let cmd = "XC_OUT=/tmp XC_RUNTIME='" + rt + "' '" + xc + "' '" + path + "' >/tmp/xrun.log 2>&1"
     let rc = run_command(cmd)
@@ -317,6 +333,13 @@ async entry main(args: String[]) -> Integer {
         if sub == "skill" {
             doSkill()
             return 0
+        }
+        if sub == "test" {
+            if args.len < 3 {
+                system.stdout.writeln("usage: xi test <file.xi>")
+                return 1
+            }
+            return runTests(xc, rt, args.data[2])
         }
         runFile(xc, rt, sub)
         return 0
