@@ -99,7 +99,12 @@ export PATH="$PWD/xi-<version>-<os>-<arch>/bin:$PATH"
 xc hello.xi        # compile  -> build/hello
 xi hello.xi        # compile and run
 xi                 # interactive REPL
+xi version         # print the toolchain version
+xi update          # self-update to the latest release
 ```
+
+Once installed, `xi update` upgrades the toolchain in place (downloads the latest
+release for your platform and replaces the binaries, runtime, and stdlib).
 
 The bundle ships the `xc` compiler, the `xi` REPL / run tool, the runtime, and
 the standard library; the `bin/` wrappers set `XC_RUNTIME` / `XC_STD` for you.

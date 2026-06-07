@@ -97,6 +97,64 @@ mapper buildProgram(decls: String, stmts: String) -> String {
          + "    return 0\n}\n"
 }
 
+// The toolchain version. Bump this when cutting a release (matches the tag).
+mapper xiVersion() -> String { return "0.0.50" }
+
+// Directory part of a path (everything before the last '/'); "." if none.
+mapper dirOf(path: String) -> String {
+    let n = string_len(path)
+    let lastSp = 0 - 1
+    let i = 0
+    while i < n {
+        if string_char_at(path, i) == 47 { lastSp = i }
+        i = i + 1
+    }
+    if lastSp <= 0 { return "." }
+    return string_slice(path, 0, lastSp)
+}
+
+// `xi update` — download the latest release bundle for this platform from GitHub
+// and replace the installed xc/xi binaries, runtime, and stdlib in place.
+consumer doUpdate(progPath: String) {
+    let repo = get_env("XI_UPDATE_REPO", "code-by-sia/x")
+    let root = dirOf(dirOf(progPath))          // libexec/xi -> bundle root
+    let sh = "set -e\n"
+    sh = sh + "REPO=\"$1\"; ROOT=\"$2\"; CUR=\"$3\"\n"
+    sh = sh + "if [ ! -d \"$ROOT/libexec\" ]; then w=$(command -v xi 2>/dev/null || true); if [ -n \"$w\" ]; then ROOT=$(cd \"$(dirname \"$w\")/..\" && pwd); fi; fi\n"
+    sh = sh + "if [ ! -d \"$ROOT/libexec\" ]; then echo \"xi update: could not locate the install root (got: $ROOT)\"; echo \"  update works on an installed release bundle (bin/ + libexec/).\"; exit 1; fi\n"
+    sh = sh + "if [ ! -w \"$ROOT/libexec\" ]; then echo \"xi update: no write permission to $ROOT (try: sudo xi update)\"; exit 1; fi\n"
+    sh = sh + "os=$(uname -s); arch=$(uname -m)\n"
+    sh = sh + "case \"$os\" in Linux) o=linux;; Darwin) o=macos;; *) echo \"xi update: unsupported OS: $os\"; exit 1;; esac\n"
+    sh = sh + "case \"$arch\" in x86_64|amd64) a=x86_64;; arm64|aarch64) a=arm64;; *) echo \"xi update: unsupported arch: $arch\"; exit 1;; esac\n"
+    sh = sh + "target=\"$o-$a\"\n"
+    sh = sh + "tag=$(curl -fsSL \"https://api.github.com/repos/$REPO/releases/latest\" 2>/dev/null | grep '\"tag_name\"' | head -1 | cut -d'\"' -f4)\n"
+    sh = sh + "[ -n \"$tag\" ] || { echo \"xi update: could not determine the latest release\"; exit 1; }\n"
+    sh = sh + "ver=${tag#v}\n"
+    sh = sh + "echo \"current: $CUR   latest: $ver\"\n"
+    sh = sh + "if [ \"$ver\" = \"$CUR\" ]; then echo \"xi is already up to date.\"; exit 0; fi\n"
+    sh = sh + "bundle=\"xi-$tag-$target\"\n"
+    sh = sh + "url=\"https://github.com/$REPO/releases/download/$tag/$bundle.tar.gz\"\n"
+    sh = sh + "tmp=$(mktemp -d \"$ROOT/.xi-update.XXXXXX\") || { echo \"xi update: cannot create a temp dir in $ROOT\"; exit 1; }\n"
+    sh = sh + "echo \"downloading $bundle.tar.gz ...\"\n"
+    sh = sh + "if ! curl -fsSL \"$url\" -o \"$tmp/b.tgz\"; then echo \"xi update: download failed ($url)\"; rm -rf \"$tmp\"; exit 1; fi\n"
+    sh = sh + "if ! tar -xzf \"$tmp/b.tgz\" -C \"$tmp\"; then echo \"xi update: extract failed\"; rm -rf \"$tmp\"; exit 1; fi\n"
+    sh = sh + "src=\"$tmp/$bundle\"\n"
+    sh = sh + "if [ ! -x \"$src/libexec/xi\" ]; then echo \"xi update: unexpected bundle layout\"; rm -rf \"$tmp\"; exit 1; fi\n"
+    sh = sh + "mv -f \"$src/libexec/xc\" \"$ROOT/libexec/xc\"\n"
+    sh = sh + "mv -f \"$src/libexec/xi\" \"$ROOT/libexec/xi\"\n"
+    sh = sh + "rm -rf \"$ROOT/runtime\" \"$ROOT/std\"\n"
+    sh = sh + "mv -f \"$src/runtime\" \"$ROOT/runtime\"\n"
+    sh = sh + "mv -f \"$src/std\" \"$ROOT/std\"\n"
+    sh = sh + "if [ -d \"$src/bin\" ]; then cp -f \"$src/bin/xc\" \"$src/bin/xi\" \"$ROOT/bin/\" 2>/dev/null || true; fi\n"
+    sh = sh + "chmod +x \"$ROOT/libexec/xc\" \"$ROOT/libexec/xi\" 2>/dev/null || true\n"
+    sh = sh + "rm -rf \"$tmp\"\n"
+    sh = sh + "echo \"xi updated: $CUR -> $ver\"\n"
+    file_write("/tmp/xi-update.sh", sh)
+    system.stdout.writeln("xi update: checking " + repo + " ...")
+    flush_out()
+    run_command("sh /tmp/xi-update.sh '" + repo + "' '" + root + "' '" + xiVersion() + "'")
+}
+
 // Base name of a path: drop the directory and a trailing ".x".
 mapper baseName(path: String) -> String {
     let n = string_len(path)
@@ -207,7 +265,16 @@ async entry main(args: String[]) -> Integer {
     let xc = get_env("XC", "compiler/xc")
     let rt = get_env("XC_RUNTIME", "runtime")
     if args.len >= 2 {
-        runFile(xc, rt, args.data[1])
+        let sub = args.data[1]
+        if sub == "version" or sub == "--version" or sub == "-v" {
+            system.stdout.writeln("xi " + xiVersion())
+            return 0
+        }
+        if sub == "update" {
+            doUpdate(args.data[0])
+            return 0
+        }
+        runFile(xc, rt, sub)
         return 0
     }
     repl(xc, rt)
