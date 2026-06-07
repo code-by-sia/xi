@@ -642,12 +642,17 @@ mapper buildCellCond(colName: String, cell: Token[], line: Integer) -> Token[] {
             let it = tokenArrGet(cell, i)
             if it.kind == 105 { i = n }                                  // ]
             else {
-                if it.kind == 107 and i + 1 < n and tokenArrGet(cell, i + 1).kind == 107 {
+                if it.kind == 134 {                                      // `..` (range token)
                     inHi = true
+                    i = i + 1
+                } else {
+                if it.kind == 107 and i + 1 < n and tokenArrGet(cell, i + 1).kind == 107 {
+                    inHi = true                                          // legacy: two `.` tokens
                     i = i + 2
                 } else {
                     if inHi { hi = appendToken(hi, it) } else { lo = appendToken(lo, it) }
                     i = i + 1
+                }
                 }
             }
         }

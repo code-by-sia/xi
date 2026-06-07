@@ -275,7 +275,12 @@ if isAdult(u) { ... } else { ... }
 
 if let row = maybeRow { use(row) }       // optional unwrap
 
-for item in items { ... }                // arrays
+for item in items { ... }                // arrays, List<T>, Set<T>
+
+for i in 1..5 { ... }                    // ranges: 1 2 3 4 5 (inclusive)
+for i in 0 until 5 { ... }               // 0 1 2 3 4 (exclusive end)
+for i in 10 downTo 1 { ... }             // counts down
+for i in 0..100 step 10 { ... }          // custom stride
 
 while cond { ... }
 

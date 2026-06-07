@@ -320,6 +320,10 @@ void         xstd_map_clear(xc_Map_t);
 xc_List_t    xstd_map_keys(xc_Map_t);                                /* keys, as a List<K> */
 xc_List_t    xstd_map_values(xc_Map_t);                              /* values, as a List<V> */
 
+/* ─── Integer ranges (1..10 / until / downTo / step) ─────────────────────────
+ * `end` is exclusive; `step` is signed and non-zero. Iterated by `for x in`.    */
+typedef struct { xc_integer_t start; xc_integer_t end; xc_integer_t step; } xc_range_t;
+
 /* ─── Optional helpers ───────────────────────────────────────────────────── */
 
 typedef struct { bool has_value; xc_number_t  value; } xc_opt_number_t;

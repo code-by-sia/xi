@@ -41,6 +41,8 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `match` (literal / string / bool / bound-ident / variant / `_` / `else` patterns; multi-key `(a, b)` arms; inline `-> expr` or `{ block }` bodies) | ✓ |
 | Interrupts — resumable conditions (`interrupt`/`signal`/`try`/`catch`, `skip`+`recover`) | ✓ (MVP) |
 | `for` loops over arrays | ✓ |
+| `for` loops over `List<T>` / `Set<T>` | ✓ |
+| Integer ranges (`a..b`, `until`, `downTo`, `step`) in `for` and as values | ✓ |
 | `if` / `if let` | ✓ |
 | `scope` blocks | ✓ (compiled as C blocks) |
 | `async` functions | ✓ (compiled synchronously in the C backend) |
