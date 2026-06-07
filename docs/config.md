@@ -37,6 +37,23 @@ tax:
   rate: 3
 ```
 
+## `readConfig<T>` — read any file into a value
+
+Beyond binding a whole interface, you can read a single file into a value with the
+generic `readConfig<T>` form. The format is chosen by extension — **JSON, YAML,
+and XML** are all supported:
+
+```x
+import "std/config.xi"
+type Tax = { percent: Number, rate: Integer }
+
+let tax  = readConfig<Tax>("tax.yaml")     // or .json / .xml
+let tax2 = readConfig<Tax>(path)           // the path can be dynamic
+```
+
+Primitives and (nested) compounds decode automatically via the derived codec; a
+missing key is the zero value.
+
 ## How it works
 
 - Each interface **method name maps to a top-level config key** (`tax()` → the

@@ -399,6 +399,11 @@ module Test { bind AppConfig -> readConfig("application-test.yaml") }   // wins 
 ```
 
 Inject `AppConfig` like any dependency. A missing key yields the zero value.
+Or read one file into a value generically (JSON/YAML/XML by extension):
+
+```x
+let tax = readConfig<Tax>("tax.yaml")
+```
 
 ## A complete program
 

@@ -21,5 +21,12 @@
 //         return 0
 //     }
 //
-// A missing key yields the type's zero value. `readConfig` is recognized by the
-// compiler only as a `bind` target — it is not a callable function.
+// A missing key yields the type's zero value.
+//
+// To read a single file into a value, use the generic form (format chosen by
+// extension — JSON, YAML, or XML):
+//
+//     let tax = readConfig<TaxConfig>("tax.yaml")   // or .json / .xml
+//
+// `readConfig("file")` (no type arg) is recognized only as a `bind` target;
+// `readConfig<T>("file")` is the generic value form.
