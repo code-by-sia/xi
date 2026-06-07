@@ -146,9 +146,10 @@ growable layer over it.
 
 1. **Generics** (monomorphization) — the foundation; also benefits events/channels.
 2. **Closures / lambdas** (`=>` and trailing-`{ it }`), capture-by-value.
-3. **`std/collections`** — **`List<T>` shipped** (built-in generic: `empty List<T>`,
-   push/get/set/len/isEmpty/removeAt/clear, `for x in`, usable as param/field/
-   return). Mutable map/set, builders, the eager functional API, and ranges remain.
+3. **`std/collections`** — **`List<T>` and `Set<T>` shipped** (built-in generics:
+   `empty List<T>`/`empty Set<T>`, the mutating + query ops, `for x in`, usable as
+   param/field/return). `Map<K, V>` is next; builders, the eager functional API,
+   and ranges remain.
 4. **`std/sequences`** — lazy fused `Sequence<T>` with the same operators.
 5. Extra structures (`ArrayDeque`, `PriorityQueue`, ordered maps) on demand.
 
