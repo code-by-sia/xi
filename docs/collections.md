@@ -103,6 +103,17 @@ nums.first() / nums.last()               // ends (bounds-checked)
 nums.toSet()                             // Set<T> of the elements
 ```
 
+Lookups that can miss return an **optional** (`T?`), unwrapped with `if let`
+(there's no `null`):
+
+```x
+if let hit = nums.find { it > 4 } { use(hit) }   // first match, or none
+nums.firstOrNone()  / nums.lastOrNone()          // ends as optionals
+nums.maxByOrNone { it.score }                    // element with the max key
+nums.minByOrNone { it.score }                    // element with the min key
+nums.average { it.score }                        // Number mean (0.0 if empty)
+```
+
 They chain naturally — `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.
 See `examples/functional_demo.xi`.
 
