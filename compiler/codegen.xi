@@ -1231,6 +1231,10 @@ predicate isListFunc(fld: String) {
     if fld == "maxByOrNone" { return true }
     if fld == "minByOrNone" { return true }
     if fld == "average"  { return true }
+    if fld == "sorted"   { return true }
+    if fld == "sortedDescending" { return true }
+    if fld == "sortedBy" { return true }
+    if fld == "sortedByDescending" { return true }
     return false
 }
 // index of the top-level `=>` (kind 110) within (start, close), or -1.
@@ -1245,6 +1249,35 @@ mapper lambdaArrow(toks: Token[], start: Integer, close: Integer) -> Integer {
         i = i + 1
     }
     return 0 - 1
+}
+
+// Build a stable insertion-sort over a copy of the list, keyed by `keyExpr`
+// (computed once per element, `evar` bound to it). Numeric keys compare with
+// `>`/`<`; String keys with xc_str_cmp. `desc` flips the order.
+mapper sortStmtExpr(declSv: String, sv: String, rv: String, iv: String, u: String,
+                    elem: String, evar: String, keyC: String, keyX: String, keyExpr: String, desc: Bool) -> String {
+    let nN = "_n" + u
+    let ks = "_ks" + u
+    let ev = "_ev" + u
+    let kv = "_kv" + u
+    let jj = "_j" + u
+    let cmp = ks + "[" + jj + "] > " + kv
+    if keyX == "String" { cmp = "xc_str_cmp(" + ks + "[" + jj + "], " + kv + ") > 0" }
+    if desc {
+        cmp = ks + "[" + jj + "] < " + kv
+        if keyX == "String" { cmp = "xc_str_cmp(" + ks + "[" + jj + "], " + kv + ") < 0" }
+    }
+    return "({ " + declSv
+        + "xc_integer_t " + nN + " = xstd_list_len(" + sv + ");\n"
+        + "      xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n"
+        + "      " + keyC + "* " + ks + " = (" + keyC + "*)malloc((" + nN + " > 0 ? " + nN + " : 1) * sizeof(" + keyC + "));\n"
+        + "      for (xc_integer_t " + iv + " = 0; " + iv + " < " + nN + "; " + iv + " = " + iv + " + 1) { "
+        + elem + " " + evar + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + "); xstd_list_push(" + rv + ", &" + evar + "); " + ks + "[" + iv + "] = (" + keyExpr + "); }\n"
+        + "      for (xc_integer_t " + iv + " = 1; " + iv + " < " + nN + "; " + iv + " = " + iv + " + 1) {\n"
+        + "        " + elem + " " + ev + " = *(" + elem + "*)xstd_list_at(" + rv + ", " + iv + "); " + keyC + " " + kv + " = " + ks + "[" + iv + "]; xc_integer_t " + jj + " = " + iv + " - 1;\n"
+        + "        while (" + jj + " >= 0 && (" + cmp + ")) { xstd_list_set(" + rv + ", " + jj + " + 1, xstd_list_at(" + rv + ", " + jj + ")); " + ks + "[" + jj + " + 1] = " + ks + "[" + jj + "]; " + jj + " = " + jj + " - 1; }\n"
+        + "        xstd_list_set(" + rv + ", " + jj + " + 1, &" + ev + "); " + ks + "[" + jj + " + 1] = " + kv + "; }\n"
+        + "      free(" + ks + "); " + rv + "; })"
 }
 
 // recv.<fld>([arg]) { [params =>] body } — emit an inlined loop (statement-expr).
@@ -1321,6 +1354,12 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         let code = "({ " + declSv + "xc_opt_" + suf + "_t " + rv + "; " + rv + ".has_value = 0;\n"
                  + "      if (xstd_list_len(" + sv + ") > 0) { " + rv + ".has_value = 1; " + rv + ".value = *(" + elem + "*)xstd_list_at(" + sv + ", xstd_list_len(" + sv + ") - 1); } " + rv + "; })"
         return ExprRes { code: code, pos: q, xtyp: "opt_" + suf }
+    }
+    if fld == "sorted" or fld == "sortedDescending" {
+        // natural order of primitive/String elements
+        let evar = "_x" + u
+        let code = sortStmtExpr(declSv, sv, rv, iv, u, elem, evar, elem, elemX, evar, fld == "sortedDescending")
+        return ExprRes { code: code, pos: q, xtyp: typ }
     }
 
     // ── lambda methods:  { [params =>] body } ──
@@ -1467,6 +1506,12 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
                  + "        _sum" + u + " = _sum" + u + " + (" + body.code + "); }"
                  + " xstd_list_len(" + sv + ") > 0 ? _sum" + u + " / (xc_number_t)xstd_list_len(" + sv + ") : 0.0; })"
         return ExprRes { code: code, pos: close + 1, xtyp: "Number" }
+    }
+    if fld == "sortedBy" or fld == "sortedByDescending" {
+        // sort by a numeric/String key projection
+        let keyC = xnameToCtype(body.xtyp)
+        let code = sortStmtExpr(declSv, sv, rv, iv, u, elem, p0, keyC, body.xtyp, body.code, fld == "sortedByDescending")
+        return ExprRes { code: code, pos: close + 1, xtyp: typ }
     }
     // joinToString(sep) { it => <string> }
     let sep = argCode

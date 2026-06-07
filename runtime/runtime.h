@@ -77,6 +77,16 @@ static inline xc_bool_t xc_string_eq(xc_string_t a, xc_string_t b) {
     return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
 }
 
+/* Lexicographic compare: <0, 0, >0 (used by List.sorted/sortedBy). */
+static inline int xc_str_cmp(xc_string_t a, xc_string_t b) {
+    xc_size_t n = a.len < b.len ? a.len : b.len;
+    int c = (n == 0) ? 0 : memcmp(a.data, b.data, n);
+    if (c != 0) return c;
+    if (a.len < b.len) return -1;
+    if (a.len > b.len) return 1;
+    return 0;
+}
+
 /* Concatenate two strings — result is heap-allocated */
 static inline xc_string_t xc_string_concat(xc_string_t a, xc_string_t b) {
     xc_size_t len = a.len + b.len;
