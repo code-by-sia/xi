@@ -106,8 +106,16 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
         }
         // Named type
         if t.kind == 1 {  // IDENT
-            base = identToCtype(t.text)
-            ps2 = advance(ps)
+            if t.text == "List" and peekAt(ps, 1).kind == 114 {  // List<T>
+                let ep = advance(advance(ps))                    // past `List` and `<`
+                let elem = parseTypeExpr(ep)
+                ps2 = elem.ps
+                if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
+                base = "xc_List_" + ctypeSuffix(elem.ctype) + "_t"
+            } else {
+                base = identToCtype(t.text)
+                ps2 = advance(ps)
+            }
         } else {
             return TypeResult { ctype: "void", ps: ps }
         }

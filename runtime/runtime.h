@@ -253,6 +253,25 @@ typedef struct {
     xc_size_t  cap;
 } xc_arr_any_t;
 
+/* ─── List<T> (std/collections) ──────────────────────────────────────────────
+ * A growable, mutable list. The runtime is element-type-erased (it stores
+ * `elem`-sized cells); the compiler keeps the element type for safety and emits
+ * the right casts, and aliases `xc_List_<T>_t` to this handle per element type.  */
+typedef struct xc_list* xc_List_t;
+/* Per-element aliases (all the same handle) so List<T> can be a typed param/field. */
+typedef xc_List_t xc_List_integer_t;
+typedef xc_List_t xc_List_number_t;
+typedef xc_List_t xc_List_bool_t;
+typedef xc_List_t xc_List_string_t;
+typedef xc_List_t xc_List_char_t;
+xc_List_t    xstd_list_new(xc_size_t elem);
+void         xstd_list_push(xc_List_t, const void* e);
+void*        xstd_list_at(xc_List_t, xc_integer_t i);     /* ptr to element (aborts OOB) */
+void         xstd_list_set(xc_List_t, xc_integer_t i, const void* e);
+xc_integer_t xstd_list_len(xc_List_t);
+void         xstd_list_removeat(xc_List_t, xc_integer_t i);
+void         xstd_list_clear(xc_List_t);
+
 /* ─── Optional helpers ───────────────────────────────────────────────────── */
 
 typedef struct { bool has_value; xc_number_t  value; } xc_opt_number_t;

@@ -2119,3 +2119,46 @@ xc_bool_t xstd_thread_stopped(void) {
     struct xc_thread* t = (struct xc_thread*)pthread_getspecific(xc_thread_key);
     return t ? (t->stop != 0) : false;
 }
+
+/* ─── List<T> (std/collections) ───────────────────────────────────────────────
+ * Element-type-erased growable list; the compiler supplies element size and
+ * casts. Stores cells contiguously (like a typed array) so iteration is tight. */
+struct xc_list { char* data; xc_size_t len, cap, elem; };
+
+xc_List_t xstd_list_new(xc_size_t elem) {
+    struct xc_list* l = (struct xc_list*)malloc(sizeof(*l)); if (!l) abort();
+    l->data = NULL; l->len = 0; l->cap = 0; l->elem = elem ? elem : 1;
+    return l;
+}
+static void xc_list_grow(struct xc_list* l, xc_size_t need) {
+    if (need <= l->cap) return;
+    xc_size_t cap = l->cap ? l->cap * 2 : 8;
+    if (cap < need) cap = need;
+    l->data = (char*)realloc(l->data, cap * l->elem); if (!l->data) abort();
+    l->cap = cap;
+}
+void xstd_list_push(xc_List_t l, const void* e) {
+    xc_list_grow(l, l->len + 1);
+    memcpy(l->data + l->len * l->elem, e, l->elem);
+    l->len += 1;
+}
+static void xc_list_oob(xc_integer_t i, xc_size_t len) {
+    fprintf(stderr, "xc: list index %lld out of bounds (len %zu)\n", (long long)i, (size_t)len);
+    abort();
+}
+void* xstd_list_at(xc_List_t l, xc_integer_t i) {
+    if (i < 0 || (xc_size_t)i >= l->len) xc_list_oob(i, l->len);
+    return l->data + (xc_size_t)i * l->elem;
+}
+void xstd_list_set(xc_List_t l, xc_integer_t i, const void* e) {
+    if (i < 0 || (xc_size_t)i >= l->len) xc_list_oob(i, l->len);
+    memcpy(l->data + (xc_size_t)i * l->elem, e, l->elem);
+}
+xc_integer_t xstd_list_len(xc_List_t l) { return (xc_integer_t)l->len; }
+void xstd_list_removeat(xc_List_t l, xc_integer_t i) {
+    if (i < 0 || (xc_size_t)i >= l->len) xc_list_oob(i, l->len);
+    char* slot = l->data + (xc_size_t)i * l->elem;
+    memmove(slot, slot + l->elem, (l->len - (xc_size_t)i - 1) * l->elem);
+    l->len -= 1;
+}
+void xstd_list_clear(xc_List_t l) { l->len = 0; }
