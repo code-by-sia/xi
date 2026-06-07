@@ -114,6 +114,14 @@ nums.minByOrNone { it.score }                    // element with the min key
 nums.average { it.score }                        // Number mean (0.0 if empty)
 ```
 
+Sorting returns a sorted copy (numeric or `String` keys):
+
+```x
+nums.sorted() / nums.sortedDescending()          // natural order of the elements
+people.sortedBy { it.age }                        // by a key projection
+people.sortedByDescending { it.name }
+```
+
 They chain naturally — `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.
 See `examples/functional_demo.xi`.
 
