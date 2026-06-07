@@ -1019,6 +1019,57 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             pos: endp, xtyp: "Map_" + ctypeSuffix(kc) + "_" + ctypeSuffix(vc)
         }
     }
+    // ── builders: listOf(a, b, ...) / setOf(a, b, ...) / mapOf(k to v, ...) ──
+    // Element/key types are inferred from the first argument (homogeneous).
+    if k == 1 and txt == "listOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_List_t _t = xstd_list_new(sizeof(" + ec + ")); "
+                 + "xstd_list_push(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_list_push(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "List_" + arrSuffixOf(first.xtyp) }
+    }
+    if k == 1 and txt == "setOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_Set_t _s = xstd_set_new(sizeof(" + ec + "), " + strFlagFor(ec) + "); "
+                 + "xstd_set_add(_s, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_set_add(_s, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_s; })", pos: p, xtyp: "Set_" + arrSuffixOf(first.xtyp) }
+    }
+    if k == 1 and txt == "mapOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let k1 = genExpr(toks, pos + 2, ctx)
+        let kc = xnameToCtype(k1.xtyp)
+        let q = k1.pos
+        if gkind(toks, q) == 1 and gtext(toks, q) == "to" { q = q + 1 }   // `k to v`
+        let v1 = genExpr(toks, q, ctx)
+        let vc = xnameToCtype(v1.xtyp)
+        let body = "xc_Map_t _m = xstd_map_new(sizeof(" + kc + "), sizeof(" + vc + "), " + strFlagFor(kc) + "); "
+                 + "xstd_map_put(_m, (" + kc + "[]){ " + k1.code + " }, (" + vc + "[]){ " + v1.code + " }); "
+        let p = v1.pos
+        while gkind(toks, p) == 106 {
+            let kk = genExpr(toks, p + 1, ctx)
+            let qq = kk.pos
+            if gkind(toks, qq) == 1 and gtext(toks, qq) == "to" { qq = qq + 1 }
+            let vv = genExpr(toks, qq, ctx)
+            body = body + "xstd_map_put(_m, (" + kc + "[]){ " + kk.code + " }, (" + vc + "[]){ " + vv.code + " }); "
+            p = vv.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_m; })", pos: p, xtyp: "Map_" + arrSuffixOf(k1.xtyp) + "_" + arrSuffixOf(v1.xtyp) }
+    }
     if k == 1 and txt == "empty" {
         let nk = gkind(toks, pos + 1)
         if nk == 1 or string_len(primCtypeK(nk)) > 0 {
