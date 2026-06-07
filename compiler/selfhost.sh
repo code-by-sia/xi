@@ -28,7 +28,7 @@ SEED="$("$ROOT/compiler/fetch-seed.sh")"
 cp "$SEED" "$W/xc_gen0"; chmod +x "$W/xc_gen0"
 
 compile_with() {  # $1 = compiler binary, $2 = output C copy
-    ( cd "$W" && XC_HELPERS="$HELP" XC_RUNTIME="$ROOT/runtime" XC_OUT=. "$1" xc.xi >/dev/null )
+    ( cd "$W" && XC_KEEP_C=1 XC_HELPERS="$HELP" XC_RUNTIME="$ROOT/runtime" XC_OUT=. "$1" xc.xi >/dev/null )
     cp "$W/xc.gen.c" "$2"
 }
 

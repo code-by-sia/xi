@@ -336,6 +336,11 @@ async entry main(args: String[]) -> Integer {
     system.stdout.writeln("xc: compiling C to native binary ...")
     let rc = compile_c(outPath, binPath)
     if rc == 0 {
+        // Drop the generated C once it's built. Set XC_KEEP_C=1 to retain it
+        // (the self-host fixpoint check diffs the generated .gen.c).
+        if string_len(get_env("XC_KEEP_C", "")) == 0 {
+            run_command("rm -f '" + outPath + "'")
+        }
         system.stdout.writeln("xc: built executable " + binPath)
         return 0
     }

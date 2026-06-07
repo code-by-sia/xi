@@ -7,14 +7,16 @@ $ ./compiler/xc <source.xi>
 ```
 
 Pipeline: resolve `import`s → lex → parse → generate C → invoke `cc` →
-**native executable**. Build artifacts (the executable and the generated
-`<name>.gen.c`) are written to the output directory `$XC_OUT` (default `build/`),
-keeping source trees clean.
+**native executable**. The binary is written to the output directory `$XC_OUT`
+(default `build/`). The intermediate `<name>.gen.c` is generated there and then
+**deleted after a successful build** — set `XC_KEEP_C=1` to keep it (e.g. to
+inspect the generated C or diff the self-hosting output).
 
 | Environment variable | Meaning | Default |
 |----------------------|---------|---------|
 | `XC_RUNTIME` | directory containing `runtime.h` / `runtime.c` | `runtime` |
-| `XC_OUT` | output directory for built binaries + generated C | `build` |
+| `XC_OUT` | output directory for the built binary (and the transient generated C) | `build` |
+| `XC_KEEP_C` | keep the generated `<name>.gen.c` instead of deleting it | unset |
 | `XC_STD` | search root for `import "std/..."` | `.` |
 | `XC_HELPERS` | C file appended to the output (only needed when compiling the compiler itself) | unset |
 
