@@ -385,9 +385,49 @@ predicate usesThreads(prog: Program) {
 // A JSON codec (xc_tojson_/xc_fromjson_) is emitted for this X type: every event
 // type, plus (when web or threading is in use, so channels can carry structured
 // payloads) every compound type.
+// Any `bind I -> readConfig("...")` in the program?
+predicate usesConfig(prog: Program) {
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        let j = 0
+        let m = bindSpecLen(mod.bindings)
+        while j < m {
+            if string_len(bindSpecGet(mod.bindings, j).configPath) > 0 { return true }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// The config file path bound to interface `ifn`, or "" if it isn't config-backed.
+mapper configPathFor(prog: Program, ifn: String) -> String {
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    let found = ""
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        let isTest = (mod.name == "Test")
+        let j = 0
+        let m = bindSpecLen(mod.bindings)
+        while j < m {
+            let b = bindSpecGet(mod.bindings, j)
+            if b.ifaceName == ifn and string_len(b.configPath) > 0 {
+                if isTest and inTestMode() { return b.configPath }   // Test config wins under XC_TEST
+                if not isTest { found = b.configPath }
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return found
+}
+
 predicate hasCodec(prog: Program, xn: String) {
     if isEventTypeC(prog, xn) { return true }
-    if isCompoundTypeC(prog, xn) and (webEnabled(prog) or usesThreads(prog)) { return true }
+    if isCompoundTypeC(prog, xn) and (webEnabled(prog) or usesThreads(prog) or usesConfig(prog)) { return true }
     return false
 }
 
@@ -3306,6 +3346,7 @@ mapper chosenImpl(prog: Program, iface: String) -> String {
 predicate isResolvable(prog: Program, iface: String) {
     if string_len(bindFor(prog, iface)) > 0 { return true }
     if stringArrLen(implementorsOf(prog, iface)) > 0 { return true }
+    if string_len(configPathFor(prog, iface)) > 0 { return true }   // config-backed
     return false
 }
 
@@ -4015,6 +4056,53 @@ mapper genConstructors(prog: Program) -> String {
 }
 
 // Per-interface resolver: bind override or sole implementor; singleton or fresh.
+// Config-backed implementors: a vtable whose methods read the parsed config tree
+// by method name and decode into each method's return type.
+mapper genConfigImpls(prog: Program) -> String {
+    if not usesConfig(prog) { return "" }
+    let out = "/* === Config-backed interface implementors === */\n"
+    out = out + "extern xc_string_t file_read_all(xc_string_t);\n"
+    out = out + "extern xc_Json_t xstd_json_parse(xc_string_t);\n"
+    out = out + "extern xc_Json_t xstd_yaml_parse(xc_string_t);\n"
+    out = out + "extern xc_Json_t xstd_json_get(xc_Json_t, xc_string_t);\n"
+    out = out + "extern xc_string_t xstd_json_as_string(xc_Json_t);\n"
+    out = out + "extern xc_number_t xstd_json_as_number(xc_Json_t);\n"
+    out = out + "extern xc_bool_t xstd_json_as_bool(xc_Json_t);\n"
+    let i = 0
+    let n = ifaceSpecLen(prog.ifaces)
+    while i < n {
+        let is2 = ifaceSpecGet(prog.ifaces, i)
+        let ifn = is2.name
+        if string_len(configPathFor(prog, ifn)) > 0 {
+            let mn = methodSpecLen(is2.methList)
+            let mi = 0
+            while mi < mn {
+                let ms = methodSpecGet(is2.methList, mi)
+                let dec = jsonDecodeExpr(prog, ms.retCtype, "xstd_json_get(_t, xc_string_from_cstr(\"" + ms.name + "\"))")
+                out = out + "static " + ms.retCtype + " xc_" + ifn + "__" + ms.name + "_cfg(void* self) {\n"
+                out = out + "    xc_Json_t _t = (xc_Json_t)self; (void)_t;\n"
+                if string_len(dec) > 0 {
+                    out = out + "    return " + dec + ";\n"
+                } else {
+                    out = out + "    " + ms.retCtype + " _z; memset(&_z, 0, sizeof(_z)); return _z;\n"
+                }
+                out = out + "}\n"
+                mi = mi + 1
+            }
+            out = out + "static const xc_" + ifn + "_vtable_t xc_" + ifn + "_cfg_vtable = {\n"
+            mi = 0
+            while mi < mn {
+                let ms = methodSpecGet(is2.methList, mi)
+                out = out + "    ." + ms.name + " = xc_" + ifn + "__" + ms.name + "_cfg,\n"
+                mi = mi + 1
+            }
+            out = out + "};\n\n"
+        }
+        i = i + 1
+    }
+    return out
+}
+
 mapper genResolvers(prog: Program) -> String {
     let out = "/* === DI resolvers === */\n"
     let i = 0
@@ -4022,6 +4110,18 @@ mapper genResolvers(prog: Program) -> String {
     while i < n {
         let is2 = ifaceSpecGet(prog.ifaces, i)
         let ifn = is2.name
+        let cfgp = configPathFor(prog, ifn)
+        if string_len(cfgp) > 0 {
+            // config-backed: parse the file once, return a fat ptr over the tree
+            let parse = "xstd_yaml_parse(_src" + ifn + ")"
+            if endsWith2(cfgp, ".json") { parse = "xstd_json_parse(_src" + ifn + ")" }
+            out = out + "static xc_" + ifn + "_t xc_resolve_" + ifn + "(void) {\n"
+            out = out + "    static xc_Json_t _cfg" + ifn + "; static bool _ci" + ifn + " = false;\n"
+            out = out + "    if (!_ci" + ifn + ") { xc_string_t _src" + ifn + " = file_read_all(xc_string_from_cstr(\"" + cfgp + "\")); _cfg" + ifn + " = " + parse + "; _ci" + ifn + " = true; }\n"
+            out = out + "    return (xc_" + ifn + "_t){ .self = (void*)_cfg" + ifn + ", .vtable = &xc_" + ifn + "_cfg_vtable };\n"
+            out = out + "}\n\n"
+            i = i + 1
+        } else {
         out = out + "static xc_" + ifn + "_t xc_resolve_" + ifn + "(void) {\n"
         let chosen = chosenImpl(prog, ifn)
         if string_len(chosen) == 0 {
@@ -4035,6 +4135,7 @@ mapper genResolvers(prog: Program) -> String {
         }
         out = out + "}\n\n"
         i = i + 1
+        }
     }
     return out + "\n"
 }
@@ -4049,7 +4150,7 @@ mapper genSingletons(prog: Program) -> String {
         let m = bindSpecLen(mod.bindings)
         while j < m {
             let b = bindSpecGet(mod.bindings, j)
-            if b.scopeKind == "singleton" {
+            if b.scopeKind == "singleton" and string_len(b.configPath) == 0 {
                 out = out + "static xc_" + b.concreteName + "_t xc_singleton_" + b.concreteName + ";\n"
                 out = out + "static bool xc_singleton_" + b.concreteName + "_initialized = false;\n"
             }
@@ -4071,7 +4172,7 @@ mapper genSingletonInit(prog: Program) -> String {
         let m = bindSpecLen(mod.bindings)
         while j < m {
             let b = bindSpecGet(mod.bindings, j)
-            if b.scopeKind == "singleton" {
+            if b.scopeKind == "singleton" and string_len(b.configPath) == 0 {
                 let cn = b.concreteName
                 // xc_new_ wires deps; singletons capture stable &storage addresses,
                 // so initialisation order is irrelevant.
@@ -4108,7 +4209,7 @@ mapper genFactories(prog: Program) -> String {
                 retType = "xc_" + cn + "_t*"
             }
             out = out + "static " + retType + " xc_" + mname + "_resolve_" + ifn + "(void) {\n"
-            if b.scopeKind == "singleton" {
+            if b.scopeKind == "singleton" and string_len(b.configPath) == 0 {
                 if isInterface(prog, ifn) {
                     out = out + "    return xc_" + cn + "_as_" + ifn + "(&xc_singleton_" + cn + ");\n"
                 } else {
@@ -4299,7 +4400,7 @@ mapper genEventCodecs(prog: Program) -> String {
         types = appendString(types, stringArrGet(prog.eventTypes, ei))
         ei = ei + 1
     }
-    if webEnabled(prog) or usesThreads(prog) {
+    if webEnabled(prog) or usesThreads(prog) or usesConfig(prog) {
         let ti = 0
         let tn = typeSpecLen(prog.types)
         while ti < tn {
@@ -4870,6 +4971,7 @@ mapper genAll(prog: Program, srcPath: String) -> String {
          + genSingletons(prog)
          + genCtorResolverFwd(prog)
          + genConstructors(prog)
+         + genConfigImpls(prog)
          + genResolvers(prog)
          + genSingletonInit(prog)
          + genFuncForwardDecls(prog)

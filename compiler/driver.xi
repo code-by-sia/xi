@@ -303,7 +303,7 @@ mapper strArrIndexOf(arr: String[], s: String) -> Integer {
 }
 
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
-mapper xcVersion() -> String { return "0.0.61" }
+mapper xcVersion() -> String { return "0.0.62" }
 
 async entry main(args: String[]) -> Integer {
     if args.len < 2 {

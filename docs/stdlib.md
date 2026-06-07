@@ -216,6 +216,13 @@ receive). See [Events](events.md).
 | `readLine` | `() -> String` |
 | `eof` | `predicate ()` |
 
+### `config` — `std/config.xi`
+
+Typed configuration: `bind I -> readConfig("app.yaml")` makes the compiler
+synthesize an implementor of interface `I` that loads the file once and
+deserializes each method's value from the matching key. See
+[Configuration](config.md).
+
 ### `log` — `std/log.xi`
 
 A leveled `Logger` interface with a `ConsoleLogger` default (DI picks it as the
