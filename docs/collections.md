@@ -91,6 +91,16 @@ nums.any { it > 4 }                // Bool
 nums.all { it > 0 }                // Bool
 nums.none { it > 9 }               // Bool
 nums.joinToString(", ") { int_to_string(it) }   // String, with a separator
+
+nums.mapIndexed { i, x => i * 10 + x }   // map with the index
+nums.take(3) / nums.drop(2)              // first n / skip n
+nums.takeWhile { it < 4 }                // prefix while the predicate holds
+nums.dropWhile { it < 4 }                // drop that prefix
+nums.reversed()                          // reversed copy
+nums.distinct()                          // unique elements, order preserved
+nums.flatMap { listOf(it, it) }          // map then flatten the result lists
+nums.first() / nums.last()               // ends (bounds-checked)
+nums.toSet()                             // Set<T> of the elements
 ```
 
 They chain naturally — `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.

@@ -1214,6 +1214,17 @@ predicate isListFunc(fld: String) {
     if fld == "none"     { return true }
     if fld == "sumOf"    { return true }
     if fld == "joinToString" { return true }
+    if fld == "mapIndexed" { return true }
+    if fld == "takeWhile" { return true }
+    if fld == "dropWhile" { return true }
+    if fld == "flatMap"  { return true }
+    if fld == "take"     { return true }
+    if fld == "drop"     { return true }
+    if fld == "reversed" { return true }
+    if fld == "distinct" { return true }
+    if fld == "first"    { return true }
+    if fld == "last"     { return true }
+    if fld == "toSet"    { return true }
     return false
 }
 // index of the top-level `=>` (kind 110) within (start, close), or -1.
@@ -1238,18 +1249,65 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     let sv = "_s" + u
     let iv = "_i" + u
     let rv = "_r" + u
+    let suf = string_slice(typ, 5, string_len(typ))   // element arr-suffix (typ = "List_<suf>")
+    let strF = strFlagFor(elem)
+    let declSv = "xc_List_t " + sv + " = " + recv + ";\n      "
     let q = p + 2
-    // optional leading (arg): fold's seed, joinToString's separator
+    // optional leading (arg): take/drop count, fold seed, joinToString separator
     let argCode = ""
     let argX = ""
     if gkind(toks, q) == 100 {
-        let ae = genExpr(toks, q + 1, ctx)
-        argCode = ae.code
-        argX = ae.xtyp
-        q = ae.pos
-        if gkind(toks, q) == 101 { q = q + 1 }
+        if gkind(toks, q + 1) == 101 {
+            q = q + 2                                  // empty ()
+        } else {
+            let ae = genExpr(toks, q + 1, ctx)
+            argCode = ae.code
+            argX = ae.xtyp
+            q = ae.pos
+            if gkind(toks, q) == 101 { q = q + 1 }
+        }
     }
-    // lambda { [params =>] body }
+
+    // ── methods without a lambda (return here; pos = q) ──
+    if fld == "reversed" {
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n"
+                 + "      for (xc_integer_t " + iv + " = xstd_list_len(" + sv + ") - 1; " + iv + " >= 0; " + iv + " = " + iv + " - 1)\n"
+                 + "        xstd_list_push(" + rv + ", xstd_list_at(" + sv + ", " + iv + ")); " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: typ }
+    }
+    if fld == "take" {
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + ")); xc_integer_t _n" + u + " = (" + argCode + ");\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + ") && " + iv + " < _n" + u + "; " + iv + " = " + iv + " + 1)\n"
+                 + "        xstd_list_push(" + rv + ", xstd_list_at(" + sv + ", " + iv + ")); " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: typ }
+    }
+    if fld == "drop" {
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n"
+                 + "      for (xc_integer_t " + iv + " = (" + argCode + "); " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1)\n"
+                 + "        xstd_list_push(" + rv + ", xstd_list_at(" + sv + ", " + iv + ")); " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: typ }
+    }
+    if fld == "distinct" {
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + ")); xc_Set_t _seen" + u + " = xstd_set_new(sizeof(" + elem + "), " + strF + ");\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                 + "        void* _e" + u + " = xstd_list_at(" + sv + ", " + iv + ");\n"
+                 + "        if (!xstd_set_contains(_seen" + u + ", _e" + u + ")) { xstd_set_add(_seen" + u + ", _e" + u + "); xstd_list_push(" + rv + ", _e" + u + "); } } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: typ }
+    }
+    if fld == "toSet" {
+        let code = "({ " + declSv + "xc_Set_t " + rv + " = xstd_set_new(sizeof(" + elem + "), " + strF + ");\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1)\n"
+                 + "        xstd_set_add(" + rv + ", xstd_list_at(" + sv + ", " + iv + ")); " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "Set_" + suf }
+    }
+    if fld == "first" {
+        return ExprRes { code: "({ " + declSv + "*(" + elem + "*)xstd_list_at(" + sv + ", 0); })", pos: q, xtyp: elemX }
+    }
+    if fld == "last" {
+        return ExprRes { code: "({ " + declSv + "*(" + elem + "*)xstd_list_at(" + sv + ", xstd_list_len(" + sv + ") - 1); })", pos: q, xtyp: elemX }
+    }
+
+    // ── lambda methods:  { [params =>] body } ──
     let close = matchBrace(toks, q)
     let arrow = lambdaArrow(toks, q + 1, close)
     let p0 = "it"
@@ -1257,24 +1315,24 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     let bstart = q + 1
     if arrow >= 0 {
         let pi = q + 1
-        let first = true
+        let firstP = true
         while pi < arrow {
             if gkind(toks, pi) == 1 {
-                if first { p0 = gtext(toks, pi)  first = false } else { p1 = gtext(toks, pi) }
+                if firstP { p0 = gtext(toks, pi)  firstP = false } else { p1 = gtext(toks, pi) }
             }
             pi = pi + 1
         }
         bstart = arrow + 1
     }
-    let declSv = "xc_List_t " + sv + " = " + recv + ";\n      "
+    let elAt = "*(" + elem + "*)xstd_list_at(" + sv + ", " + iv + ")"
 
-    // for fold/reduce the second param binds the element; p0 binds the accumulator
+    // two-param lambdas
     if fld == "fold" or fld == "reduce" {
         let accX = elemX
         if fld == "fold" { accX = argX }
         let bctx = addSym(addSym(ctx, p0, accX), p1, elemX)
         let body = genExpr(toks, bstart, bctx)
-        let elDecl = "        " + elem + " " + p1 + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + ");\n"
+        let elDecl = "        " + elem + " " + p1 + " = " + elAt + ";\n"
         if fld == "fold" {
             let accC = xnameToCtype(accX)
             let loop = "({ " + declSv + accC + " " + p0 + " = " + argCode + ";\n"
@@ -1282,18 +1340,28 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
                      + elDecl + "        " + p0 + " = (" + body.code + "); } " + p0 + "; })"
             return ExprRes { code: loop, pos: close + 1, xtyp: accX }
         }
-        // reduce: seed = element 0, iterate from 1
         let loop = "({ " + declSv + elem + " " + p0 + " = *(" + elem + "*)xstd_list_at(" + sv + ", 0);\n"
                  + "      for (xc_integer_t " + iv + " = 1; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
                  + elDecl + "        " + p0 + " = (" + body.code + "); } " + p0 + "; })"
         return ExprRes { code: loop, pos: close + 1, xtyp: elemX }
+    }
+    if fld == "mapIndexed" {
+        // { i, x => body } — p0 = index (Integer), p1 = element
+        let bctx = addSym(addSym(ctx, p0, "Integer"), p1, elemX)
+        let body = genExpr(toks, bstart, bctx)
+        let uc = xnameToCtype(body.xtyp)
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + uc + "));\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                 + "        xc_integer_t " + p0 + " = " + iv + "; " + elem + " " + p1 + " = " + elAt + ";\n"
+                 + "        " + uc + " _v = (" + body.code + "); xstd_list_push(" + rv + ", &_v); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "List_" + arrSuffixOf(body.xtyp) }
     }
 
     // single-param lambdas: p0 binds the element
     let bctx = addSym(ctx, p0, elemX)
     let body = genExpr(toks, bstart, bctx)
     let loopOpen = "for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
-                 + "        " + elem + " " + p0 + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + ");\n"
+                 + "        " + elem + " " + p0 + " = " + elAt + ";\n"
 
     if fld == "map" {
         let uc = xnameToCtype(body.xtyp)
@@ -1339,6 +1407,25 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         let sc = xnameToCtype(body.xtyp)
         let code = "({ " + declSv + sc + " " + rv + " = 0;\n      " + loopOpen
                  + "        " + rv + " = " + rv + " + (" + body.code + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: body.xtyp }
+    }
+    if fld == "takeWhile" {
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n      " + loopOpen
+                 + "        if (!(" + body.code + ")) break; xstd_list_push(" + rv + ", &" + p0 + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: typ }
+    }
+    if fld == "dropWhile" {
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + ")); int _drop" + u + " = 1;\n      " + loopOpen
+                 + "        if (_drop" + u + " && (" + body.code + ")) continue; _drop" + u + " = 0; xstd_list_push(" + rv + ", &" + p0 + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: typ }
+    }
+    if fld == "flatMap" {
+        // body returns a List<U>; concatenate all sublists
+        let uc = listElemCtype(body.xtyp)
+        let jv = "_j" + u
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + uc + "));\n      " + loopOpen
+                 + "        xc_List_t _sub" + u + " = (" + body.code + ");\n"
+                 + "        for (xc_integer_t " + jv + " = 0; " + jv + " < xstd_list_len(_sub" + u + "); " + jv + " = " + jv + " + 1) xstd_list_push(" + rv + ", xstd_list_at(_sub" + u + ", " + jv + ")); } " + rv + "; })"
         return ExprRes { code: code, pos: close + 1, xtyp: body.xtyp }
     }
     // joinToString(sep) { it => <string> }
