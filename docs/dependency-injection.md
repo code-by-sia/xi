@@ -165,7 +165,8 @@ are created where needed.
 
 The `module` block can also carry package metadata. `id` sets the **compiled
 binary's name** (otherwise it's the source file name); `name`/`description`/
-`version`/`license` are descriptive. The block may be named (`module App { … }`)
+`version`/`license` are descriptive, and `includes`/`excludes` define the
+module's source files (see [multi-file](multi-file.md#module-source-sets-includes-excludes)). The block may be named (`module App { … }`)
 or anonymous (`module { … }`), and metadata can sit alongside `bind`s.
 
 ```x
