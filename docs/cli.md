@@ -8,7 +8,8 @@ $ ./compiler/xc <source.xi>
 
 Pipeline: resolve `import`s → lex → parse → generate C → invoke `cc` →
 **native executable**. The binary is written to the output directory `$XC_OUT`
-(default `build/`). The intermediate `<name>.gen.c` is generated there and then
+(default `build/`). It's named after the source file, unless the program's
+`module` declares an `id` (see below), in which case `id` is used. The intermediate `<name>.gen.c` is generated there and then
 **deleted after a successful build** — set `XC_KEEP_C=1` to keep it (e.g. to
 inspect the generated C or diff the self-hosting output).
 
@@ -73,20 +74,17 @@ It no-ops with "already up to date" when you're on the latest version. Notes:
 
 ### AI agent skill
 
-`xi skill` downloads the latest **[Xi agent guide](skill.md)** (a single markdown
-file that teaches an AI how to write Xi) and writes it locally:
+`xi skill` fetches the latest **[Xi agent guide](skill.md)** (a single markdown
+file that teaches an AI how to write Xi) and **prints it to stdout** — pipe it to
+a file or straight to your coding agent:
 
 ```console
-$ xi skill                 # writes ./skill.md
-xi skill: downloading the Xi agent guide ...
-xi skill: wrote skill.md — give this file to your AI agent so it can write Xi.
-
-$ xi skill docs/XI.md      # or pick the output path
+$ xi skill > SKILL.md        # save it
+$ xi skill | pbcopy          # or copy it to hand to an agent
 ```
 
-Hand the resulting file to your coding agent (e.g. as a project skill / context
-file). Requires `curl`; override the source with `XI_SKILL_URL` (or
-`XI_SKILL_REPO` / `XI_SKILL_REF`).
+Status/errors go to stderr, so stdout is clean markdown. Requires `curl`;
+override the source with `XI_SKILL_URL` (or `XI_SKILL_REPO` / `XI_SKILL_REF`).
 
 ### Interactive REPL
 

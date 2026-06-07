@@ -98,7 +98,7 @@ mapper buildProgram(decls: String, stmts: String) -> String {
 }
 
 // The toolchain version. Bump this when cutting a release (matches the tag).
-mapper xiVersion() -> String { return "0.0.52" }
+mapper xiVersion() -> String { return "0.0.53" }
 
 // Directory part of a path (everything before the last '/'); "." if none.
 mapper dirOf(path: String) -> String {
@@ -155,22 +155,21 @@ consumer doUpdate(progPath: String) {
     run_command("sh /tmp/xi-update.sh '" + repo + "' '" + root + "' '" + xiVersion() + "'")
 }
 
-// `xi skill [out]` — download the latest Xi agent guide (docs/skill.md) from
-// GitHub and write it locally, so it can be handed to an AI coding agent.
-consumer doSkill(outPath: String) {
+// `xi skill` — fetch the latest Xi agent guide (docs/skill.md) from GitHub and
+// print it to stdout, so it can be piped to a file or read by an AI agent.
+// Status/errors go to stderr so stdout stays pure markdown (`xi skill > SKILL.md`).
+consumer doSkill() {
     let repo = get_env("XI_SKILL_REPO", "code-by-sia/x")
     let ref = get_env("XI_SKILL_REF", "main")
     let url = get_env("XI_SKILL_URL",
         "https://raw.githubusercontent.com/" + repo + "/" + ref + "/docs/skill.md")
-    system.stdout.writeln("xi skill: downloading the Xi agent guide ...")
-    flush_out()
-    let rc = run_command("curl -fsSL '" + url + "' -o '" + outPath + "'")
+    let tmp = "/tmp/xi-skill.md"
+    let rc = run_command("curl -fsSL '" + url + "' -o '" + tmp + "'")
     if rc != 0 {
-        system.stdout.writeln("xi skill: download failed (" + url + ")")
-        system.stdout.writeln("  needs curl on PATH; override the source with XI_SKILL_URL.")
+        system.stderr.writeln("xi skill: download failed (" + url + ")")
+        system.stderr.writeln("  needs curl on PATH; override the source with XI_SKILL_URL.")
     } else {
-        system.stdout.writeln("xi skill: wrote " + outPath
-            + " — give this file to your AI agent so it can write Xi.")
+        system.stdout.write(file_read_all(tmp))
     }
 }
 
@@ -195,14 +194,36 @@ mapper compileSession(xc: String, rt: String, prog: String) -> Integer {
 
 // ── modes ────────────────────────────────────────────────────────
 
+// Pull the built binary's path out of xc's "built executable <path>" line, so
+// `xi file.xi` runs the right binary even when `module { id = ... }` renames it.
+mapper builtPath(log: String) -> String {
+    let marker = "built executable "
+    let ml = string_len(marker)
+    let n = string_len(log)
+    let i = 0
+    while i + ml <= n {
+        if string_slice(log, i, i + ml) == marker {
+            let j = i + ml
+            let k = j
+            while k < n and string_char_at(log, k) != 10 { k = k + 1 }
+            return string_slice(log, j, k)
+        }
+        i = i + 1
+    }
+    return ""
+}
+
 consumer runFile(xc: String, rt: String, path: String) {
     let cmd = "XC_OUT=/tmp XC_RUNTIME='" + rt + "' '" + xc + "' '" + path + "' >/tmp/xrun.log 2>&1"
     let rc = run_command(cmd)
+    let log = file_read_all("/tmp/xrun.log")
     if rc != 0 {
         system.stdout.writeln("x: compilation failed:")
-        system.stdout.writeln(file_read_all("/tmp/xrun.log"))
+        system.stdout.writeln(log)
     } else {
-        run_command("'/tmp/" + baseName(path) + "'")
+        let bin = builtPath(log)
+        if string_len(bin) == 0 { bin = "/tmp/" + baseName(path) }
+        run_command("'" + bin + "'")
     }
 }
 
@@ -294,9 +315,7 @@ async entry main(args: String[]) -> Integer {
             return 0
         }
         if sub == "skill" {
-            let out = "skill.md"
-            if args.len >= 3 { out = args.data[2] }
-            doSkill(out)
+            doSkill()
             return 0
         }
         runFile(xc, rt, sub)

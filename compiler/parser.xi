@@ -254,10 +254,15 @@ type BindSpec = {
     scopeKind:    String
 }
 
-// A module
+// A module — DI container plus optional package metadata.
 type ModuleSpec = {
-    name:     String,
-    bindings: BindSpec[]
+    name:        String,
+    bindings:    BindSpec[],
+    id:          String,    // binary name (xc uses this if set)
+    title:       String,    // the `name = "..."` field (display name)
+    description: String,
+    version:     String,
+    license:     String
 }
 
 // A top-level function or creator
@@ -1396,13 +1401,21 @@ type ModuleResult = { spec: ModuleSpec, ps: PState }
 
 mapper parseModule(ps: PState) -> ModuleResult {
     let ps2 = advance(ps)  // "module"
-    let name = peek(ps2).text
-    ps2 = advance(ps2)
+    let name = "App"
+    if peek(ps2).kind != 102 {        // a name is present (not an anonymous `module {`)
+        name = peek(ps2).text
+        ps2 = advance(ps2)
+    }
     if peek(ps2).kind == 102 { ps2 = advance(ps2) }  // {
 
     let bindings: BindSpec[] = []
+    let mId = ""
+    let mTitle = ""
+    let mDesc = ""
+    let mVer = ""
+    let mLic = ""
     while peek(ps2).kind != 103 and peek(ps2).kind != 0 {
-        // import or bind
+        // import, bind, or a metadata field (key = "value")
         if peek(ps2).kind == 244 {  // import
             ps2 = advance(ps2)
             ps2 = advance(ps2)  // skip module name
@@ -1438,13 +1451,29 @@ mapper parseModule(ps: PState) -> ModuleResult {
                     }
                 }
             } else {
-                ps2 = advance(ps2)
+                // metadata field:  key = "value"
+                let key = peek(ps2).text
+                if peekAt(ps2, 1).kind == 111 {              // `=`
+                    let val = peekAt(ps2, 2).text
+                    if key == "id"          { mId = val }
+                    if key == "name"        { mTitle = val }
+                    if key == "title"       { mTitle = val }
+                    if key == "description" { mDesc = val }
+                    if key == "version"     { mVer = val }
+                    if key == "license"     { mLic = val }
+                    ps2 = advance(advance(advance(ps2)))     // key = value
+                } else {
+                    ps2 = advance(ps2)
+                }
             }
         }
     }
     if peek(ps2).kind == 103 { ps2 = advance(ps2) }  // }
 
-    let spec = ModuleSpec { name: name, bindings: bindings }
+    let spec = ModuleSpec {
+        name: name, bindings: bindings,
+        id: mId, title: mTitle, description: mDesc, version: mVer, license: mLic
+    }
     return ModuleResult { spec: spec, ps: ps2 }
 }
 
