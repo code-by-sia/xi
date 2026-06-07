@@ -60,6 +60,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `singleton` / `transient` scopes (via optional `bind ... as`) | ✓ |
 | `App.resolve(Interface)` at use sites | ✓ |
 | `module App { bind I -> Impl ... }` overrides | ✓ |
+| `module` metadata (`id`/`name`/`description`/`version`/`license`); `id` sets the binary name | ✓ |
 
 ## Modules & interop
 
@@ -101,7 +102,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `file:line` diagnostics on lexer/parser errors | ✓ (initial) |
 | REPL / run tool (`xi`) | ✓ |
 | `xi version` and `xi update` (self-update from GitHub releases) | ✓ |
-| `xi skill` — download the AI-agent language guide (`docs/skill.md`) | ✓ |
+| `xi skill` — print the AI-agent language guide (`docs/skill.md`) | ✓ |
 | Editor support: Tree-sitter grammar, Zed, Vim | ✓ |
 | Full ownership / borrow checking | ✗ (relies on C; planned) |
 | LLVM backend | ✗ (uses C as the intermediate) |

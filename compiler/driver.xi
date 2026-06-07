@@ -328,7 +328,10 @@ async entry main(args: String[]) -> Integer {
     // keeping source trees clean.
     let outDir = get_env("XC_OUT", "build")
     run_command("mkdir -p '" + outDir + "'")
+    // Binary name: the module's `id` if it declares one, else the source basename.
     let base = baseName(srcPath)
+    let mid = moduleId(prog)
+    if string_len(mid) > 0 { base = mid }
     let outPath = outDir + "/" + base + ".gen.c"
     file_write(outPath, cSource)
     let binPath = outDir + "/" + base
@@ -346,6 +349,18 @@ async entry main(args: String[]) -> Integer {
     }
     system.stderr.writeln("xc: C compilation failed")
     return 1
+}
+
+// The first non-empty module `id` in the program (used as the binary name), or "".
+mapper moduleId(prog: Program) -> String {
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let m = moduleSpecGet(prog.modules, i)
+        if string_len(m.id) > 0 { return m.id }
+        i = i + 1
+    }
+    return ""
 }
 
 // Base name of a path: drop the directory and a trailing ".x" or ".xi".

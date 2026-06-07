@@ -246,6 +246,23 @@ module App {}     // add `bind Greeter -> FormalGreeter` here to override
 Function/method deps use the same `(dep: I)` form:
 `consumer (logger: Logger) report(msg: String) { logger.info(msg) }`.
 
+## Module metadata
+
+The `module` block can also carry package metadata. `id` sets the **compiled
+binary's name** (otherwise it's the source filename). The block may be anonymous
+(`module { ... }`) or named (`module App { ... }`), and metadata can sit
+alongside `bind`s.
+
+```x
+module {
+    id          = "file-server"     // -> binary named `file-server`
+    name        = "File Server"
+    description = "a simple file server"
+    version     = "0.12"
+    license     = "MIT"
+}
+```
+
 ## Logging (std/log)
 
 Inject `Logger`; levels: `debug` `info` `warn` `error` `fatal` (warn/error/fatal
