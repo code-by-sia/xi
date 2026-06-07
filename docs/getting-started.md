@@ -1,57 +1,34 @@
 # Getting started
 
-## Requirements
+## Install
 
-- A C compiler (`cc` — clang or gcc).
-- `curl` and a POSIX shell.
-- Network access to download the bootstrap seed (or an existing `xc` via `XC_SEED`).
+Download the toolchain for your platform from the
+**[releases page](https://github.com/code-by-sia/x/releases)**, unpack it, and put
+its `bin/` on your `PATH`:
 
-Supported platforms: **Linux** (x86_64, arm64) and **macOS** (arm64, x86_64).
-
-## Windows
-
-There is no native Windows build yet — the runtime uses POSIX APIs (sockets,
-directories, processes). Two options:
-
-- **WSL2**: install a Linux distribution, then follow the Linux instructions
-  unchanged (download the `linux-x86_64` release or build from source inside WSL).
-- **Docker** (using the [`Dockerfile`](https://github.com/code-by-sia/x/blob/main/Dockerfile)
-  at the repo root):
-
-  ```powershell
-  docker build -t xi .
-  docker run --rm -v "${PWD}:/work" xi xi hello.xi   # compile + run
-  docker run --rm -it -v "${PWD}:/work" xi xi        # REPL
-  ```
-
-  The image downloads a published release and puts `xc` / `xi` on PATH (it
-  bundles a C compiler since `xc` shells out to `cc`).
-
-A native Windows port is tracked as future work.
-
-## Build the compiler from source
-
-The compiler is self-hosting. `bootstrap.sh` downloads the released `xc` binary
-for your platform (the seed), compiles `compiler/xc.xi` with it, then rebuilds the
-result from source with itself — so the compiler you get is built from the
-current source, not the download:
-
-```console
-$ ./compiler/bootstrap.sh
-==> [seed] fetching a released compiler to bootstrap from ...
-==> [stage1] seed compiler builds xc from compiler/xc.xi ...
-==> [stage2] xc rebuilds itself from compiler/xc.xi ...
-==> Building the REPL / run tool 'x' from compiler/repl.xi ...
-Bootstrap complete. The compiler is built from current Xi source.
+```sh
+# grab the asset for your platform, e.g. xi-<version>-macos-arm64.tar.gz
+tar -xzf xi-<version>-<os>-<arch>.tar.gz
+export PATH="$PWD/xi-<version>-<os>-<arch>/bin:$PATH"
 ```
 
-Pin the seed with `XC_BOOTSTRAP_VERSION=v0.0.0`, or build offline by pointing
-`XC_SEED` at an existing `xc` binary.
+This gives you two commands — `xc` (compiler) and `xi` (run tool + REPL).
+Upgrade later in place with `xi update`.
 
-This produces:
+**Requirements:** a C compiler (`cc` — clang or gcc) on your `PATH`, since `xc`
+produces a native binary by compiling generated C. Supported platforms:
+**Linux** (x86_64, arm64) and **macOS** (arm64, x86_64).
 
-- `compiler/xc` — the compiler.
-- `x` — the REPL / run tool.
+### Windows
+
+No native Windows build yet (the runtime uses POSIX APIs). Use **WSL2** (install a
+Linux distro and follow the Linux steps), or **Docker**:
+
+```powershell
+docker build -t xi .   # from a clone of the repo
+docker run --rm -v "${PWD}:/work" xi xi hello.xi   # compile + run
+docker run --rm -it -v "${PWD}:/work" xi xi        # REPL
+```
 
 ## Hello, world
 
@@ -59,43 +36,52 @@ This produces:
 import "std/log.xi"
 
 async entry (logger: Logger) main(args: String[]) -> Integer {
-    logger.print("Hello World!")
+    logger.info("Hello World!")
     return 0
 }
+
+module App {}
 ```
 
 `(logger: Logger)` on the entry asks for a `Logger` by interface; the compiler
 injects the standard `ConsoleLogger` — no globals, no setup. (Bind your own
 `Logger` later and `main` doesn't change.) See
-[Dependency injection](dependency-injection.md) for the full model.
+[Dependency injection](dependency-injection.md).
 
-Compile and run:
+Compile to a native binary, then run it:
 
 ```console
-$ export XC_RUNTIME="$PWD/runtime"
-$ ./compiler/xc hello.xi        # writes build/hello (a native binary)
+$ xc hello.xi        # writes build/hello
 $ ./build/hello
 Hello World!
 ```
 
-Or do both at once with the `x` tool:
+Or compile and run in one step with `xi`:
 
 ```console
-$ ./bin/xi hello.xi
+$ xi hello.xi
 Hello World!
 ```
 
-!!! note "XC_RUNTIME"
-    The compiler needs to know where the C runtime lives so it can invoke `cc`.
-    It defaults to `runtime` (relative to the current directory); set
-    `XC_RUNTIME` to an absolute path if you run from elsewhere.
-
-## Verify self-hosting
+## Try the REPL
 
 ```console
-$ ./compiler/selfhost.sh
-    ✓ byte-identical (4582 lines) — stable self-hosting fixpoint
-SELF-HOSTING VERIFIED — bootstraps from C source.
+$ xi
+Xi REPL — :help for commands, :quit to exit
+x> let n = 21
+x> print("double = " + n * 2)
+double = 42
+x> :quit
 ```
 
-Next: the [CLI & REPL](cli.md), or the [Language guide](language-guide.md).
+## Next steps
+
+- The [Language guide](language-guide.md) — types, functions, control flow.
+- [Dependency injection](dependency-injection.md), [Testing](testing.md), and the
+  [standard library](stdlib.md).
+- [CLI & REPL](cli.md) for `xc`/`xi` options, `xi test`, `xi skill`, and `xi update`.
+- `xi skill > SKILL.md` produces a single-file language guide for AI coding agents.
+
+> Building the compiler from source (it's self-hosting) is covered in
+> [Compiler internals](internals.md) and the repository `README` — you don't need
+> that to write Xi.

@@ -34,7 +34,7 @@ async entry (logger: Logger) main(args: String[]) -> Integer {
 ```
 
 ```console
-$ ./compiler/xc examples/proj/main.xi && ./examples/proj/main
+$ xc main.xi && ./build/main
 hello multi-file!
 2 + 3 = 5
 4^2 = 16
@@ -59,17 +59,26 @@ qualified form `a.b.Name`, which the compiler resolves to the prefixed symbol.
 //             b.fmt("two")  ->  [B]two
 ```
 
-## The compiler itself is multi-file
+## A manifest entry file
 
-The Xi compiler uses exactly this feature for its own source. `compiler/xc.xi` is
-just a manifest:
+A common layout is one small entry file that imports the rest of the project:
 
-```x
-import "lexer.xi"
-import "parser.xi"
-import "codegen.xi"
-import "driver.xi"
+```x title="app.xi"
+import "models.xi"
+import "repository.xi"
+import "service.xi"
+
+async entry (svc: Service) main(args: String[]) -> Integer {
+    svc.run()
+    return 0
+}
+
+module App {}
 ```
 
-Building `./compiler/xc compiler/xc.xi` merges the four parts into one unit — the
-same mechanism your projects use.
+```console
+$ xc app.xi && ./build/app
+```
+
+`import` merges all the parts into one compilation unit (recursively, with
+duplicates resolved once), so you compile just the entry file.

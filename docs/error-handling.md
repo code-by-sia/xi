@@ -63,7 +63,7 @@ async entry main(args: String[]) -> Integer {
 Run the full example:
 
 ```console
-$ ./bin/xi examples/errors.xi
+$ xi errors.xi
 25 -> adult
 10 -> minor
 200 -> error: age too large
