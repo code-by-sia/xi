@@ -444,6 +444,9 @@ mapper lexOne(src: String, pos: Integer, line: Integer, prevKind: Integer) -> Le
     if ch == 47 and p + 1 < slen and string_char_at(src, p + 1) == 61 { // /=
         return LexStep { tok: Token { kind: 133, text: "/=", line: ln }, pos: p + 2, line: ln }
     }
+    if ch == 46 and p + 1 < slen and string_char_at(src, p + 1) == 46 { // ..  range
+        return LexStep { tok: Token { kind: 134, text: "..", line: ln }, pos: p + 2, line: ln }
+    }
 
     // Single-char punctuation
     let singleMap = 100

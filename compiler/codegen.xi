@@ -1668,9 +1668,36 @@ mapper genAdd(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     return ExprRes { code: code, pos: p, xtyp: typ }
 }
 
+// ── integer ranges:  a..b (inclusive) / a until b / a downTo b / ... step n ──
+mapper genRange(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let left = genAdd(toks, pos, ctx)
+    let p = left.pos
+    let k = gkind(toks, p)
+    let isUntil  = (k == 1 and gtext(toks, p) == "until")
+    let isDownTo = (k == 1 and gtext(toks, p) == "downTo")
+    if k == 134 or isUntil or isDownTo {
+        let right = genAdd(toks, p + 1, ctx)
+        let endExpr = "(" + right.code + ") + 1"   // `..` inclusive
+        let stepC = "1"
+        if isUntil  { endExpr = "(" + right.code + ")" }
+        if isDownTo { endExpr = "(" + right.code + ") - 1"  stepC = "-1" }
+        let q = right.pos
+        if gkind(toks, q) == 1 and gtext(toks, q) == "step" {   // optional `step n`
+            let se = genAdd(toks, q + 1, ctx)
+            if isDownTo { stepC = "-(" + se.code + ")" } else { stepC = "(" + se.code + ")" }
+            q = se.pos
+        }
+        return ExprRes {
+            code: "(xc_range_t){ (" + left.code + "), " + endExpr + ", " + stepC + " }",
+            pos: q, xtyp: "Range"
+        }
+    }
+    return left
+}
+
 // ── comparison ────────────────────────────────────────────────────
 mapper genCmp(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
-    let left = genAdd(toks, pos, ctx)
+    let left = genRange(toks, pos, ctx)
     let code = left.code
     let typ = left.xtyp
     let p = left.pos
@@ -1896,6 +1923,17 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             let code = "    { xc_List_t " + itv + " = xstd_set_items(" + it.code + ");\n"
                      + "      for (xc_integer_t " + idv + " = 0; " + idv + " < xstd_list_len(" + itv + "); " + idv + " = " + idv + " + 1) {\n"
                      + "        " + elem + " " + varName + " = *(" + elem + "*)xstd_list_at(" + itv + ", " + idv + ");\n"
+                     + body + "      } }\n"
+            return StmtRes { code: code, ctx: ctx, pos: close + 1 }
+        }
+        if it.xtyp == "Range" {
+            // for i in <range> — a..b / until / downTo / step
+            let bctx = addSym(ctx, varName, "Integer")
+            let body = genStmts(toks, it.pos + 1, close, bctx)
+            let code = "    { xc_range_t " + itv + " = " + it.code + ";\n"
+                     + "      for (xc_integer_t " + varName + " = " + itv + ".start;\n"
+                     + "           " + itv + ".step > 0 ? " + varName + " < " + itv + ".end : " + varName + " > " + itv + ".end;\n"
+                     + "           " + varName + " = " + varName + " + " + itv + ".step) {\n"
                      + body + "      } }\n"
             return StmtRes { code: code, ctx: ctx, pos: close + 1 }
         }
