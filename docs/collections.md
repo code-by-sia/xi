@@ -1,5 +1,21 @@
 # Collections
 
+## Builders
+
+Besides `empty` + mutation, you can construct a populated collection in one
+expression. Element/key types are inferred from the first argument (keep the
+elements homogeneous):
+
+```x
+let xs   = listOf(2, 3, 5, 7)                    // List<Integer>
+let tags = setOf("a", "b", "a")                  // Set<String> (deduplicates)
+let caps = mapOf("fr" to "Paris", "jp" to "Tokyo")  // Map<String, String>
+```
+
+`k to v` pairs the key and value in `mapOf`. For an empty collection, use
+`empty List<T>` / `empty Set<T>` / `empty Map<K, V>` (the type can't be inferred
+with no elements).
+
 ## `List<T>`
 
 `List<T>` is a growable, mutable, typed list — a **built-in generic**, the same

@@ -16,6 +16,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `List<T>` — growable mutable generic list (`empty List<T>`, push/get/set/len/removeAt; `for x in`) | ✓ |
 | `Set<T>` — hash set of unique elements (`empty Set<T>`, add/contains/remove/len/isEmpty/clear/items; `for x in`) | ✓ |
 | `Map<K, V>` — hash map, K primitive/String (`empty Map<K, V>`, put/get/getOr/has/remove/len/clear/keys/values) | ✓ |
+| Collection builders (`listOf(...)`, `setOf(...)`, `mapOf(k to v, ...)`) | ✓ |
 | Type aliases incl. plural/array (`type People = Person[]`, `type Name = String`) | ✓ |
 | `empty T` — the zero value of any type (struct all-zero, array empty) | ✓ |
 | `atom` — active-state store: immutable `state` + `transition` reducers + `undo()`/`canUndo()` time-travel | ✓ |

@@ -149,7 +149,7 @@ growable layer over it.
 3. **`std/collections`** — **`List<T>`, `Set<T>`, and `Map<K, V>` shipped**
    (built-in generics: `empty List<T>`/`empty Set<T>`/`empty Map<K, V>`, the
    mutating + query ops, `for x in` over List/Set and `for k in m.keys()`, usable
-   as param/field/return). **Ranges shipped** (`a..b`/`until`/`downTo`/`step` in `for` and as values). Builders and the eager functional API remain.
+   as param/field/return). **Ranges and builders shipped** (`a..b`/`until`/`downTo`/`step`; `listOf`/`setOf`/`mapOf`). The eager functional API and lazy sequences remain (they need closures).
 4. **`std/sequences`** — lazy fused `Sequence<T>` with the same operators.
 5. Extra structures (`ArrayDeque`, `PriorityQueue`, ordered maps) on demand.
 

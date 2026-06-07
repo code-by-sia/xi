@@ -1,4 +1,5 @@
-// Collections — built-in generics (like T[] arrays), created with `empty`:
+// Collections — built-in generics (like T[] arrays), created with `empty` or a
+// builder (listOf / setOf / mapOf):
 //   List<T>     growable ordered list (push/get/set/len/removeAt/...)
 //   Set<T>      hash set of unique elements (add/contains/remove/items/...)
 //   Map<K, V>   hash map (put/get/getOr/has/remove/keys/values/...)
@@ -57,6 +58,14 @@ async entry (logger: Logger) main(args: String[]) -> Integer {
     let total = 0
     for name in ages.keys() { total = total + ages.get(name) } // iterate via keys()
     logger.print("total = " + int_to_string(total))           // 57
+
+    // Builders — construct a populated collection in one expression.
+    let primes = listOf(2, 3, 5, 7)                           // List<Integer>
+    logger.print("primes= " + int_to_string(primes.len()))    // 4
+    let uniq = setOf("a", "b", "a")                          // Set<String> (dedups)
+    logger.print("uniq  = " + int_to_string(uniq.len()))      // 2
+    let caps = mapOf("fr" to "Paris", "jp" to "Tokyo")        // Map<String, String>
+    logger.print("fr    = " + caps.get("fr"))                 // Paris
     return 0
 }
 
