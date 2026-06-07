@@ -17,6 +17,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `Set<T>` — hash set of unique elements (`empty Set<T>`, add/contains/remove/len/isEmpty/clear/items; `for x in`) | ✓ |
 | `Map<K, V>` — hash map, K primitive/String (`empty Map<K, V>`, put/get/getOr/has/remove/len/clear/keys/values) | ✓ |
 | Collection builders (`listOf(...)`, `setOf(...)`, `mapOf(k to v, ...)`) | ✓ |
+| List functional API via lambdas — `map`/`filter`/`fold`/`reduce`/`sumOf`/`count`/`any`/`all`/`none`/`forEach`/`joinToString` (inlined) | ✓ |
 | Type aliases incl. plural/array (`type People = Person[]`, `type Name = String`) | ✓ |
 | `empty T` — the zero value of any type (struct all-zero, array empty) | ✓ |
 | `atom` — active-state store: immutable `state` + `transition` reducers + `undo()`/`canUndo()` time-travel | ✓ |

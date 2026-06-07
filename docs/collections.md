@@ -70,6 +70,32 @@ mapper totalQty(items: List<Item>) -> Integer {
 - Element access is bounds-checked; an out-of-range `get`/`set`/`removeAt` aborts.
 - See `examples/collections_demo.xi`.
 
+## Functional operations on `List<T>`
+
+Lists have a functional API driven by **lambdas**: `{ it ... }` binds the element
+implicitly, or `{ a, b => ... }` names the parameters. Each call is inlined into a
+loop, so chains are zero-overhead (no intermediate closures).
+
+```x
+let nums = listOf(1, 2, 3, 4, 5)
+
+nums.map { it * 2 }                 // List<U> — transform (U is the body's type)
+nums.filter { it % 2 == 0 }        // List<T> — keep matching
+nums.filterNot { it > 3 }          // List<T> — drop matching
+nums.forEach { print(it) }         // run a side effect per element
+nums.fold(0) { acc, x => acc + x } // reduce with a seed
+nums.reduce { a, b => a + b }      // reduce, seed = first element
+nums.sumOf { it }                  // sum of a projection (Integer/Number)
+nums.count { it > 2 }              // Integer — how many match
+nums.any { it > 4 }                // Bool
+nums.all { it > 0 }                // Bool
+nums.none { it > 9 }               // Bool
+nums.joinToString(", ") { int_to_string(it) }   // String, with a separator
+```
+
+They chain naturally — `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.
+See `examples/functional_demo.xi`.
+
 ## `Set<T>`
 
 `Set<T>` is a hash set of **unique** elements — also a built-in generic, created
