@@ -13,6 +13,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Sum / algebraic types (`type Shape = \| Circle { r: Number } \| Empty`), matched with `match` | ✓ |
 | Optional types (`T?`) and `if let` unwrapping | ✓ |
 | Array types (`T[]`) | ✓ |
+| `List<T>` — growable mutable generic list (`empty List<T>`, push/get/set/len/removeAt; `for x in`) | ✓ |
 | Type aliases incl. plural/array (`type People = Person[]`, `type Name = String`) | ✓ |
 | `empty T` — the zero value of any type (struct all-zero, array empty) | ✓ |
 | `atom` — active-state store: immutable `state` + `transition` reducers + `undo()`/`canUndo()` time-travel | ✓ |

@@ -722,6 +722,15 @@ mapper xnameFromArrSuffix(suf: String) -> String {
     }
 }
 
+// ── List<T> element-type helpers (xtype "List_<suffix>") ──────────
+predicate isListXType(typ: String) { return startsWith2(typ, "List_") }
+mapper listElemCtype(typ: String) -> String {
+    return xnameToCtype(xnameFromArrSuffix(string_slice(typ, 5, string_len(typ))))
+}
+mapper listElemXName(typ: String) -> String {
+    return xnameFromArrSuffix(string_slice(typ, 5, string_len(typ)))
+}
+
 predicate endsWith2(s: String, suffix: String) {
     let sl = string_len(suffix)
     let n = string_len(s)
@@ -930,6 +939,18 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     // `empty T` — the zero value of T (struct all-zero, array empty, ...).
     // Contextual: only when `empty` starts a primary AND is followed by a type
     // (so `bytes.empty()` and any var/field named `empty` still work).
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "List" and gkind(toks, pos + 2) == 114 {
+        // `empty List<T>` — a fresh, empty list
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }   // `>`
+        return ExprRes {
+            code: "xstd_list_new(sizeof(" + elemCtype + "))",
+            pos: endp, xtyp: "List_" + ctypeSuffix(elemCtype)
+        }
+    }
     if k == 1 and txt == "empty" {
         let nk = gkind(toks, pos + 1)
         if nk == 1 or string_len(primCtypeK(nk)) > 0 {
@@ -1117,6 +1138,40 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "running" { code = "xstd_thread_running(" + code + ")"  typ = "Bool" }
                     p = al.pos
                 } else {
+                if isListXType(typ) {
+                    let recv = code
+                    let elem = listElemCtype(typ)
+                    if fld == "push" {
+                        let ae = genExpr(toks, p + 3, ctx)
+                        code = "xstd_list_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
+                        typ = ""
+                        p = ae.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                    if fld == "get" {
+                        let al = genArgs(toks, p + 2, ctx)
+                        code = "(*(" + elem + "*)xstd_list_at(" + recv + ", " + al.code + "))"
+                        typ = listElemXName(typ)
+                        p = al.pos
+                    } else {
+                    if fld == "set" {
+                        let ie = genExpr(toks, p + 3, ctx)
+                        let q = ie.pos
+                        if gkind(toks, q) == 106 { q = q + 1 }   // ,
+                        let ve = genExpr(toks, q, ctx)
+                        code = "xstd_list_set(" + recv + ", " + ie.code + ", (" + elem + "[]){ " + ve.code + " })"
+                        typ = ""
+                        p = ve.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                        let al = genArgs(toks, p + 2, ctx)
+                        if fld == "len"      { code = "xstd_list_len(" + recv + ")"  typ = "Integer" }
+                        if fld == "isEmpty"  { code = "(xstd_list_len(" + recv + ") == 0)"  typ = "Bool" }
+                        if fld == "removeAt" { code = "xstd_list_removeat(" + recv + ", " + al.code + ")"  typ = "" }
+                        if fld == "clear"    { code = "xstd_list_clear(" + recv + ")"  typ = "" }
+                        p = al.pos
+                    } } }
+                } else {
                 if typ == "HttpResponse" {
                     // res.send(dto): serialize via the DI-resolved WebTransport.
                     // res.sendStatus(code, msg) / res.sendText(code, body): plain text.
@@ -1251,6 +1306,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 }
                 }
                 p = al.pos
+                }
                 }
                 }
                 }
@@ -1665,6 +1721,17 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let close = matchBrace(toks, it.pos)
         let idv = "_i" + int_to_string(pos)
         let itv = "_it" + int_to_string(pos)
+        if isListXType(it.xtyp) {
+            // for x in <List<T>>
+            let elem = listElemCtype(it.xtyp)
+            let bctx = addSym(ctx, varName, listElemXName(it.xtyp))
+            let body = genStmts(toks, it.pos + 1, close, bctx)
+            let code = "    { xc_List_t " + itv + " = " + it.code + ";\n"
+                     + "      for (xc_integer_t " + idv + " = 0; " + idv + " < xstd_list_len(" + itv + "); " + idv + " = " + idv + " + 1) {\n"
+                     + "        " + elem + " " + varName + " = *(" + elem + "*)xstd_list_at(" + itv + ", " + idv + ");\n"
+                     + body + "      } }\n"
+            return StmtRes { code: code, ctx: ctx, pos: close + 1 }
+        }
         let bctx = addSym(ctx, varName, "")
         let body = genStmts(toks, it.pos + 1, close, bctx)
         let code = "    { __auto_type " + itv + " = " + it.code + ";\n"
@@ -3624,6 +3691,7 @@ mapper genArrTypedefs(prog: Program) -> String {
         let ts = typeSpecGet(prog.types, i)
         if not isCompositeAlias(ts) {
             out = out + "typedef struct { xc_" + ts.name + "_t* data; xc_size_t len; xc_size_t cap; } xc_arr_" + ts.name + "_t;\n"
+            out = out + "typedef xc_List_t xc_List_" + ts.name + "_t;\n"   // List<ts>
         }
         i = i + 1
     }

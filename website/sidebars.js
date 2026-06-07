@@ -15,6 +15,7 @@ const sidebars = {
     'atoms',
     'machines',
     'stdlib',
+    'collections',
     'serialization',
     'events',
     'web',
