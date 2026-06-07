@@ -302,6 +302,9 @@ mapper strArrIndexOf(arr: String[], s: String) -> Integer {
     return 0 - 1
 }
 
+// The toolchain version (kept in sync with the xi tool); printed by `xc version`.
+mapper xcVersion() -> String { return "0.0.61" }
+
 async entry main(args: String[]) -> Integer {
     if args.len < 2 {
         system.stdout.writeln("Usage: xc <source.x|.xi>")
@@ -309,6 +312,10 @@ async entry main(args: String[]) -> Integer {
     }
 
     let srcPath = args.data[1]
+    if srcPath == "version" or srcPath == "--version" or srcPath == "-v" {
+        system.stdout.writeln("xc " + xcVersion())
+        return 0
+    }
 
     system.stdout.writeln("xc: loading + lexing " + srcPath + " ...")
     let lr = loadModule(srcPath, emptyStrings())
