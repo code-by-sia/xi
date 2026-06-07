@@ -289,6 +289,37 @@ xc_integer_t xstd_set_len(xc_Set_t);
 void         xstd_set_clear(xc_Set_t);
 xc_List_t    xstd_set_items(xc_Set_t);                    /* live elements, as a List */
 
+/* ─── Map<K,V> (std/collections) ─────────────────────────────────────────────
+ * A hash map. Key-type-erased (String keys hashed/compared by content via the
+ * is_str flag); the compiler aliases `xc_Map_<K>_<V>_t` per (key,value) pair.   */
+typedef struct xc_map* xc_Map_t;
+/* Primitive (key x value) aliases (all the same handle). */
+typedef xc_Map_t xc_Map_integer_integer_t; typedef xc_Map_t xc_Map_integer_number_t;
+typedef xc_Map_t xc_Map_integer_bool_t;    typedef xc_Map_t xc_Map_integer_string_t;
+typedef xc_Map_t xc_Map_integer_char_t;
+typedef xc_Map_t xc_Map_number_integer_t;  typedef xc_Map_t xc_Map_number_number_t;
+typedef xc_Map_t xc_Map_number_bool_t;     typedef xc_Map_t xc_Map_number_string_t;
+typedef xc_Map_t xc_Map_number_char_t;
+typedef xc_Map_t xc_Map_bool_integer_t;    typedef xc_Map_t xc_Map_bool_number_t;
+typedef xc_Map_t xc_Map_bool_bool_t;       typedef xc_Map_t xc_Map_bool_string_t;
+typedef xc_Map_t xc_Map_bool_char_t;
+typedef xc_Map_t xc_Map_string_integer_t;  typedef xc_Map_t xc_Map_string_number_t;
+typedef xc_Map_t xc_Map_string_bool_t;     typedef xc_Map_t xc_Map_string_string_t;
+typedef xc_Map_t xc_Map_string_char_t;
+typedef xc_Map_t xc_Map_char_integer_t;    typedef xc_Map_t xc_Map_char_number_t;
+typedef xc_Map_t xc_Map_char_bool_t;       typedef xc_Map_t xc_Map_char_string_t;
+typedef xc_Map_t xc_Map_char_char_t;
+xc_Map_t     xstd_map_new(xc_size_t ksize, xc_size_t vsize, int key_is_str);
+void         xstd_map_put(xc_Map_t, const void* k, const void* v);   /* insert or overwrite */
+void*        xstd_map_get(xc_Map_t, const void* k);                  /* ptr to value (aborts if absent) */
+void*        xstd_map_getor(xc_Map_t, const void* k, void* def);     /* value ptr, or `def` if absent */
+xc_bool_t    xstd_map_has(xc_Map_t, const void* k);
+void         xstd_map_remove(xc_Map_t, const void* k);               /* no-op if absent */
+xc_integer_t xstd_map_len(xc_Map_t);
+void         xstd_map_clear(xc_Map_t);
+xc_List_t    xstd_map_keys(xc_Map_t);                                /* keys, as a List<K> */
+xc_List_t    xstd_map_values(xc_Map_t);                              /* values, as a List<V> */
+
 /* ─── Optional helpers ───────────────────────────────────────────────────── */
 
 typedef struct { bool has_value; xc_number_t  value; } xc_opt_number_t;

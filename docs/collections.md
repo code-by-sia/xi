@@ -92,8 +92,57 @@ for x in ids { ... }
 - A `Set<T>` is a mutable handle (reference semantics), like `List<T>`.
 - Iteration order is not specified; use `items()` if you need a `List` to sort.
 
+## `Map<K, V>`
+
+`Map<K, V>` is a hash map — a built-in generic, created with `empty`. Keys are
+primitives or `String` (compared by value, `String` by content); values can be
+any type.
+
+### Creating one
+
+```x
+let ages  = empty Map<String, Integer>
+let names  = empty Map<Integer, String>
+let byId  = empty Map<String, Item>      // value can be a compound
+```
+
+### Operations
+
+```x
+ages.put("ada", 37)      // insert or overwrite
+ages.get("ada")          // value (aborts if the key is absent — guard with has)
+ages.getOr("zz", 0)      // value, or the fallback if absent
+ages.has("ada")          // Bool
+ages.remove("ada")       // delete (no-op if absent)
+ages.len()               // Integer entry count
+ages.isEmpty()           // Bool
+ages.clear()             // empty it
+ages.keys()              // a List<K> of the keys
+ages.values()            // a List<V> of the values
+```
+
+Since lookups can miss, iterate over the keys (no `null` in Ξ — a missing key
+is simply not in `keys()`):
+
+```x
+for k in ages.keys() {
+    let v = ages.get(k)
+    ...
+}
+```
+
+### Notes
+
+- `get` aborts if the key is absent — use `has` to check first, or `getOr` for a
+  default. (A `V?`-returning lookup will follow once optionals are wired into the
+  collection API.)
+- Keys are restricted to primitives and `String`; values may be any type.
+- A `Map<K, V>` is a mutable handle (reference semantics). Iteration order is
+  unspecified.
+
 ## What's next
 
-`List<T>` and `Set<T>` are in. `Map<K, V>` is next; the rich functional API
-(`map` / `filter` / `fold` / …) and lazy sequences build on closures — see the
+`List<T>`, `Set<T>`, and `Map<K, V>` are in — the core containers. The rich
+functional API (`map` / `filter` / `fold` / …) and lazy sequences build on
+**closures**, a separate language feature; see the
 [collections proposal](proposals/collections.md) for the full design.

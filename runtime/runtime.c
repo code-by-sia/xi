@@ -2239,3 +2239,83 @@ xc_List_t xstd_set_items(xc_Set_t s) {
     for (xc_size_t i = 0; i < s->cap; i++) if (s->state[i] == 1) xstd_list_push(l, s->slots + i * s->elem);
     return l;
 }
+
+/* ─── Map<K,V> ───────────────────────────────────────────────────────────────
+ * Parallel-array open-addressed hash map sharing Set's hashing helpers.         */
+struct xc_map {
+    char* kslots; char* vslots; unsigned char* state;
+    xc_size_t cap, len, used, ksize, vsize; int kis_str;
+};
+
+xc_Map_t xstd_map_new(xc_size_t ks, xc_size_t vs, int kis_str) {
+    struct xc_map* m = (struct xc_map*)malloc(sizeof(*m)); if (!m) abort();
+    m->kslots = NULL; m->vslots = NULL; m->state = NULL;
+    m->cap = 0; m->len = 0; m->used = 0;
+    m->ksize = ks ? ks : 1; m->vsize = vs ? vs : 1; m->kis_str = kis_str;
+    return m;
+}
+static xc_size_t xc_map_probe(struct xc_map* m, const void* k, int* found) {
+    xc_size_t mask = m->cap - 1;
+    xc_size_t i = (xc_size_t)xc_hash_key(k, m->ksize, m->kis_str) & mask;
+    xc_size_t tomb = (xc_size_t)-1;
+    for (;;) {
+        if (m->state[i] == 0) { *found = 0; return tomb != (xc_size_t)-1 ? tomb : i; }
+        if (m->state[i] == 2) { if (tomb == (xc_size_t)-1) tomb = i; }
+        else if (xc_key_eq(m->kslots + i * m->ksize, k, m->ksize, m->kis_str)) { *found = 1; return i; }
+        i = (i + 1) & mask;
+    }
+}
+static void xc_map_resize(struct xc_map* m, xc_size_t ncap) {
+    char* ok = m->kslots; char* ov = m->vslots; unsigned char* ost = m->state; xc_size_t ocap = m->cap;
+    m->kslots = (char*)calloc(ncap, m->ksize); m->vslots = (char*)calloc(ncap, m->vsize);
+    m->state = (unsigned char*)calloc(ncap, 1);
+    if (!m->kslots || !m->vslots || !m->state) abort();
+    m->cap = ncap; m->len = 0; m->used = 0;
+    for (xc_size_t i = 0; i < ocap; i++) if (ost[i] == 1) {
+        int f; xc_size_t j = xc_map_probe(m, ok + i * m->ksize, &f);
+        memcpy(m->kslots + j * m->ksize, ok + i * m->ksize, m->ksize);
+        memcpy(m->vslots + j * m->vsize, ov + i * m->vsize, m->vsize);
+        m->state[j] = 1; m->len++; m->used++;
+    }
+    free(ok); free(ov); free(ost);
+}
+void xstd_map_put(xc_Map_t m, const void* k, const void* v) {
+    if (m->cap == 0) xc_map_resize(m, 8);
+    else if ((m->used + 1) * 4 >= m->cap * 3) xc_map_resize(m, m->cap * 2);
+    int f; xc_size_t i = xc_map_probe(m, k, &f);
+    if (!f) {
+        if (m->state[i] == 0) m->used++;
+        memcpy(m->kslots + i * m->ksize, k, m->ksize); m->state[i] = 1; m->len++;
+    }
+    memcpy(m->vslots + i * m->vsize, v, m->vsize);
+}
+static void xc_map_missing(void) { fprintf(stderr, "xc: map key not found\n"); abort(); }
+void* xstd_map_get(xc_Map_t m, const void* k) {
+    if (m->cap == 0) xc_map_missing();
+    int f; xc_size_t i = xc_map_probe(m, k, &f); if (!f) xc_map_missing();
+    return m->vslots + i * m->vsize;
+}
+void* xstd_map_getor(xc_Map_t m, const void* k, void* def) {
+    if (m->cap == 0) return def;
+    int f; xc_size_t i = xc_map_probe(m, k, &f);
+    return f ? (void*)(m->vslots + i * m->vsize) : def;
+}
+xc_bool_t xstd_map_has(xc_Map_t m, const void* k) {
+    if (m->cap == 0) return false; int f; xc_map_probe(m, k, &f); return f ? true : false;
+}
+void xstd_map_remove(xc_Map_t m, const void* k) {
+    if (m->cap == 0) return; int f; xc_size_t i = xc_map_probe(m, k, &f);
+    if (!f) return; m->state[i] = 2; m->len--;
+}
+xc_integer_t xstd_map_len(xc_Map_t m) { return (xc_integer_t)m->len; }
+void xstd_map_clear(xc_Map_t m) { if (m->state) memset(m->state, 0, m->cap); m->len = 0; m->used = 0; }
+xc_List_t xstd_map_keys(xc_Map_t m) {
+    xc_List_t l = xstd_list_new(m->ksize);
+    for (xc_size_t i = 0; i < m->cap; i++) if (m->state[i] == 1) xstd_list_push(l, m->kslots + i * m->ksize);
+    return l;
+}
+xc_List_t xstd_map_values(xc_Map_t m) {
+    xc_List_t l = xstd_list_new(m->vsize);
+    for (xc_size_t i = 0; i < m->cap; i++) if (m->state[i] == 1) xstd_list_push(l, m->vslots + i * m->vsize);
+    return l;
+}
