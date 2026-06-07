@@ -169,46 +169,6 @@ consumer run() {
 }
 ```
 
-## Implementation design (C backend)
-
-Interrupts need **runtime + codegen** support — unlike decision tables, they
-cannot be desugared into existing constructs.
-
-**Runtime: a dynamic handler stack.**
-
-```c
-typedef enum { XC_SKIP = 0, XC_RECOVER = 1 } xc_resolution_t;
-
-typedef struct xc_handler {
-    int               type_id;             /* which interrupt this catch matches */
-    xc_resolution_t (*fn)(void* payload);  /* compiled catch body */
-    jmp_buf           unwind;              /* skip target (the try) */
-    struct xc_handler* prev;
-} xc_handler_t;
-
-static xc_handler_t* xc_handlers;          /* stack top */
-```
-
-- **`try { BODY } catch e: T { CATCH }`** lowers to:
-  1. compile `CATCH` to `xc_resolution_t __hN(T payload)` (reads payload/globals
-     only, returns the chosen resolution),
-  2. push `{ type_id(T), __hN, jb }`, `setjmp(jb)` (the `skip` landing),
-  3. run `BODY`; pop the handler.
-- **`signal T { ... } recover { REC }`** lowers to:
-  1. walk `xc_handlers` for the nearest matching `type_id`,
-  2. none → unhandled (propagate per `interrupts`; at `main`, panic),
-  3. `res = handler->fn(&payload)`  ← *the signalling frame is still on the stack*,
-  4. `if (res == XC_RECOVER) { REC; /* continue after the signal */ }`
-     `else /* XC_SKIP */ longjmp(handler->unwind, 1);`
-
-`skip` uses `setjmp`/`longjmp` (already used in the runtime). `recover` needs no
-unwinding — it just runs `REC` and continues — which is exactly why the handler
-must be a callable function rather than inline code touching `try`-locals.
-
-**Codegen** adds: interrupt struct typedefs + `type_id`s, the `signal` lowering,
-the `try`/`catch` lowering (push/pop + setjmp + compiled catch fn), and
-`interrupts` checking in the type/effect pass.
-
 ## Static checks / diagnostics
 
 - `signal T` in a function not declaring `interrupts T` → error (suggest adding

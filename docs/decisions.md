@@ -36,24 +36,6 @@ A `decision` is just a value-returning function: it desugars to an `if/return`
 chain, so it has the same performance as hand-written branches and can be called
 like any other function.
 
-## How it lowers
-
-```x
-decision tier(s: Number) -> String {
-    when s >= 700 => "high"
-    else          => "low"
-}
-```
-
-becomes, in effect:
-
-```x
-mapper tier(s: Number) -> String {
-    if s >= 700 { return "high" }
-    return "low"
-}
-```
-
 ## Dependency injection
 
 Because a `decision` is a function kind, it can be an interface method, which

@@ -5,11 +5,7 @@ the `?` propagation operator.
 
 ## The result type `T!`
 
-`T!` means "a `T` or an error". The error is a `String` in v1. It lowers to:
-
-```c
-struct { bool ok; T value; xc_string_t err; }
-```
+`T!` means "a `T` or an error". The error is a `String` in v1.
 
 ## Constructing results
 

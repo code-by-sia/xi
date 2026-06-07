@@ -178,14 +178,7 @@ module {
 }
 ```
 
-## How it lowers
-
-No runtime container. Each interface becomes a fat pointer
-`{ void* self; const vtable* vtable }`; a class's methods become
-`xc_<Class>_<method>_impl`; the compiler generates a resolver
-(`xc_resolve_<Interface>`) that constructs the chosen implementor and wires its
-own deps. An interface call is a direct `recv.vtable->m(recv.self, …)`, which the
-compiler devirtualizes when the concrete type is known — so the abstraction is
-free at runtime.
+There's no runtime container and no registration step — resolution is resolved at
+compile time, so the abstraction is free at runtime.
 
 See `examples/logger_demo.xi`, `examples/di_auto.xi`, and `examples/greeting.xi`.
