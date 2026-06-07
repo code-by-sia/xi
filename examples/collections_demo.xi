@@ -1,6 +1,7 @@
 // Collections — built-in generics (like T[] arrays), created with `empty`:
-//   List<T>  growable ordered list (push/get/set/len/removeAt/...)
-//   Set<T>   hash set of unique elements (add/contains/remove/items/...)
+//   List<T>     growable ordered list (push/get/set/len/removeAt/...)
+//   Set<T>      hash set of unique elements (add/contains/remove/items/...)
+//   Map<K, V>   hash map (put/get/getOr/has/remove/keys/values/...)
 // No import needed for the collections themselves.
 //
 //   xc examples/collections_demo.xi && ./build/collections_demo
@@ -45,6 +46,17 @@ async entry (logger: Logger) main(args: String[]) -> Integer {
     let listed = ""
     for t in tags { listed = listed + t + " " }               // iterate the set
     logger.print("kept  = " + listed)                         // new
+
+    // Map<K, V> — keys are primitives or String; values can be any type.
+    let ages = empty Map<String, Integer>
+    ages.put("ada", 36)
+    ages.put("bo", 20)
+    ages.put("ada", 37)                                       // overwrite
+    logger.print("ada   = " + int_to_string(ages.get("ada"))) // 37
+    logger.print("zz?   = " + int_to_string(ages.getOr("zz", -1)))  // -1 (absent)
+    let total = 0
+    for name in ages.keys() { total = total + ages.get(name) } // iterate via keys()
+    logger.print("total = " + int_to_string(total))           // 57
     return 0
 }
 

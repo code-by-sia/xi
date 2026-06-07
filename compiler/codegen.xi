@@ -748,6 +748,28 @@ mapper strFlagFor(ctype: String) -> String {
     return "0"
 }
 
+// ── Map<K,V> key/value helpers (xtype "Map_<ksuf>_<vsuf>") ──────────
+// The key is always a primitive/String suffix, so its boundary is unambiguous.
+predicate isMapXType(typ: String) { return startsWith2(typ, "Map_") }
+mapper mapKeySuffix(typ: String) -> String {
+    let rest = string_slice(typ, 4, string_len(typ))   // "<ksuf>_<vsuf>"
+    if startsWith2(rest, "integer_") { return "integer" }
+    if startsWith2(rest, "number_")  { return "number" }
+    if startsWith2(rest, "bool_")    { return "bool" }
+    if startsWith2(rest, "string_")  { return "string" }
+    if startsWith2(rest, "char_")    { return "char" }
+    return ""
+}
+mapper mapValSuffix(typ: String) -> String {
+    let rest = string_slice(typ, 4, string_len(typ))
+    let k = mapKeySuffix(typ)
+    return string_slice(rest, string_len(k) + 1, string_len(rest))
+}
+mapper mapKeyCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuffix(mapKeySuffix(typ))) }
+mapper mapValCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuffix(mapValSuffix(typ))) }
+mapper mapValXName(typ: String) -> String { return xnameFromArrSuffix(mapValSuffix(typ)) }
+mapper mapKeyXName(typ: String) -> String { return xnameFromArrSuffix(mapKeySuffix(typ)) }
+
 predicate endsWith2(s: String, suffix: String) {
     let sl = string_len(suffix)
     let n = string_len(s)
@@ -978,6 +1000,23 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         return ExprRes {
             code: "xstd_set_new(sizeof(" + elemCtype + "), " + strFlagFor(elemCtype) + ")",
             pos: endp, xtyp: "Set_" + ctypeSuffix(elemCtype)
+        }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "Map" and gkind(toks, pos + 2) == 114 {
+        // `empty Map<K, V>` — a fresh, empty map (K is a primitive or String)
+        let ktk = gkind(toks, pos + 3)
+        let kc = primCtypeK(ktk)
+        if string_len(kc) == 0 { kc = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let q = pos + 4
+        if gkind(toks, q) == 106 { q = q + 1 }            // `,`
+        let vtk = gkind(toks, q)
+        let vc = primCtypeK(vtk)
+        if string_len(vc) == 0 { vc = "xc_" + gtext(toks, q) + "_t" }
+        let endp = q + 1
+        if gkind(toks, endp) == 115 { endp = endp + 1 }   // `>`
+        return ExprRes {
+            code: "xstd_map_new(sizeof(" + kc + "), sizeof(" + vc + "), " + strFlagFor(kc) + ")",
+            pos: endp, xtyp: "Map_" + ctypeSuffix(kc) + "_" + ctypeSuffix(vc)
         }
     }
     if k == 1 and txt == "empty" {
@@ -1233,6 +1272,60 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         p = al.pos
                     } } }
                 } else {
+                if isMapXType(typ) {
+                    let recv = code
+                    let kc = mapKeyCtype(typ)
+                    let vc = mapValCtype(typ)
+                    if fld == "put" {
+                        let ke = genExpr(toks, p + 3, ctx)
+                        let q = ke.pos
+                        if gkind(toks, q) == 106 { q = q + 1 }   // ,
+                        let ve = genExpr(toks, q, ctx)
+                        code = "xstd_map_put(" + recv + ", (" + kc + "[]){ " + ke.code + " }, (" + vc + "[]){ " + ve.code + " })"
+                        typ = ""
+                        p = ve.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                    if fld == "get" {
+                        let ke = genExpr(toks, p + 3, ctx)
+                        code = "(*(" + vc + "*)xstd_map_get(" + recv + ", (" + kc + "[]){ " + ke.code + " }))"
+                        typ = mapValXName(typ)
+                        p = ke.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                    if fld == "getOr" {
+                        let ke = genExpr(toks, p + 3, ctx)
+                        let q = ke.pos
+                        if gkind(toks, q) == 106 { q = q + 1 }   // ,
+                        let de = genExpr(toks, q, ctx)
+                        code = "(*(" + vc + "*)xstd_map_getor(" + recv + ", (" + kc + "[]){ " + ke.code + " }, (" + vc + "[]){ " + de.code + " }))"
+                        typ = mapValXName(typ)
+                        p = de.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                    if fld == "has" {
+                        let ke = genExpr(toks, p + 3, ctx)
+                        code = "xstd_map_has(" + recv + ", (" + kc + "[]){ " + ke.code + " })"
+                        typ = "Bool"
+                        p = ke.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                    if fld == "remove" {
+                        let ke = genExpr(toks, p + 3, ctx)
+                        code = "xstd_map_remove(" + recv + ", (" + kc + "[]){ " + ke.code + " })"
+                        typ = ""
+                        p = ke.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                        let al = genArgs(toks, p + 2, ctx)
+                        if fld == "len"     { code = "xstd_map_len(" + recv + ")"  typ = "Integer" }
+                        if fld == "isEmpty" { code = "(xstd_map_len(" + recv + ") == 0)"  typ = "Bool" }
+                        if fld == "clear"   { code = "xstd_map_clear(" + recv + ")"  typ = "" }
+                        if fld == "keys"    { code = "xstd_map_keys(" + recv + ")"  typ = "List_" + mapKeySuffix(typ) }
+                        if fld == "values"  { code = "xstd_map_values(" + recv + ")"  typ = "List_" + mapValSuffix(typ) }
+                        p = al.pos
+                    } } } } }
+                } else {
                 if typ == "HttpResponse" {
                     // res.send(dto): serialize via the DI-resolved WebTransport.
                     // res.sendStatus(code, msg) / res.sendText(code, body): plain text.
@@ -1367,6 +1460,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 }
                 }
                 p = al.pos
+                }
                 }
                 }
                 }
@@ -3766,6 +3860,12 @@ mapper genArrTypedefs(prog: Program) -> String {
             out = out + "typedef struct { xc_" + ts.name + "_t* data; xc_size_t len; xc_size_t cap; } xc_arr_" + ts.name + "_t;\n"
             out = out + "typedef xc_List_t xc_List_" + ts.name + "_t;\n"   // List<ts>
             out = out + "typedef xc_Set_t xc_Set_" + ts.name + "_t;\n"     // Set<ts>
+            // Map<primitive-key, ts> — one alias per primitive/String key type
+            out = out + "typedef xc_Map_t xc_Map_integer_" + ts.name + "_t;\n"
+            out = out + "typedef xc_Map_t xc_Map_number_"  + ts.name + "_t;\n"
+            out = out + "typedef xc_Map_t xc_Map_bool_"    + ts.name + "_t;\n"
+            out = out + "typedef xc_Map_t xc_Map_string_"  + ts.name + "_t;\n"
+            out = out + "typedef xc_Map_t xc_Map_char_"    + ts.name + "_t;\n"
         }
         i = i + 1
     }
