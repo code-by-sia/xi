@@ -1,6 +1,7 @@
 // Serialization in three formats over one value tree. Build a `Json` value with
 // std/json, then render it as JSON, YAML, or XML — and parse each back. The
 // document model (`Json`) is shared; only the encoder/decoder differs.
+import "std/log.xi"
 import "std/json.xi"
 import "std/yaml.xi"
 import "std/xml.xi"
@@ -17,20 +18,20 @@ mapper sample() -> Json {
     return o
 }
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let o = sample()
-    system.stdout.writeln("=== YAML ===")
+    logger.print("=== YAML ===")
     let y = yaml.stringify(o)
-    system.stdout.write(y)
-    system.stdout.writeln("--- parse back -> json ---")
+    logger.print(y)
+    logger.print("--- parse back -> json ---")
     let yb = yaml.parse(y)
-    system.stdout.writeln(json.stringify(yb))
+    logger.print(json.stringify(yb))
 
-    system.stdout.writeln("=== XML ===")
+    logger.print("=== XML ===")
     let x = xml.stringify(o)
-    system.stdout.write(x)
-    system.stdout.writeln("--- parse back -> json ---")
+    logger.print(x)
+    logger.print("--- parse back -> json ---")
     let xb = xml.parse(x)
-    system.stdout.writeln(json.stringify(xb))
+    logger.print(json.stringify(xb))
     return 0
 }

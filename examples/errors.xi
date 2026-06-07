@@ -1,4 +1,5 @@
 // Error handling with Result (`T!`), ok/err, and `?` propagation.
+import "std/log.xi"
 
 type Age = Number where value >= 0 and value <= 130
 
@@ -16,11 +17,11 @@ mapper classify(n: Number) -> String! {
     return ok("adult")
 }
 
-consumer report(label: String, r: String!) {
+consumer (logger: Logger) report(label: String, r: String!) {
     if isOk(r) {
-        system.stdout.writeln(label + " -> " + r.value)
+        logger.print(label + " -> " + r.value)
     } else {
-        system.stdout.writeln(label + " -> error: " + r.err)
+        logger.error(label + " -> error: " + r.err)
     }
 }
 

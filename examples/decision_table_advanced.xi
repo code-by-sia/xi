@@ -2,6 +2,7 @@
 // record), `hit unique`, and `hit collect` with and without an aggregator.
 
 // Several outputs -> a `<Decision>Out` record (here ShippingOut { cost, express }).
+import "std/log.xi"
 decision shipping {
     in  weight: Number
     in  zone:   String
@@ -43,17 +44,17 @@ decision badges {
     |  < 60  => "at-risk" |
 }
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let s = shipping(3.0, "CA")
-    system.stdout.writeln("shipping(3,CA): cost=" + s.cost + " express=" + s.express)   // 15 true
+    logger.print("shipping(3,CA): cost=" + s.cost + " express=" + s.express)   // 15 true
 
-    system.stdout.writeln("grade(95)=" + grade(95.0) + ", grade(72)=" + grade(72.0))    // A, B
+    logger.print("grade(95)=" + grade(95.0) + ", grade(72)=" + grade(72.0))    // A, B
 
-    system.stdout.writeln("discount(1200)=" + discount(1200.0) + "%")                    // 5+5+10 = 20
+    logger.print("discount(1200)=" + discount(1200.0) + "%")                    // 5+5+10 = 20
 
     let b = badges(95.0)                                                                 // passing + honors
-    system.stdout.writeln("badges(95): " + b.len + " ->")
+    logger.print("badges(95): " + b.len + " ->")
     let i = 0
-    while i < b.len { system.stdout.writeln("  " + b.data[i]) i = i + 1 }
+    while i < b.len { logger.print("  " + b.data[i]) i = i + 1 }
     return 0
 }

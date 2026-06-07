@@ -1,6 +1,7 @@
 // Method overloading with `where` guards.
 // At a call site the runtime selects the first overload whose guard holds.
 
+import "std/log.xi"
 type ApiResponse = { status: Number, body: String }
 
 mapper mapResponse(res: ApiResponse) -> String where res.status == 200 {
@@ -20,15 +21,15 @@ mapper mapResponse(res: ApiResponse) -> String {
     return "Unhandled status: " + res.status
 }
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let ok    = ApiResponse { status: 200, body: "hello" }
     let nf     = ApiResponse { status: 404, body: "" }
     let err    = ApiResponse { status: 503, body: "" }
     let other  = ApiResponse { status: 302, body: "" }
 
-    system.stdout.writeln(mapResponse(ok))
-    system.stdout.writeln(mapResponse(nf))
-    system.stdout.writeln(mapResponse(err))
-    system.stdout.writeln(mapResponse(other))
+    logger.print(mapResponse(ok))
+    logger.print(mapResponse(nf))
+    logger.print(mapResponse(err))
+    logger.print(mapResponse(other))
     return 0
 }

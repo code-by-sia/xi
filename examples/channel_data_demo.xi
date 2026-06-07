@@ -3,12 +3,13 @@
 // with `recv(T)`, and numbers/bools stringify automatically.
 //
 //   xc examples/channel_data_demo.xi && ./build/channel_data_demo
+import "std/log.xi"
 import "std/thread.xi"
 import "std/convert.xi"
 
 type Order = { id: Integer, item: String, qty: Integer }
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let jobs    = thread.channel()
     let results = thread.channel()
 
@@ -26,12 +27,12 @@ async entry main(args: String[]) -> Integer {
 
     let a = results.recv(Order)
     let b = results.recv(Order)
-    system.stdout.writeln(a.item + " x" + int_to_string(a.qty))   // book x3
-    system.stdout.writeln(b.item + " x" + int_to_string(b.qty))   // pen x6
+    logger.print(a.item + " x" + int_to_string(a.qty))   // book x3
+    logger.print(b.item + " x" + int_to_string(b.qty))   // pen x6
 
     jobs.send(Order { id: 0, item: "", qty: 0 })       // stop the worker
     worker.wait()
-    system.stdout.writeln("done")
+    logger.print("done")
     return 0
 }
 

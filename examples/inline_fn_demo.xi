@@ -2,6 +2,7 @@
 // function kind, for methods, and for `where`-overloads.
 //
 //   xc examples/inline_fn_demo.xi && ./build/inline_fn_demo
+import "std/log.xi"
 import "std/convert.xi"
 
 mapper    square(n: Integer) -> Integer => n * n
@@ -18,12 +19,12 @@ class Doubler implements Calc {
     mapper apply(n: Integer) -> Integer => n * 2     // inline method
 }
 
-async entry main(args: String[]) -> Integer {
-    system.stdout.writeln(int_to_string(square(7)))     // 49
-    if isEven(4) { system.stdout.writeln("4 is even") }
-    system.stdout.writeln(greet("Ada"))                 // Hi, Ada!
-    system.stdout.writeln(tier(500) + " / " + tier(5))  // high / low
-    system.stdout.writeln(int_to_string(App.resolve(Calc).apply(21)))  // 42
+async entry (logger: Logger) main(args: String[]) -> Integer {
+    logger.print(int_to_string(square(7)))     // 49
+    if isEven(4) { logger.print("4 is even") }
+    logger.print(greet("Ada"))                 // Hi, Ada!
+    logger.print(tier(500) + " / " + tier(5))  // high / low
+    logger.print(int_to_string(App.resolve(Calc).apply(21)))  // 42
     return 0
 }
 

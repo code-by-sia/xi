@@ -2,6 +2,7 @@
 // multi-key selectors, and an `else` default.
 //
 //   xc examples/match_demo.xi && ./build/match_demo
+import "std/log.xi"
 import "std/convert.xi"
 
 mapper classify(code: String) -> Integer {
@@ -22,14 +23,14 @@ mapper bucket(n: Integer) -> String {
     }
 }
 
-async entry main(args: String[]) -> Integer {
-    system.stdout.writeln(int_to_string(classify("x")))    // 345
-    system.stdout.writeln(int_to_string(classify("A")))    // 101
-    system.stdout.writeln(int_to_string(classify("BD")))   // 200
-    system.stdout.writeln(int_to_string(classify("zzz")))  // 300
-    system.stdout.writeln(bucket(2))                        // low
-    system.stdout.writeln(bucket(5))                        // mid
-    system.stdout.writeln(bucket(9))                        // other:9
+async entry (logger: Logger) main(args: String[]) -> Integer {
+    logger.print(int_to_string(classify("x")))    // 345
+    logger.print(int_to_string(classify("A")))    // 101
+    logger.print(int_to_string(classify("BD")))   // 200
+    logger.print(int_to_string(classify("zzz")))  // 300
+    logger.print(bucket(2))                        // low
+    logger.print(bucket(5))                        // mid
+    logger.print(bucket(9))                        // other:9
     return 0
 }
 

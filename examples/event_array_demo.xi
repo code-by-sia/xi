@@ -3,6 +3,7 @@
 // the event to JSON and decodes it back; the array fields survive the round-trip.
 import "std/json.xi"
 import "std/events.xi"
+import "std/log.xi"
 
 event Line  { sku: String, qty: Integer }
 event Order { id: String, tags: String[], lines: Line[] }   // String[] and event[]
@@ -10,21 +11,21 @@ event Order { id: String, tags: String[], lines: Line[] }   // String[] and even
 // A transport that serializes, "ships", then deserializes and re-dispatches —
 // exercising Events.encode / Events.decode over the array fields.
 class LoopBus implements PublisherService {
-    deps {}
+    deps { logger: Logger }
     producer publish(e: Event) {
         let body = json.stringify(Events.encode(e))
-        system.stdout.writeln("[wire] " + body)
+        logger.print("[wire] " + body)
         Events.dispatch(Events.decode(Events.topic(e), Events.type(e), json.parse(body)))
     }
 }
 
 class Sink {
-    deps {}
+    deps { logger: Logger }
     listener got(e: Order) on "order.created" {
-        system.stdout.writeln("order " + e.id + ": " + e.tags.len + " tags, " + e.lines.len + " lines")
+        logger.print("order " + e.id + ": " + e.tags.len + " tags, " + e.lines.len + " lines")
         let i = 0
         while i < e.lines.len {
-            system.stdout.writeln("  " + e.lines.data[i].sku + " x" + e.lines.data[i].qty)
+            logger.print("  " + e.lines.data[i].sku + " x" + e.lines.data[i].qty)
             i = i + 1
         }
     }

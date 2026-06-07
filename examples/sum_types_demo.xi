@@ -3,6 +3,7 @@
 // binding the payload.
 //
 //   xc examples/sum_types_demo.xi && ./build/sum_types_demo
+import "std/log.xi"
 import "std/convert.xi"
 
 // Variants with payloads, and a nullary variant (Empty).
@@ -32,12 +33,12 @@ mapper label(c: Color) -> String {
     return "?"
 }
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let shapes: Shape[] = [ Circle { radius: 2.0 }, Rect { w: 3.0, h: 4.0 }, Empty ]
     for s in shapes {
-        system.stdout.writeln(number_to_str(area(s)))
+        logger.print(number_to_str(area(s)))
     }
-    system.stdout.writeln(label(Green))
+    logger.print(label(Green))
     return 0
 }
 

@@ -3,6 +3,7 @@
 // named transitions (`name : From... -> To`). Calling a transition returns a new
 // value in the target state; an illegal move signals the `IllegalTransition`
 // interrupt so the caller can `recover` (stay put) or unwind.
+import "std/log.xi"
 machine Door {
     states  Closed, Open, Locked
     initial Closed
@@ -13,25 +14,27 @@ machine Door {
     unlock : Locked       -> Closed
 }
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let d = Door.start()
-    system.stdout.writeln("start  = " + d.state)
+    logger.print("start  = " + d.state)
 
     d = d.open()
-    system.stdout.writeln("open   = " + d.state)
+    logger.print("open   = " + d.state)
 
     d = d.lock()
-    system.stdout.writeln("lock   = " + d.state)
+    logger.print("lock   = " + d.state)
 
     // Locked has no `open` edge — the illegal move is resumable.
     try {
         d = d.open()
     } catch e: IllegalTransition {
+        // an interrupt handler runs as an isolated frame: it sees globals, not
+        // the entry's injected `logger`, so report via system.stdout here.
         system.stdout.writeln("illegal " + e.from + " -> " + e.to)
         recover
     }
 
     d = d.unlock()
-    system.stdout.writeln("final  = " + d.state)
+    logger.print("final  = " + d.state)
     return 0
 }

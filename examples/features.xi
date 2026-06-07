@@ -1,5 +1,6 @@
 // Feature showcase: optionals, arrays, match, for loops, modules with DI
 
+import "std/log.xi"
 type Score    = Number where value >= 0 and value <= 100
 type Username = String where value.length > 0
 
@@ -61,7 +62,7 @@ module Game {
 
 // --- entry ---
 
-async entry main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) -> Integer {
     let players = [
         makePlayer("Alice", 95),
         makePlayer("Bob",   72),
@@ -69,7 +70,7 @@ async entry main(args: String[]) -> Integer {
     ]
 
     for p in players {
-        system.stdout.writeln(describe(p))
+        logger.print(describe(p))
     }
 
     return 0
