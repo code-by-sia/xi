@@ -134,6 +134,26 @@ nums.windowed(3)                    // List<List<T>> — sliding windows
 
 `groupBy` results chain: `people.groupBy { it.team }.get("x").average { it.age }`.
 
+### Lazy sequences
+
+`asSequence()` makes the pipeline **lazy**: the chain of lazy operators plus the
+terminal compile into a **single fused loop** — no intermediate lists are built,
+and `take` short-circuits.
+
+```x
+let total = orders.asSequence()
+    .filter { it.active }
+    .map    { it.total }
+    .fold(0.0) { a, b => a + b }     // one loop, no intermediates
+
+nums.asSequence().take(3).sum()      // visits only the first 3 elements
+```
+
+- **Lazy ops:** `map`, `filter`, `filterNot`, `take(n)`, `drop(n)`, `takeWhile`,
+  `dropWhile`.
+- **Terminals:** `toList()`, `toSet()`, `forEach`, `fold(seed)`, `sum()`,
+  `count()`, `any`, `all`, `first()`, `firstOrNone()`.
+
 They chain naturally — `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.
 See `examples/functional_demo.xi`.
 
@@ -225,7 +245,8 @@ for k in ages.keys() {
 
 ## What's next
 
-`List<T>`, `Set<T>`, and `Map<K, V>` are in — the core containers. The rich
-functional API (`map` / `filter` / `fold` / …) and lazy sequences build on
-**closures**, a separate language feature; see the
-[collections proposal](proposals/collections.md) for the full design.
+The containers (`List`/`Set`/`Map`), the eager functional API, and lazy
+sequences are all in. Remaining proposal items are `zip` / `partition` (they
+need a `Pair`/tuple type) and infinite sequence sources (`generateSequence`,
+which needs first-class closures) — see the
+[collections proposal](proposals/collections.md).

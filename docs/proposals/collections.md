@@ -4,7 +4,8 @@
 > sequence APIs and the two language features they rest on. The design takes
 > inspiration from several modern collection libraries but is tailored to Ξ —
 > value semantics, no `null` (optionals via `T?` / `none`), and a C99 backend.
-> **Nothing here is implemented yet.**
+> **Mostly implemented** — see [Collections](../collections.md); `zip`/`partition`
+> (need a Pair type) and infinite sequence sources remain.
 
 ## Goal
 
@@ -150,7 +151,7 @@ growable layer over it.
    (built-in generics: `empty List<T>`/`empty Set<T>`/`empty Map<K, V>`, the
    mutating + query ops, `for x in` over List/Set and `for k in m.keys()`, usable
    as param/field/return). **Ranges, builders, and the core eager functional API shipped** (`a..b`/`until`/`downTo`/`step`; `listOf`/`setOf`/`mapOf`; a broad eager operator set via inlined lambdas: map/filter/filterNot/fold/reduce/sumOf/count/any/all/none/forEach/joinToString/mapIndexed/take/drop/takeWhile/dropWhile/reversed/distinct/flatMap/first/last/toSet). find/firstOrNone/lastOrNone/maxByOrNone/minByOrNone/average too, returning optionals). `sorted`/`sortedBy`/`sortedDescending` too. `groupBy`/`associateBy`/`associateWith`/`chunked`/`windowed` too. `zip`/`partition` (need a Pair type) and lazy `Sequence` remain.
-4. **`std/sequences`** — lazy fused `Sequence<T>` with the same operators.
+4. **Lazy `Sequence<T>` shipped** — `asSequence()` fuses map/filter/filterNot/take/drop/takeWhile/dropWhile + terminals (toList/toSet/forEach/fold/sum/count/any/all/first/firstOrNone) into one loop. Infinite sources (generateSequence) need closures.
 5. Extra structures (`ArrayDeque`, `PriorityQueue`, ordered maps) on demand.
 
 ## Why this fits the philosophy

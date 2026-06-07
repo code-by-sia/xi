@@ -1256,6 +1256,139 @@ mapper lambdaArrow(toks: Token[], start: Integer, close: Integer) -> Integer {
     return 0 - 1
 }
 
+// Lazy sequences: `list.asSequence().<lazy ops>.<terminal>` fuses the whole
+// chain into ONE loop (no intermediate lists). `p` is at the `.` of asSequence;
+// `src` is the source list code, `elemX0` its element xtype.
+mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, ctx: GCtx) -> ExprRes {
+    let u = int_to_string(p)
+    let sv = "_sq" + u
+    let iv = "_qi" + u
+    let q = p + 2
+    if gkind(toks, q) == 100 { q = q + 1  if gkind(toks, q) == 101 { q = q + 1 } }   // ()
+    let curVar = "_e" + u + "_0"
+    let curX = elemX0
+    let curC = xnameToCtype(curX)
+    let pre = ""                                            // decls before the loop (counters)
+    let inner = "        " + curC + " " + curVar + " = *(" + curC + "*)xstd_list_at(" + sv + ", " + iv + ");\n"
+    let step = 0
+    let going = true
+    while going and gkind(toks, q) == 107 {
+        let fld = gtext(toks, q + 1)
+        if fld == "map" or fld == "filter" or fld == "filterNot" or fld == "takeWhile" or fld == "dropWhile" {
+            let bo = q + 2
+            let close = matchBrace(toks, bo)
+            let arrow = lambdaArrow(toks, bo + 1, close)
+            let param = "it"
+            let bstart = bo + 1
+            if arrow >= 0 { param = gtext(toks, bo + 1)  bstart = arrow + 1 }
+            let body = genExpr(toks, bstart, addSym(ctx, param, curX))
+            // each op binds its param in its own block so reused names (e.g. `it`) don't clash
+            if fld == "map" {
+                step = step + 1
+                let nv = "_e" + u + "_" + int_to_string(step)
+                let nc = xnameToCtype(body.xtyp)
+                inner = inner + "        " + nc + " " + nv + ";\n"
+                inner = inner + "        { " + curC + " " + param + " = " + curVar + "; " + nv + " = (" + body.code + "); }\n"
+                curVar = nv  curX = body.xtyp  curC = nc
+            }
+            if fld == "filter"    { inner = inner + "        { " + curC + " " + param + " = " + curVar + "; if (!(" + body.code + ")) continue; }\n" }
+            if fld == "filterNot" { inner = inner + "        { " + curC + " " + param + " = " + curVar + "; if (("  + body.code + ")) continue; }\n" }
+            if fld == "takeWhile" { inner = inner + "        { " + curC + " " + param + " = " + curVar + "; if (!(" + body.code + ")) break; }\n" }
+            if fld == "dropWhile" {
+                let dw = "_dw" + int_to_string(step) + u
+                pre = pre + "xc_bool_t " + dw + " = 1; "
+                inner = inner + "        { " + curC + " " + param + " = " + curVar + "; if (" + dw + " && (" + body.code + ")) continue; " + dw + " = 0; }\n"
+                step = step + 1
+            }
+            q = close + 1
+        } else {
+        if fld == "take" or fld == "drop" {
+            let ae = genExpr(toks, q + 3, ctx)
+            let nstr = ae.code
+            q = ae.pos
+            if gkind(toks, q) == 101 { q = q + 1 }
+            let cv = "_c" + int_to_string(step) + u
+            pre = pre + "xc_integer_t " + cv + " = 0; "
+            if fld == "take" { inner = inner + "        if (" + cv + " >= (" + nstr + ")) break; " + cv + " = " + cv + " + 1;\n" }
+            else { inner = inner + "        if (" + cv + " < (" + nstr + ")) { " + cv + " = " + cv + " + 1; continue; }\n" }
+            step = step + 1
+        } else {
+            going = false                                   // a terminal
+        } }
+    }
+    // terminal at q (`.fld(...)` or `.fld { ... }`)
+    let head = "({ xc_List_t " + sv + " = " + src + "; " + pre + "\n"
+    let loopHdr = "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+    let tf = gtext(toks, q + 1)
+    if tf == "toList" or tf == "toSet" {
+        let add = "xstd_list_push"
+        let tx = "List_" + arrSuffixOf(curX)
+        let newc = "xstd_list_new(sizeof(" + curC + "))"
+        if tf == "toSet" { add = "xstd_set_add"  tx = "Set_" + arrSuffixOf(curX)  newc = "xstd_set_new(sizeof(" + curC + "), " + strFlagFor(curC) + ")" }
+        let code = head + "      __auto_type _out" + u + " = " + newc + ";\n" + loopHdr + inner
+                 + "        " + add + "(_out" + u + ", &" + curVar + "); } _out" + u + "; })"
+        return ExprRes { code: code, pos: q + 4, xtyp: tx }
+    }
+    if tf == "forEach" {
+        let bo = q + 2  let close = matchBrace(toks, bo)
+        let arrow = lambdaArrow(toks, bo + 1, close)
+        let param = "it"  let bstart = bo + 1
+        if arrow >= 0 { param = gtext(toks, bo + 1)  bstart = arrow + 1 }
+        let body = genExpr(toks, bstart, addSym(ctx, param, curX))
+        let code = head + loopHdr + inner + "        " + curC + " " + param + " = " + curVar + "; (void)(" + body.code + "); } (void)0; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "" }
+    }
+    if tf == "fold" {
+        let ae = genExpr(toks, q + 3, ctx)  let seed = ae.code  let accX = ae.xtyp
+        let qq = ae.pos
+        if gkind(toks, qq) == 101 { qq = qq + 1 }
+        let bo = qq  let close = matchBrace(toks, bo)
+        let arrow = lambdaArrow(toks, bo + 1, close)
+        let pa = "acc"  let px = "x"  let bstart = bo + 1
+        if arrow >= 0 {
+            let pi = bo + 1  let firstP = true
+            while pi < arrow { if gkind(toks, pi) == 1 { if firstP { pa = gtext(toks, pi)  firstP = false } else { px = gtext(toks, pi) } } pi = pi + 1 }
+            bstart = arrow + 1
+        }
+        let body = genExpr(toks, bstart, addSym(addSym(ctx, pa, accX), px, curX))
+        let accC = xnameToCtype(accX)
+        let code = head + "      " + accC + " " + pa + " = " + seed + ";\n" + loopHdr + inner
+                 + "        " + curC + " " + px + " = " + curVar + "; " + pa + " = (" + body.code + "); } " + pa + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: accX }
+    }
+    if tf == "count" {
+        let code = head + "      xc_integer_t _c" + u + " = 0;\n" + loopHdr + inner + "        _c" + u + " = _c" + u + " + 1; } _c" + u + "; })"
+        return ExprRes { code: code, pos: q + 4, xtyp: "Integer" }
+    }
+    if tf == "sum" {
+        let code = head + "      " + curC + " _s" + u + " = 0;\n" + loopHdr + inner + "        _s" + u + " = _s" + u + " + " + curVar + "; } _s" + u + "; })"
+        return ExprRes { code: code, pos: q + 4, xtyp: curX }
+    }
+    if tf == "any" or tf == "all" {
+        let bo = q + 2  let close = matchBrace(toks, bo)
+        let arrow = lambdaArrow(toks, bo + 1, close)
+        let param = "it"  let bstart = bo + 1
+        if arrow >= 0 { param = gtext(toks, bo + 1)  bstart = arrow + 1 }
+        let body = genExpr(toks, bstart, addSym(ctx, param, curX))
+        let init = "0"  let setv = "1"  let cond = "(" + body.code + ")"
+        if tf == "all" { init = "1"  setv = "0"  cond = "!(" + body.code + ")" }
+        let code = head + "      xc_bool_t _r" + u + " = " + init + ";\n" + loopHdr + inner
+                 + "        " + curC + " " + param + " = " + curVar + "; if (" + cond + ") { _r" + u + " = " + setv + "; break; } } _r" + u + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "Bool" }
+    }
+    if tf == "firstOrNone" {
+        let suf = arrSuffixOf(curX)
+        let code = head + "      xc_opt_" + suf + "_t _r" + u + "; _r" + u + ".has_value = 0;\n" + loopHdr + inner
+                 + "        _r" + u + ".has_value = 1; _r" + u + ".value = " + curVar + "; break; } _r" + u + "; })"
+        return ExprRes { code: code, pos: q + 4, xtyp: "opt_" + suf }
+    }
+    // first() — first surviving element (aborts if none)
+    let fcode = head + "      xc_opt_" + arrSuffixOf(curX) + "_t _r" + u + "; _r" + u + ".has_value = 0;\n" + loopHdr + inner
+             + "        _r" + u + ".has_value = 1; _r" + u + ".value = " + curVar + "; break; }\n"
+             + "      if (!_r" + u + ".has_value) { fprintf(stderr, \"xc: first() on an empty sequence\\n\"); abort(); } _r" + u + ".value; })"
+    return ExprRes { code: fcode, pos: q + 4, xtyp: curX }
+}
+
 // Build a stable insertion-sort over a copy of the list, keyed by `keyExpr`
 // (computed once per element, `evar` bound to it). Numeric keys compare with
 // `>`/`<`; String keys with xc_str_cmp. `desc` flips the order.
@@ -1584,6 +1717,12 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         let k = gkind(toks, p)
         if k == 107 or k == 129 {
             let fld = gtext(toks, p + 1)
+            if isListXType(typ) and fld == "asSequence" {
+                let fr = genSequenceChain(toks, p, code, listElemXName(typ), ctx)
+                code = fr.code
+                typ = fr.xtyp
+                p = fr.pos
+            } else {
             if isListXType(typ) and isListFunc(fld) {
                 let fr = genListFunc(toks, p, code, typ, fld, ctx)
                 code = fr.code
@@ -1962,6 +2101,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 }
                 }
                 p = p + 2
+            }
             }
             }
         } else {

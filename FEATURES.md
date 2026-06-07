@@ -18,6 +18,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `Map<K, V>` — hash map, K primitive/String (`empty Map<K, V>`, put/get/getOr/has/remove/len/clear/keys/values) | ✓ |
 | Collection builders (`listOf(...)`, `setOf(...)`, `mapOf(k to v, ...)`) | ✓ |
 | List functional API via lambdas — map/filter/fold/reduce/sumOf/count/any/all/none/forEach/joinToString/mapIndexed/take/drop/takeWhile/dropWhile/reversed/distinct/flatMap/first/last/toSet/find/firstOrNone/lastOrNone/maxByOrNone/minByOrNone/average/sorted/sortedBy/groupBy/associateBy/associateWith/chunked/windowed (inlined); optional results via `if let` | ✓ |
+| Lazy `Sequence` via `asSequence()` — fused map/filter/take/... + terminals (single loop, short-circuit) | ✓ |
 | Type aliases incl. plural/array (`type People = Person[]`, `type Name = String`) | ✓ |
 | `empty T` — the zero value of any type (struct all-zero, array empty) | ✓ |
 | `atom` — active-state store: immutable `state` + `transition` reducers + `undo()`/`canUndo()` time-travel | ✓ |
