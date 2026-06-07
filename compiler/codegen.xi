@@ -1235,6 +1235,11 @@ predicate isListFunc(fld: String) {
     if fld == "sortedDescending" { return true }
     if fld == "sortedBy" { return true }
     if fld == "sortedByDescending" { return true }
+    if fld == "groupBy"  { return true }
+    if fld == "associateBy" { return true }
+    if fld == "associateWith" { return true }
+    if fld == "chunked"  { return true }
+    if fld == "windowed" { return true }
     return false
 }
 // index of the top-level `=>` (kind 110) within (start, close), or -1.
@@ -1360,6 +1365,26 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         let evar = "_x" + u
         let code = sortStmtExpr(declSv, sv, rv, iv, u, elem, evar, elem, elemX, evar, fld == "sortedDescending")
         return ExprRes { code: code, pos: q, xtyp: typ }
+    }
+    if fld == "chunked" {
+        // split into consecutive sublists of size n -> List<List<T>>
+        let jv = "_j" + u
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(xc_List_t)); xc_integer_t _n" + u + " = (" + argCode + ");\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + _n" + u + ") {\n"
+                 + "        xc_List_t _ch" + u + " = xstd_list_new(sizeof(" + elem + "));\n"
+                 + "        for (xc_integer_t " + jv + " = " + iv + "; " + jv + " < " + iv + " + _n" + u + " && " + jv + " < xstd_list_len(" + sv + "); " + jv + " = " + jv + " + 1) xstd_list_push(_ch" + u + ", xstd_list_at(" + sv + ", " + jv + "));\n"
+                 + "        xstd_list_push(" + rv + ", &_ch" + u + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "List_List_" + suf }
+    }
+    if fld == "windowed" {
+        // sliding windows of size n, step 1 (only full windows) -> List<List<T>>
+        let jv = "_j" + u
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(xc_List_t)); xc_integer_t _n" + u + " = (" + argCode + ");\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " + _n" + u + " <= xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                 + "        xc_List_t _ch" + u + " = xstd_list_new(sizeof(" + elem + "));\n"
+                 + "        for (xc_integer_t " + jv + " = " + iv + "; " + jv + " < " + iv + " + _n" + u + "; " + jv + " = " + jv + " + 1) xstd_list_push(_ch" + u + ", xstd_list_at(" + sv + ", " + jv + "));\n"
+                 + "        xstd_list_push(" + rv + ", &_ch" + u + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "List_List_" + suf }
     }
 
     // ── lambda methods:  { [params =>] body } ──
@@ -1512,6 +1537,31 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         let keyC = xnameToCtype(body.xtyp)
         let code = sortStmtExpr(declSv, sv, rv, iv, u, elem, p0, keyC, body.xtyp, body.code, fld == "sortedByDescending")
         return ExprRes { code: code, pos: close + 1, xtyp: typ }
+    }
+    if fld == "groupBy" {
+        // Map<K, List<T>> — bucket elements by a key
+        let kc = xnameToCtype(body.xtyp)
+        let kstr = strFlagFor(kc)
+        let code = "({ " + declSv + "xc_Map_t " + rv + " = xstd_map_new(sizeof(" + kc + "), sizeof(xc_List_t), " + kstr + ");\n      " + loopOpen
+                 + "        " + kc + " _k" + u + " = (" + body.code + ");\n"
+                 + "        if (!xstd_map_has(" + rv + ", &_k" + u + ")) { xc_List_t _nl" + u + " = xstd_list_new(sizeof(" + elem + ")); xstd_map_put(" + rv + ", &_k" + u + ", &_nl" + u + "); }\n"
+                 + "        xc_List_t _lst" + u + " = *(xc_List_t*)xstd_map_get(" + rv + ", &_k" + u + "); xstd_list_push(_lst" + u + ", &" + p0 + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "Map_" + arrSuffixOf(body.xtyp) + "_List_" + suf }
+    }
+    if fld == "associateBy" {
+        // Map<K, T> — key each element by a projection (last wins)
+        let kc = xnameToCtype(body.xtyp)
+        let kstr = strFlagFor(kc)
+        let code = "({ " + declSv + "xc_Map_t " + rv + " = xstd_map_new(sizeof(" + kc + "), sizeof(" + elem + "), " + kstr + ");\n      " + loopOpen
+                 + "        " + kc + " _k" + u + " = (" + body.code + "); xstd_map_put(" + rv + ", &_k" + u + ", &" + p0 + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "Map_" + arrSuffixOf(body.xtyp) + "_" + suf }
+    }
+    if fld == "associateWith" {
+        // Map<T, V> — element is the key, value from a projection
+        let vc = xnameToCtype(body.xtyp)
+        let code = "({ " + declSv + "xc_Map_t " + rv + " = xstd_map_new(sizeof(" + elem + "), sizeof(" + vc + "), " + strF + ");\n      " + loopOpen
+                 + "        " + vc + " _v" + u + " = (" + body.code + "); xstd_map_put(" + rv + ", &" + p0 + ", &_v" + u + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "Map_" + suf + "_" + arrSuffixOf(body.xtyp) }
     }
     // joinToString(sep) { it => <string> }
     let sep = argCode

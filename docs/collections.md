@@ -122,6 +122,18 @@ people.sortedBy { it.age }                        // by a key projection
 people.sortedByDescending { it.name }
 ```
 
+Grouping and slicing into sublists:
+
+```x
+people.groupBy { it.team }          // Map<K, List<T>> — bucket by a key
+people.associateBy { it.id }        // Map<K, T> — index by a key
+items.associateWith { it.price }    // Map<T, V> — element -> value (T is primitive/String)
+nums.chunked(3)                     // List<List<T>> — consecutive groups
+nums.windowed(3)                    // List<List<T>> — sliding windows
+```
+
+`groupBy` results chain: `people.groupBy { it.team }.get("x").average { it.age }`.
+
 They chain naturally — `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.
 See `examples/functional_demo.xi`.
 
