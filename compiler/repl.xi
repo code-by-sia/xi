@@ -98,7 +98,7 @@ mapper buildProgram(decls: String, stmts: String) -> String {
 }
 
 // The toolchain version. Bump this when cutting a release (matches the tag).
-mapper xiVersion() -> String { return "0.0.60" }
+mapper xiVersion() -> String { return "0.0.61" }
 
 // Directory part of a path (everything before the last '/'); "." if none.
 mapper dirOf(path: String) -> String {
@@ -229,6 +229,26 @@ producer runTests(xc: String, rt: String, path: String) -> Integer {
     return run_command("'" + bin + "'")
 }
 
+// `xi test --all` — discover every *_test.xi under the current directory, run
+// each, and report a project-wide pass/fail summary (nonzero exit on any fail).
+producer runTestsAll(xc: String, rt: String) -> Integer {
+    let sh = "set -u\n"
+    sh = sh + "XC=\"$1\"; RT=\"$2\"; files=$(find . -name '*_test.xi' -not -path '*/build/*' -not -path '*/.git/*' | sort)\n"
+    sh = sh + "if [ -z \"$files\" ]; then echo \"xi test: no *_test.xi files found\"; exit 0; fi\n"
+    sh = sh + "fails=0; n=0\n"
+    sh = sh + "for f in $files; do\n"
+    sh = sh + "  n=$((n+1)); echo \"== $f ==\"\n"
+    sh = sh + "  if ! XC_TEST=1 XC_OUT=/tmp XC_RUNTIME=\"$RT\" \"$XC\" \"$f\" >/tmp/xta.log 2>&1; then echo \"  compile failed:\"; cat /tmp/xta.log; fails=$((fails+1)); continue; fi\n"
+    sh = sh + "  bin=$(grep 'built executable ' /tmp/xta.log | head -1 | sed 's/.*built executable //')\n"
+    sh = sh + "  [ -z \"$bin\" ] && bin=\"/tmp/$(basename \"${f%.xi}\")\"\n"
+    sh = sh + "  \"$bin\" || fails=$((fails+1))\n"
+    sh = sh + "done\n"
+    sh = sh + "echo; echo \"$n test file(s), $fails failed\"\n"
+    sh = sh + "[ \"$fails\" -eq 0 ]\n"
+    file_write("/tmp/xi-test-all.sh", sh)
+    return run_command("sh /tmp/xi-test-all.sh '" + xc + "' '" + rt + "'")
+}
+
 consumer runFile(xc: String, rt: String, path: String) {
     let cmd = "XC_OUT=/tmp XC_RUNTIME='" + rt + "' '" + xc + "' '" + path + "' >/tmp/xrun.log 2>&1"
     let rc = run_command(cmd)
@@ -336,9 +356,10 @@ async entry main(args: String[]) -> Integer {
         }
         if sub == "test" {
             if args.len < 3 {
-                system.stdout.writeln("usage: xi test <file.xi>")
+                system.stdout.writeln("usage: xi test <file.xi>   (or: xi test --all)")
                 return 1
             }
+            if args.data[2] == "--all" { return runTestsAll(xc, rt) }
             return runTests(xc, rt, args.data[2])
         }
         runFile(xc, rt, sub)

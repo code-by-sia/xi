@@ -23,7 +23,7 @@ Good day, Ada.
 ```
 
 A C compiler (`cc`) must be on your `PATH`, since `xc` builds the native binary by
-compiling generated C.
+compiling generated C. `xc version` prints the toolchain version.
 
 | Environment variable | Meaning | Default |
 |----------------------|---------|---------|
@@ -86,7 +86,8 @@ printing `ok`/`not ok` per case, a summary, and a nonzero exit code if any faile
 See [Testing](testing.md).
 
 ```console
-$ xi test examples/calc_test.xi
+$ xi test examples/calc_test.xi      # one file
+$ xi test --all                      # every *_test.xi under the current dir
 ok - addition
 ...
 3 tests, 3 passed, 0 failed
@@ -142,7 +143,7 @@ The REPL is a **compile-and-run loop**:
 
 | Command | Effect |
 |---------|--------|
-| `xi test <file.xi>` | compile in test mode and run the `test` cases ([Testing](testing.md)) |
+| `xi test <file.xi>` / `xi test --all` | run a file's `test`s, or every `*_test.xi` in the project ([Testing](testing.md)) |
 | `xi skill` | print the AI-agent language guide ([skill](skill.md)) |
 | `xi update` | self-update the toolchain to the latest release |
 | `xi version` | print the toolchain version |

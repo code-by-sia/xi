@@ -103,9 +103,9 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Native binaries via C99 backend (compiler invokes `cc`) | ✓ |
 | `file:line` diagnostics on lexer/parser errors | ✓ (initial) |
 | REPL / run tool (`xi`) | ✓ |
-| `xi version` and `xi update` (self-update from GitHub releases) | ✓ |
+| `xc version` / `xi version`; `xi update` (self-updates both `xc` and `xi`) | ✓ |
 | `xi skill` — print the AI-agent language guide (`docs/skill.md`) | ✓ |
-| Built-in testing — `test "…" { assert … }`, `xi test`, `module Test` doubles | ✓ |
+| Built-in testing — `test "…" { assert … }`, `xi test` / `xi test --all`, `module Test` doubles | ✓ |
 | Editor support: Tree-sitter grammar, Zed, Vim | ✓ |
 | Full ownership / borrow checking | ✗ (relies on C; planned) |
 | LLVM backend | ✗ (uses C as the intermediate) |
