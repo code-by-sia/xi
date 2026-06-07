@@ -1199,6 +1199,157 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     return ExprRes { code: txt, pos: pos + 1, xtyp: "" }
 }
 
+// ── functional API on List<T> (lambdas inlined as generated loops) ─────────
+// Method names that take a `{ lambda }` (and maybe a leading `(arg)`).
+predicate isListFunc(fld: String) {
+    if fld == "map"      { return true }
+    if fld == "filter"   { return true }
+    if fld == "filterNot"{ return true }
+    if fld == "forEach"  { return true }
+    if fld == "fold"     { return true }
+    if fld == "reduce"   { return true }
+    if fld == "count"    { return true }
+    if fld == "any"      { return true }
+    if fld == "all"      { return true }
+    if fld == "none"     { return true }
+    if fld == "sumOf"    { return true }
+    if fld == "joinToString" { return true }
+    return false
+}
+// index of the top-level `=>` (kind 110) within (start, close), or -1.
+mapper lambdaArrow(toks: Token[], start: Integer, close: Integer) -> Integer {
+    let depth = 0
+    let i = start
+    while i < close {
+        let k = gkind(toks, i)
+        if k == 102 or k == 100 or k == 104 { depth = depth + 1 }
+        if k == 103 or k == 101 or k == 105 { depth = depth - 1 }
+        if depth == 0 and k == 110 { return i }
+        i = i + 1
+    }
+    return 0 - 1
+}
+
+// recv.<fld>([arg]) { [params =>] body } — emit an inlined loop (statement-expr).
+mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: String, ctx: GCtx) -> ExprRes {
+    let elem = listElemCtype(typ)
+    let elemX = listElemXName(typ)
+    let u = int_to_string(p)
+    let sv = "_s" + u
+    let iv = "_i" + u
+    let rv = "_r" + u
+    let q = p + 2
+    // optional leading (arg): fold's seed, joinToString's separator
+    let argCode = ""
+    let argX = ""
+    if gkind(toks, q) == 100 {
+        let ae = genExpr(toks, q + 1, ctx)
+        argCode = ae.code
+        argX = ae.xtyp
+        q = ae.pos
+        if gkind(toks, q) == 101 { q = q + 1 }
+    }
+    // lambda { [params =>] body }
+    let close = matchBrace(toks, q)
+    let arrow = lambdaArrow(toks, q + 1, close)
+    let p0 = "it"
+    let p1 = ""
+    let bstart = q + 1
+    if arrow >= 0 {
+        let pi = q + 1
+        let first = true
+        while pi < arrow {
+            if gkind(toks, pi) == 1 {
+                if first { p0 = gtext(toks, pi)  first = false } else { p1 = gtext(toks, pi) }
+            }
+            pi = pi + 1
+        }
+        bstart = arrow + 1
+    }
+    let declSv = "xc_List_t " + sv + " = " + recv + ";\n      "
+
+    // for fold/reduce the second param binds the element; p0 binds the accumulator
+    if fld == "fold" or fld == "reduce" {
+        let accX = elemX
+        if fld == "fold" { accX = argX }
+        let bctx = addSym(addSym(ctx, p0, accX), p1, elemX)
+        let body = genExpr(toks, bstart, bctx)
+        let elDecl = "        " + elem + " " + p1 + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + ");\n"
+        if fld == "fold" {
+            let accC = xnameToCtype(accX)
+            let loop = "({ " + declSv + accC + " " + p0 + " = " + argCode + ";\n"
+                     + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                     + elDecl + "        " + p0 + " = (" + body.code + "); } " + p0 + "; })"
+            return ExprRes { code: loop, pos: close + 1, xtyp: accX }
+        }
+        // reduce: seed = element 0, iterate from 1
+        let loop = "({ " + declSv + elem + " " + p0 + " = *(" + elem + "*)xstd_list_at(" + sv + ", 0);\n"
+                 + "      for (xc_integer_t " + iv + " = 1; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                 + elDecl + "        " + p0 + " = (" + body.code + "); } " + p0 + "; })"
+        return ExprRes { code: loop, pos: close + 1, xtyp: elemX }
+    }
+
+    // single-param lambdas: p0 binds the element
+    let bctx = addSym(ctx, p0, elemX)
+    let body = genExpr(toks, bstart, bctx)
+    let loopOpen = "for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                 + "        " + elem + " " + p0 + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + ");\n"
+
+    if fld == "map" {
+        let uc = xnameToCtype(body.xtyp)
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + uc + "));\n      " + loopOpen
+                 + "        " + uc + " _v = (" + body.code + "); xstd_list_push(" + rv + ", &_v); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "List_" + arrSuffixOf(body.xtyp) }
+    }
+    if fld == "filter" {
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n      " + loopOpen
+                 + "        if ((" + body.code + ")) xstd_list_push(" + rv + ", &" + p0 + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: typ }
+    }
+    if fld == "filterNot" {
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n      " + loopOpen
+                 + "        if (!(" + body.code + ")) xstd_list_push(" + rv + ", &" + p0 + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: typ }
+    }
+    if fld == "forEach" {
+        let code = "({ " + declSv + loopOpen + "        (void)(" + body.code + "); } (void)0; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "" }
+    }
+    if fld == "count" {
+        let code = "({ " + declSv + "xc_integer_t " + rv + " = 0;\n      " + loopOpen
+                 + "        if (" + body.code + ") " + rv + " = " + rv + " + 1; } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "Integer" }
+    }
+    if fld == "any" {
+        let code = "({ " + declSv + "xc_bool_t " + rv + " = 0;\n      " + loopOpen
+                 + "        if ((" + body.code + ")) { " + rv + " = 1; break; } } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "Bool" }
+    }
+    if fld == "all" {
+        let code = "({ " + declSv + "xc_bool_t " + rv + " = 1;\n      " + loopOpen
+                 + "        if (!(" + body.code + ")) { " + rv + " = 0; break; } } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "Bool" }
+    }
+    if fld == "none" {
+        let code = "({ " + declSv + "xc_bool_t " + rv + " = 1;\n      " + loopOpen
+                 + "        if ((" + body.code + ")) { " + rv + " = 0; break; } } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "Bool" }
+    }
+    if fld == "sumOf" {
+        let sc = xnameToCtype(body.xtyp)
+        let code = "({ " + declSv + sc + " " + rv + " = 0;\n      " + loopOpen
+                 + "        " + rv + " = " + rv + " + (" + body.code + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: body.xtyp }
+    }
+    // joinToString(sep) { it => <string> }
+    let sep = argCode
+    if string_len(sep) == 0 { sep = "xc_string_from_cstr(\"\")" }
+    let code = "({ " + declSv + "xc_string_t " + rv + " = xc_string_from_cstr(\"\");\n      " + loopOpen
+             + "        if (" + iv + " > 0) " + rv + " = xc_string_concat(" + rv + ", " + sep + ");\n"
+             + "        " + rv + " = xc_string_concat(" + rv + ", " + toStrC(body.code, body.xtyp) + "); } " + rv + "; })"
+    return ExprRes { code: code, pos: close + 1, xtyp: "String" }
+}
+
 // ── postfix:  .field  .method(args)  (call)  [index] ──────────────
 mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let base = genPrimary(toks, pos, ctx)
@@ -1211,6 +1362,12 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         let k = gkind(toks, p)
         if k == 107 or k == 129 {
             let fld = gtext(toks, p + 1)
+            if isListXType(typ) and isListFunc(fld) {
+                let fr = genListFunc(toks, p, code, typ, fld, ctx)
+                code = fr.code
+                typ = fr.xtyp
+                p = fr.pos
+            } else {
             if gkind(toks, p + 2) == 100 {
                 if typ == "events:" {
                     // Built-in event facility (over the type-erased envelope).
@@ -1583,6 +1740,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 }
                 }
                 p = p + 2
+            }
             }
         } else {
             if k == 100 {
