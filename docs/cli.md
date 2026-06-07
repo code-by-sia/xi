@@ -22,6 +22,19 @@ $ ./build/greeting
 Good day, Ada.
 ```
 
+`xc --all` discovers every **buildable module** under the current directory (a
+file with both an `entry` and a `module`) and builds each into its own binary
+(named by the module `id`):
+
+```console
+$ xc --all
+=== xc --all: building ./server.xi ===
+xc: built executable build/server
+=== xc --all: building ./client.xi ===
+xc: built executable build/client
+xc --all: built 2 module(s), 0 failed
+```
+
 A C compiler (`cc`) must be on your `PATH`, since `xc` builds the native binary by
 compiling generated C. `xc version` prints the toolchain version.
 

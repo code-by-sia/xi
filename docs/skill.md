@@ -254,14 +254,18 @@ binary's name** (otherwise it's the source filename). The block may be anonymous
 alongside `bind`s.
 
 ```x
-module {
+module App {
     id          = "file-server"     // -> binary named `file-server`
-    name        = "File Server"
-    description = "a simple file server"
+    name        = "File Server"     // name/description/version/license = metadata
     version     = "0.12"
     license     = "MIT"
+    includes    = ["./**"]          // files that belong to this module (default)
+    excludes    = ["scratch/**"]    // ...minus these
 }
 ```
+
+Multiple modules can share a folder (each owns its `entry main` + `includes`/
+`excludes`); build one with `xc file.xi` or all with `xc --all`.
 
 ## Logging (std/log)
 

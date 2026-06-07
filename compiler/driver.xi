@@ -403,20 +403,11 @@ creator gatherSources(srcPath: String, inc: String[], exc: String[]) -> LoadResu
 }
 
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
-mapper xcVersion() -> String { return "0.0.63" }
+mapper xcVersion() -> String { return "0.0.64" }
 
-async entry main(args: String[]) -> Integer {
-    if args.len < 2 {
-        system.stdout.writeln("Usage: xc <source.x|.xi>")
-        return 1
-    }
-
-    let srcPath = args.data[1]
-    if srcPath == "version" or srcPath == "--version" or srcPath == "-v" {
-        system.stdout.writeln("xc " + xcVersion())
-        return 0
-    }
-
+// Compile one source file (resolving imports + module source sets) to a native
+// binary. Returns 0 on success.
+producer buildOne(srcPath: String) -> Integer {
     system.stdout.writeln("xc: loading + lexing " + srcPath + " ...")
     let lr = loadModule(srcPath, emptyStrings())
     let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
@@ -445,8 +436,6 @@ async entry main(args: String[]) -> Integer {
     system.stdout.writeln("xc: generating C ...")
     let cSource = genAll(prog, srcPath)
 
-    // Build artifacts go to the output directory ($XC_OUT, default "build"),
-    // keeping source trees clean.
     let outDir = get_env("XC_OUT", "build")
     run_command("mkdir -p '" + outDir + "'")
     // Binary name: the module's `id` if it declares one, else the source basename.
@@ -460,8 +449,7 @@ async entry main(args: String[]) -> Integer {
     system.stdout.writeln("xc: compiling C to native binary ...")
     let rc = compile_c(outPath, binPath)
     if rc == 0 {
-        // Drop the generated C once it's built. Set XC_KEEP_C=1 to retain it
-        // (the self-host fixpoint check diffs the generated .gen.c).
+        // Drop the generated C once it's built (XC_KEEP_C=1 retains it).
         if string_len(get_env("XC_KEEP_C", "")) == 0 {
             run_command("rm -f '" + outPath + "'")
         }
@@ -470,6 +458,59 @@ async entry main(args: String[]) -> Integer {
     }
     system.stderr.writeln("xc: C compilation failed")
     return 1
+}
+
+// A file is a buildable module if it has both an `entry` and a `module`.
+predicate isBuildableModule(path: String) {
+    let toks = tokenise(file_read_all(path))
+    let n = tokenArrLen(toks)
+    let hasEntry = false
+    let hasModule = false
+    let i = 0
+    while i < n {
+        let k = tokenArrGet(toks, i).kind
+        if k == 219 { hasEntry = true }
+        if k == 210 { hasModule = true }
+        i = i + 1
+    }
+    return hasEntry and hasModule
+}
+
+// `xc --all` — discover every buildable module under the current directory and
+// build each (into its own binary, named by its module `id`).
+producer buildAll() -> Integer {
+    run_command("find . -name '*.xi' -not -path '*/build/*' -not -path '*/.git/*' | sort > /tmp/xi-modules.txt 2>/dev/null")
+    let files = splitLines(file_read_all("/tmp/xi-modules.txt"))
+    let built = 0
+    let fails = 0
+    let i = 0
+    let n = stringArrLen(files)
+    while i < n {
+        let f = stringArrGet(files, i)
+        if isBuildableModule(f) {
+            system.stdout.writeln("=== xc --all: building " + f + " ===")
+            built = built + 1
+            if buildOne(f) != 0 { fails = fails + 1 }
+        }
+        i = i + 1
+    }
+    system.stdout.writeln("xc --all: built " + int_to_string(built) + " module(s), " + int_to_string(fails) + " failed")
+    if fails > 0 { return 1 }
+    return 0
+}
+
+async entry main(args: String[]) -> Integer {
+    if args.len < 2 {
+        system.stdout.writeln("Usage: xc <source.xi>   (or: xc --all, xc version)")
+        return 1
+    }
+    let srcPath = args.data[1]
+    if srcPath == "version" or srcPath == "--version" or srcPath == "-v" {
+        system.stdout.writeln("xc " + xcVersion())
+        return 0
+    }
+    if srcPath == "--all" { return buildAll() }
+    return buildOne(srcPath)
 }
 
 // The first non-empty module `id` in the program (used as the binary name), or "".

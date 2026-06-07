@@ -125,3 +125,37 @@ $ xc client.xi && ./build/client
   "entry file + its explicit `import`s" behavior.
 - Combine with `id` (see [DI › module metadata](dependency-injection.md#module-metadata))
   to name each module's binary.
+
+Build every module in a tree at once with `xc --all` — it finds each buildable
+module (a file with an `entry` + a `module`) and builds it separately.
+
+## Module fields
+
+Everything a `module` block can contain:
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `id` | string | source filename | name of the compiled binary |
+| `name` | string | — | display name (metadata) |
+| `description` | string | — | description (metadata) |
+| `version` | string | — | version (metadata) |
+| `license` | string | — | license (metadata) |
+| `includes` | string[] | `["./**"]` when set | globs of files that belong to this module |
+| `excludes` | string[] | `[]` | globs to drop from the include set |
+| `bind I -> Impl [as singleton]` | — | auto | DI override / scope ([DI](dependency-injection.md)) |
+| `bind I -> readConfig("file")` | — | — | config-backed binding ([config](config.md)) |
+
+```x
+module App {
+    id          = "billing"
+    name        = "Billing Service"
+    version     = "1.4.0"
+    license     = "MIT"
+    includes    = ["./**"]
+    excludes    = ["scratch/**"]
+    bind Clock  -> SystemClock as singleton
+}
+```
+
+The block may be named (`module App { … }`), anonymous (`module { … }`), or
+`module Test { … }` (whose binds win under `xi test`).
