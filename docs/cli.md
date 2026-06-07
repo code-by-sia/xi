@@ -39,6 +39,36 @@ Hello World!
 
 This compiles the file and runs the resulting binary.
 
+### Version
+
+```console
+$ xi version          # also: xi --version, xi -v
+xi 0.0.50
+```
+
+### Self-update
+
+`xi update` downloads the latest release bundle for your platform from GitHub and
+replaces the installed `xc`/`xi` binaries, `runtime/`, and `std/` **in place** —
+no reinstall needed.
+
+```console
+$ xi update
+xi update: checking code-by-sia/x ...
+current: 0.0.49   latest: 0.0.50
+downloading xi-v0.0.50-macos-arm64.tar.gz ...
+xi updated: 0.0.49 -> 0.0.50
+```
+
+It no-ops with "already up to date" when you're on the latest version. Notes:
+
+- Works on an **installed release bundle** (the `bin/` + `libexec/` layout); run
+  it from a source checkout and it reports that it can't find an install root.
+- Needs write access to the install directory — use `sudo xi update` if you
+  installed under a system path.
+- Requires `curl` and `tar` on `PATH`. Override the source repo with
+  `XI_UPDATE_REPO=owner/name`.
+
 ### Interactive REPL
 
 ```console

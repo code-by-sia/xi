@@ -99,7 +99,8 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Self-hosting compiler (written in Xi, compiles its own source) | ✓ |
 | Native binaries via C99 backend (compiler invokes `cc`) | ✓ |
 | `file:line` diagnostics on lexer/parser errors | ✓ (initial) |
-| REPL / run tool (`x`) | ✓ |
+| REPL / run tool (`xi`) | ✓ |
+| `xi version` and `xi update` (self-update from GitHub releases) | ✓ |
 | Editor support: Tree-sitter grammar, Zed, Vim | ✓ |
 | Full ownership / borrow checking | ✗ (relies on C; planned) |
 | LLVM backend | ✗ (uses C as the intermediate) |
