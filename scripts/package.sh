@@ -45,10 +45,13 @@ Contents:
   runtime/ - C runtime (xc invokes cc with this)
   std/     - standard library (import "std/...")
 
-Install: put bin/ on your PATH, e.g.
+Install (this tarball): put bin/ on your PATH, e.g.
   export PATH="\$PWD/${DIST}/bin:\$PATH"
-  xc myprog.x        # -> build/myprog
+  xc myprog.xi       # -> build/myprog
   xi                 # interactive REPL
+
+Or install with Homebrew (macOS + Linux):
+  brew install code-by-sia/x/xi
 
 Requires a C compiler (cc / clang / gcc) on PATH.
 EOF

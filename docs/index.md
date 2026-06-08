@@ -26,12 +26,26 @@ to a byte-identical fixpoint. The only non-Xi code is a small C runtime (the
 equivalent of a language's libc/libcore). You don't need any of that to write
 Xi — [install the toolchain](getting-started.md) and go.
 
+## Install
+
+On macOS (Apple Silicon + Intel) and Linux, install with **Homebrew**:
+
+```sh
+brew install code-by-sia/x/xi
+```
+
+Or grab a prebuilt tarball from the
+[releases page](https://github.com/code-by-sia/x/releases) and put its `bin/` on
+your `PATH`. Either way you get `xc` (compiler) and `xi` (run tool + REPL); you
+just need a C compiler (`cc`) on `PATH`. Full steps:
+[Getting started](getting-started.md).
+
 ## Highlights
 
 - **Refined types** — `type Age = Number where value >= 0 and value <= 130`,
   checked at construction.
-- **Seven function kinds** — `mapper`, `projector`, `predicate`, `consumer`,
-  `producer`, `reducer`, `creator`: intent is syntactic.
+- **Eight function kinds** — `mapper`, `projector`, `predicate`, `consumer`,
+  `producer`, `reducer`, `creator`, `action`: intent is syntactic.
 - **Dependency injection** in the language — `deps { ... }`, `module { bind ... }`,
   `App.resolve(Interface)`, conditional `when` bindings, `singleton`/`transient`.
 - **`where`-guarded overloading** — multiple functions with one name, selected by
@@ -57,11 +71,12 @@ mapper describe(u: User) -> String {
     return u.name + " (" + u.age + ")"
 }
 
-async entry (logger: Logger) main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) {
     let u = User { name: "Ada", age: 36 }
     if isAdult(u) { logger.info(describe(u)) }
-    return 0
 }
+
+module App {}
 ```
 
 ```console
