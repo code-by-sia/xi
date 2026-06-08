@@ -1020,9 +1020,21 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         let ln0 = peek(ips).line
         let bt: Token[] = []
         bt = appendToken(bt, mkTok(221, "return", ln0))
-        while peek(ips).kind != 0 and peek(ips).line == ln0 {
-            bt = appendToken(bt, peek(ips))
-            ips = advance(ips)
+        // Collect the inline expression. A `}` at brace-depth 0 closes the
+        // enclosing scope (e.g. a one-line class method) — stop without
+        // consuming it. Braces opened within the expr (struct literals) nest.
+        let depth = 0
+        let running = true
+        while running and peek(ips).kind != 0 and peek(ips).line == ln0 {
+            let ct = peek(ips)
+            if ct.kind == 103 and depth == 0 {
+                running = false
+            } else {
+                if ct.kind == 102 { depth = depth + 1 }
+                if ct.kind == 103 { depth = depth - 1 }
+                bt = appendToken(bt, ct)
+                ips = advance(ips)
+            }
         }
         br = BodyResult { bodyTokens: bt, ps: ips }
     }
