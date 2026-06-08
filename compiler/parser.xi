@@ -1400,8 +1400,51 @@ mapper parseClass(ps: PState) -> ClassResult {
     return ClassResult { spec: spec, ps: ps2 }
 }
 
-// Parse `module Name { bind ... }`
-type ModuleResult = { spec: ModuleSpec, ps: PState }
+// Parse an `entry` declaration (peek at `entry`): optional `{deps}` / `(deps)`,
+// name, `(params)`, return type, body. Usable top-level or inside a `module`.
+type EntryParse = { spec: FuncSpec, ps: PState }
+mapper parseEntry(ps: PState, isAsync: Bool) -> EntryParse {
+    let ps2 = advance(ps)   // `entry`
+    let edeps: DepSpec[] = []
+    if peek(ps2).kind == 102 {                  // { deps }
+        ps2 = advance(ps2)
+        while peek(ps2).kind != 103 and peek(ps2).kind != 0 {
+            let dr = parseDep(ps2)
+            edeps = appendDepSpec(edeps, dr.spec)
+            ps2 = dr.ps
+        }
+        if peek(ps2).kind == 103 { ps2 = advance(ps2) }
+    } else {
+        if peek(ps2).kind == 100 {              // ( deps )
+            ps2 = advance(ps2)
+            while peek(ps2).kind != 101 and peek(ps2).kind != 0 {
+                let dr = parseDep(ps2)
+                edeps = appendDepSpec(edeps, dr.spec)
+                ps2 = dr.ps
+            }
+            if peek(ps2).kind == 101 { ps2 = advance(ps2) }
+        }
+    }
+    let nameTok = peek(ps2)
+    ps2 = advance(ps2)
+    if peek(ps2).kind == 100 { ps2 = advance(ps2) }
+    let pr = parseParams(ps2)
+    ps2 = pr.ps
+    if peek(ps2).kind == 101 { ps2 = advance(ps2) }
+    let rr = parseRetType(ps2)
+    ps2 = rr.ps
+    let br = parseBody(ps2)
+    ps2 = br.ps
+    let spec = FuncSpec {
+        isCreator: false, isAsync: isAsync, kind: "entry", name: nameTok.text,
+        params: pr.params, retCtype: retCtypeFor("entry", rr.ctype),
+        bodyTokens: br.bodyTokens, hasWhere: false, whereTokens: [], fnDeps: edeps, topic: ""
+    }
+    return EntryParse { spec: spec, ps: ps2 }
+}
+
+// Parse `module Name { bind ... }` (may contain its own `entry main`)
+type ModuleResult = { spec: ModuleSpec, ps: PState, entry: FuncSpec, hasEntry: Bool }
 
 mapper parseModule(ps: PState) -> ModuleResult {
     let ps2 = advance(ps)  // "module"
@@ -1420,8 +1463,22 @@ mapper parseModule(ps: PState) -> ModuleResult {
     let mLic = ""
     let mIncludes: String[] = []    // unset -> file+imports only; set -> glob-gather
     let mExcludes: String[] = []
+    let mEntry = FuncSpec {
+        isCreator: false, isAsync: false, kind: "entry", name: "main",
+        params: "xc_arr_string_t args", retCtype: "xc_integer_t",
+        bodyTokens: [], hasWhere: false, whereTokens: [], fnDeps: [], topic: ""
+    }
+    let mHasEntry = false
     while peek(ps2).kind != 103 and peek(ps2).kind != 0 {
-        // import, bind, or a metadata field (key = "value")
+        // import, an inner `entry`, a bind, or a metadata field
+        if peek(ps2).kind == 230 and peekAt(ps2, 1).kind == 219 {   // async entry
+            let er = parseEntry(advance(ps2), true)
+            mEntry = er.spec  mHasEntry = true  ps2 = er.ps
+        } else {
+        if peek(ps2).kind == 219 {                                  // entry
+            let er = parseEntry(ps2, false)
+            mEntry = er.spec  mHasEntry = true  ps2 = er.ps
+        } else {
         if peek(ps2).kind == 244 {  // import
             ps2 = advance(ps2)
             ps2 = advance(ps2)  // skip module name
@@ -1498,6 +1555,8 @@ mapper parseModule(ps: PState) -> ModuleResult {
                 }
             }
         }
+        }
+        }
     }
     if peek(ps2).kind == 103 { ps2 = advance(ps2) }  // }
 
@@ -1506,7 +1565,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
         id: mId, title: mTitle, description: mDesc, version: mVer, license: mLic,
         includes: mIncludes, excludes: mExcludes
     }
-    return ModuleResult { spec: spec, ps: ps2 }
+    return ModuleResult { spec: spec, ps: ps2, entry: mEntry, hasEntry: mHasEntry }
 }
 
 // ── Program parser ────────────────────────────────────────────────
@@ -1897,6 +1956,7 @@ creator parseProgram(tokens: Token[]) -> Program {
                         if t.kind == 210 {
                             let r = parseModule(ps)
                             modules = appendModuleSpec(modules, r.spec)
+                            if r.hasEntry { entrySpec = r.entry }   // entry declared inside the module
                             ps = r.ps
                         } else {
                             // async prefix
@@ -1931,50 +1991,11 @@ creator parseProgram(tokens: Token[]) -> Program {
                                     hasWhere: false, whereTokens: [], fnDeps: tdeps, topic: ""
                                 })
                             } else {
-                            // entry
+                            // entry  (top-level form)
                             if peek(ps).kind == 219 {
-                                ps = advance(ps)  // entry keyword
-                                // optional deps block before the name:
-                                //   entry { d: I, ... } main(...)   — full form
-                                //   entry (d: I, ...)  main(...)    — simple form
-                                let edeps: DepSpec[] = []
-                                if peek(ps).kind == 102 {
-                                    ps = advance(ps)
-                                    while peek(ps).kind != 103 and peek(ps).kind != 0 {
-                                        let dr = parseDep(ps)
-                                        edeps = appendDepSpec(edeps, dr.spec)
-                                        ps = dr.ps
-                                    }
-                                    if peek(ps).kind == 103 { ps = advance(ps) }
-                                } else {
-                                    if peek(ps).kind == 100 {
-                                        ps = advance(ps)
-                                        while peek(ps).kind != 101 and peek(ps).kind != 0 {
-                                            let dr = parseDep(ps)
-                                            edeps = appendDepSpec(edeps, dr.spec)
-                                            ps = dr.ps
-                                        }
-                                        if peek(ps).kind == 101 { ps = advance(ps) }
-                                    }
-                                }
-                                let nameTok = peek(ps)
-                                ps = advance(ps)
-                                if peek(ps).kind == 100 { ps = advance(ps) }
-                                let pr = parseParams(ps)
-                                ps = pr.ps
-                                if peek(ps).kind == 101 { ps = advance(ps) }
-                                let rr = parseRetType(ps)
-                                ps = rr.ps
-                                let br = parseBody(ps)
-                                ps = br.ps
-                                entrySpec = FuncSpec {
-                                    isCreator: false, isAsync: isAsync,
-                                    kind: "entry", name: nameTok.text,
-                                    params: pr.params,
-                                    retCtype: retCtypeFor("entry", rr.ctype),
-                                    bodyTokens: br.bodyTokens,
-                                    hasWhere: false, whereTokens: [], fnDeps: edeps, topic: ""
-                                }
+                                let er = parseEntry(ps, isAsync)
+                                entrySpec = er.spec
+                                ps = er.ps
                             } else {
                                 // creator or function kind
                                 if peek(ps).kind == 212 {

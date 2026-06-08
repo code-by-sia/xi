@@ -144,6 +144,7 @@ Everything a `module` block can contain:
 | `excludes` | string[] | `[]` | globs to drop from the include set |
 | `bind I -> Impl [as singleton]` | — | auto | DI override / scope ([DI](dependency-injection.md)) |
 | `bind I -> readConfig("file")` | — | — | config-backed binding ([config](config.md)) |
+| `[async] entry [(deps)] main(...) { … }` | — | — | the module's entry point (may also be top-level) |
 
 ```x
 module App {
@@ -154,8 +155,18 @@ module App {
     includes    = ["./**"]
     excludes    = ["scratch/**"]
     bind Clock  -> SystemClock as singleton
+
+    async entry (logger: Logger) main(args: String[]) -> Integer {
+        logger.info("billing up")
+        return 0
+    }
 }
 ```
+
+The `entry` may live **inside** the module (as above) or stay at the top level
+with a separate `module App { … }` block — both are supported. Putting it inside
+keeps each module self-contained, which is what makes `xc --all` build a folder
+of modules into one binary each.
 
 The block may be named (`module App { … }`), anonymous (`module { … }`), or
 `module Test { … }` (whose binds win under `xi test`).

@@ -67,6 +67,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `ApplicationConfig` — `watch(file, topic)` emits a `ConfigChanged` event (std/events) on edit for hot-reload | ✓ |
 | Module source sets — `includes`/`excludes` globs gather a module's files; multiple modules per folder build separately | ✓ |
 | `xc --all` — discover and build every module in the project | ✓ |
+| `entry` inside a `module` block (module-scoped entry; top-level entry still works) | ✓ |
 
 ## Modules & interop
 
