@@ -403,6 +403,7 @@ decision retCtypeFor(kind: String, declaredRet: String) -> String {
     when kind == "consumer"           => "void"
     when kind == "listener"           => "void"
     when kind == "action"             => "void"
+    when kind == "entry"              => "xc_integer_t"   // entry is always Integer (implicit return 0)
     when string_len(declaredRet) > 0  => declaredRet
     else                              => "void"
 }

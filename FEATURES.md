@@ -50,6 +50,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `scope` blocks | ✓ (compiled as C blocks) |
 | `async` functions | ✓ (compiled synchronously in the C backend) |
 | `unsafe` blocks | ✓ |
+| `entry` return type optional (always `Integer`; no `return` exits `0`) | ✓ |
 
 ## Dependency injection & IoC
 
@@ -109,6 +110,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `file:line` diagnostics on lexer/parser errors | ✓ (initial) |
 | REPL / run tool (`xi`) | ✓ |
 | `xc version` / `xi version`; `xi update` (self-updates both `xc` and `xi`) | ✓ |
+| Install via **Homebrew** (`brew install code-by-sia/x/xi`) or prebuilt tarball | ✓ |
 | `xi skill` — print the AI-agent language guide (`docs/skill.md`) | ✓ |
 | Built-in testing — `test "…" { assert … }`, `xi test` / `xi test --all`, `module Test` doubles | ✓ |
 | Editor support: Tree-sitter grammar, Zed, Vim | ✓ |
