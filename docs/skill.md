@@ -261,8 +261,14 @@ module App {
     license     = "MIT"
     includes    = ["./**"]          // files that belong to this module (default)
     excludes    = ["scratch/**"]    // ...minus these
+
+    async entry (logger: Logger) main(args: String[]) -> Integer {  // entry can live inside
+        logger.info("up")
+        return 0
+    }
 }
 ```
+(The `entry` may also be top-level with a separate `module App {}` — both work.)
 
 Multiple modules can share a folder (each owns its `entry main` + `includes`/
 `excludes`); build one with `xc file.xi` or all with `xc --all`.

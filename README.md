@@ -13,6 +13,8 @@ enforce their constraints. It compiles to native binaries through a C99 backend,
 and its compiler is **written in Xi and self-hosting**.
 
 ```x
+import "std/log.xi"
+
 interface Greeter { mapper greet(name: String) -> String }
 
 class Friendly implements Greeter {
@@ -22,14 +24,23 @@ class Friendly implements Greeter {
     }
 }
 
-async entry main(args: String[]) -> Integer {
-    let g = App.resolve(Greeter)          // auto-wired — no manual construction
-    system.stdout.writeln(g.greet("Ada"))
-    return 0
-}
+module App {
+    id      = "greeter"          // name of the compiled binary
+    name    = "Greeter"
+    version = "1.0.0"
+    license = "MIT"
 
-module App {}                             // resolution is automatic
+    // the entry can live inside its module; dependencies are auto-wired
+    async entry (logger: Logger, greeter: Greeter) main(args: String[]) -> Integer {
+        logger.info(greeter.greet("Ada"))
+        return 0
+    }
+}
 ```
+
+A folder can hold several such modules; `xc --all` builds each into its own
+binary (named by its `id`). The entry may also be written at the top level with a
+separate `module App { … }` block — both forms work.
 
 ## Why Xi
 
