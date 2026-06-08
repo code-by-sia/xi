@@ -149,3 +149,56 @@ jobs:
           files: ${{ steps.package.outputs.artifact }}
           fail_on_unmatched_files: true
           generate_release_notes: true
+
+  # After all platform tarballs are attached to the release, refresh the
+  # Homebrew formula (urls + sha256) and push it to the tap repo. Gated on a
+  # token secret: without it the release still succeeds and the bump is skipped
+  # (run scripts/update-formula.sh + push xi.rb by hand). See
+  # packaging/homebrew/README.md.
+  homebrew:
+    name: bump homebrew tap
+    needs: [build, macos-x86_64]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for tap token
+        id: gate
+        env:
+          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::notice::HOMEBREW_TAP_TOKEN not set — skipping formula bump"
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Regenerate formula from published release assets
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          scripts/update-formula.sh "$VERSION"
+
+      - name: Push to code-by-sia/homebrew-x
+        if: steps.gate.outputs.go == 'true'
+        env:
+          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          VER="${GITHUB_REF_NAME#v}"
+          git clone "https://x-access-token:${TOKEN}@github.com/code-by-sia/homebrew-x.git" tap
+          mkdir -p tap/Formula
+          cp packaging/homebrew/xi.rb tap/Formula/xi.rb
+          cd tap
+          git config user.name "xi release"
+          git config user.email "9437465+code-by-sia@users.noreply.github.com"
+          git add Formula/xi.rb
+          if git diff --cached --quiet; then
+            echo "formula already up to date"
+          else
+            git commit -m "xi ${VER}"
+            git push
+          fi

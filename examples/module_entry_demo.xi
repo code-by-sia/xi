@@ -15,8 +15,9 @@ module App {
     version = "0.1.0"
     license = "MIT"
 
-    async entry (logger: Logger, greeter: Greeter) main(args: String[]) -> Integer {
+    // `entry` always returns Integer: `-> Integer` is optional and a body
+    // without `return` exits 0.
+    async entry (logger: Logger, greeter: Greeter) main(args: String[]) {
         logger.info(greeter.greet())
-        return 0
     }
 }

@@ -5,9 +5,11 @@ and then to a native binary. Fetch the latest copy with `xi skill`.
 
 ## Golden rules
 
-- Every program has one `async entry … main(args: String[]) -> Integer { … }` and
-  ends with `module App {}` (the DI container; add `bind`s inside it only to
-  override defaults).
+- Every program has one `async entry … main(args: String[]) { … }` and a
+  `module App {}` (the DI container; add `bind`s inside it only to override
+  defaults; the entry may also live *inside* the module block). `entry` always
+  returns `Integer`, so `-> Integer` is optional and a body with no `return`
+  exits `0`; add `-> Integer` + `return <code>` for a non-zero exit.
 - **There is no `null`.** Absence is modeled with optionals (`T?` + `if let`) or
   results (`T!`). Never write `null`.
 - Statements are newline-separated; no semicolons. Blocks use `{ }`.

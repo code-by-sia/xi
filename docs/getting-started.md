@@ -2,6 +2,15 @@
 
 ## Install
 
+### Homebrew (macOS + Linux)
+
+```sh
+brew install code-by-sia/x/xi
+brew upgrade xi        # later, to update
+```
+
+### Tarball (any supported platform)
+
 Download the toolchain for your platform from the
 **[releases page](https://github.com/code-by-sia/x/releases)**, unpack it, and put
 its `bin/` on your `PATH`:
@@ -12,8 +21,9 @@ tar -xzf xi-<version>-<os>-<arch>.tar.gz
 export PATH="$PWD/xi-<version>-<os>-<arch>/bin:$PATH"
 ```
 
-This gives you two commands — `xc` (compiler) and `xi` (run tool + REPL).
-Upgrade later in place with `xi update`.
+Either way you get two commands — `xc` (compiler) and `xi` (run tool + REPL).
+Tarball installs upgrade in place with `xi update`; Homebrew installs upgrade
+with `brew upgrade xi`.
 
 **Requirements:** a C compiler (`cc` — clang or gcc) on your `PATH`, since `xc`
 produces a native binary by compiling generated C. Supported platforms:
@@ -35,9 +45,8 @@ docker run --rm -it -v "${PWD}:/work" xi xi        # REPL
 ```x title="hello.xi"
 import "std/log.xi"
 
-async entry (logger: Logger) main(args: String[]) -> Integer {
+async entry (logger: Logger) main(args: String[]) {
     logger.info("Hello World!")
-    return 0
 }
 
 module App {}
@@ -47,6 +56,11 @@ module App {}
 injects the standard `ConsoleLogger` — no globals, no setup. (Bind your own
 `Logger` later and `main` doesn't change.) See
 [Dependency injection](dependency-injection.md).
+
+`entry` always returns `Integer`, so the `-> Integer` is optional and a body
+without a `return` exits `0` — write `-> Integer` and `return <code>` only when
+you want a non-zero exit code. (An unhandled interrupt that reaches `main`
+aborts with a non-zero status.)
 
 Compile to a native binary, then run it:
 

@@ -8,7 +8,7 @@
 <h1 align="center">The Ξ (Xi) Programming Language</h1>
 
 Xi is a **statically-typed, ahead-of-time compiled** language with **first-class
-dependency injection**, **seven function kinds**, and **refined types** that
+dependency injection**, **eight function kinds**, and **refined types** that
 enforce their constraints. It compiles to native binaries through a C99 backend,
 and its compiler is **written in Xi and self-hosting**.
 
@@ -30,10 +30,11 @@ module App {
     version = "1.0.0"
     license = "MIT"
 
-    // the entry can live inside its module; dependencies are auto-wired
-    async entry (logger: Logger, greeter: Greeter) main(args: String[]) -> Integer {
+    // the entry can live inside its module; dependencies are auto-wired.
+    // `entry` always returns Integer, so `-> Integer` is optional and a body
+    // without a `return` exits 0.
+    async entry (logger: Logger, greeter: Greeter) main(args: String[]) {
         logger.info(greeter.greet("Ada"))
-        return 0
     }
 }
 ```
@@ -98,7 +99,14 @@ Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:
 
 ## Quick start
 
-Download a prebuilt toolchain for your platform from the
+On macOS (Apple Silicon + Intel) and Linux, install with **Homebrew**:
+
+```sh
+brew install code-by-sia/x/xi
+brew upgrade xi        # later, to update
+```
+
+Or download a prebuilt toolchain for your platform from the
 **[releases page](https://github.com/code-by-sia/x/releases)**, unpack it, and
 put its `bin/` on your `PATH`:
 
@@ -106,12 +114,16 @@ put its `bin/` on your `PATH`:
 # grab the asset for your platform, e.g. xi-<version>-macos-arm64.tar.gz
 tar -xzf xi-<version>-<os>-<arch>.tar.gz
 export PATH="$PWD/xi-<version>-<os>-<arch>/bin:$PATH"
+```
 
+Either way you get `xc` and `xi`:
+
+```sh
 xc hello.xi        # compile  -> build/hello
 xi hello.xi        # compile and run
 xi                 # interactive REPL
 xi version         # print the toolchain version
-xi update          # self-update to the latest release
+xi update          # self-update to the latest release (tarball installs)
 xi skill           # print the AI-agent language guide (xi skill > SKILL.md)
 ```
 
