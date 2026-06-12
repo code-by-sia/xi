@@ -69,6 +69,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Module source sets — `includes`/`excludes` globs gather a module's files; multiple modules per folder build separately | ✓ |
 | `xc --all` — discover and build every module in the project | ✓ |
 | `entry` inside a `module` block (module-scoped entry; top-level entry still works) | ✓ |
+| Module `dependencies` — URLs to source archives; `xi install` fetches them into `./modules`, auto-gathered at build | ✓ |
 
 ## Modules & interop
 
@@ -114,6 +115,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `xc version` / `xi version`; `xi update` (self-updates both `xc` and `xi`) | ✓ |
 | Install via **Homebrew** (`brew install code-by-sia/x/xi`) or prebuilt tarball | ✓ |
 | `xi skill` — print the AI-agent language guide (`docs/skill.md`) | ✓ |
+| `xi install` — fetch a module's `dependencies` (source archives) into `./modules` | ✓ |
 | Built-in testing — `test "…" { assert … }`, `xi test` / `xi test --all`, `module Test` doubles | ✓ |
 | Editor support: Tree-sitter grammar, Zed, Vim | ✓ |
 | Full ownership / borrow checking | ✗ (relies on C; planned) |

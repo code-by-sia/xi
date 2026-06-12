@@ -89,7 +89,9 @@ separate `module App { … }` block — both forms work.
   `link`/`pkg`/`cflags` build directives; `Ptr`/`cstring` types, `&mut`
   out-params, and a `std/ffi` String↔cstring bridge. See
   [C interop](https://code-by-sia.github.io/x/ffi) (e.g. a SQLite binding).
-- **Multi-file projects** with `import` and `namespace`.
+- **Multi-file projects** with `import` and `namespace`, plus a module
+  `dependencies` field — list source-archive URLs and `xi install` fetches them
+  into `./modules` (auto-compiled in, no manual `import`).
 - **A growing standard library** — math, text, bytes, convert, **serialization
   (json / yaml / xml)**, **crypto (SHA/HMAC/base64/CSPRNG)**, fs, path,
   **net (TCP sockets)**, **http (HTTP/1.1 client)**, **web (REST framework)**,

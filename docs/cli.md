@@ -38,6 +38,22 @@ xc --all: built 2 module(s), 0 failed
 A C compiler (`cc`) must be on your `PATH`, since `xc` builds the native binary by
 compiling generated C. `xc version` prints the toolchain version.
 
+### Dependencies — `xi install`
+
+A module can list third-party libraries as `dependencies` (URLs to `.tar.gz` /
+`.zip` source archives). `xi install [file]` downloads and extracts them into a
+`modules/` directory, which `xc` then folds into the build automatically:
+
+```console
+$ xi install server.xi        # or: xi install  (every buildable module)
+  fetching https://github.com/code-by-sia/xi-sqlite/archive/refs/tags/v0.1.0.tar.gz
+xi install: 1/1 fetched into ./modules
+$ xc server.xi                # compiles ./modules in, no extra import
+```
+
+Needs `curl` (and `unzip` for `.zip`). See
+[Multi-file › Dependencies](multi-file.md#dependencies-dependencies--xi-install).
+
 | Environment variable | Meaning | Default |
 |----------------------|---------|---------|
 | `XC_OUT` | output directory for the built binary | `build` |
