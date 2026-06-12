@@ -56,6 +56,7 @@ mapper primKindToCtype(kind: Integer) -> String {
         266 -> "xc_size_t"
         267 -> "const char*"
         268 -> "xc_bytes_t"
+        269 -> "void*"
         _   -> ""
     }
 }
@@ -177,6 +178,8 @@ mapper ctypeSuffix(ctype: String) -> String {
         "xc_char_t"      -> "char"
         "xc_size_t"      -> "size"
         "xc_timestamp_t" -> "timestamp"
+        "void*"          -> "ptr"
+        "const char*"    -> "cstring"
         _ -> {
             // otherwise strip leading "xc_" and trailing "_t"
             if string_len(ctype) > 5 { return string_slice(ctype, 3, string_len(ctype) - 2) }
@@ -331,7 +334,9 @@ type Program = {
     machines:   MachineSpec[], // declared `machine`s
     eventTypes: String[],     // names of declared `event` types (typed payloads)
     tables:     DecisionTable[], // table-form `decision`s (emitted by codegen)
-    tests:      FuncSpec[]     // `test "name" (deps) { ... }` cases (kind="test")
+    tests:      FuncSpec[],    // `test "name" (deps) { ... }` cases (kind="test")
+    cIncludes:  String[],      // C headers from `extern "C" { include "..." }`
+    cFlags:     String[]       // build-flag tokens: -lX / -I.. / pkg:NAME (extern "C")
 }
 
 // C helpers for building typed arrays used by Program
@@ -1847,6 +1852,8 @@ creator parseProgram(tokens: Token[]) -> Program {
     let eventTypes: String[] = []
     let tables: DecisionTable[] = []
     let tests: FuncSpec[] = []
+    let cIncludes: String[] = []
+    let cFlags: String[] = []
     let entrySpec = FuncSpec {
         isCreator: false, isAsync: false,
         kind: "entry", name: "main",
@@ -1865,6 +1872,22 @@ creator parseProgram(tokens: Token[]) -> Program {
             if peek(ps).kind == 4 { ps = advance(ps) }   // string "C"
             if peek(ps).kind == 102 { ps = advance(ps) } // {
             while peek(ps).kind != 103 and peek(ps).kind != 0 {
+              // Build directives: include/link/pkg/cflags/ldflags "value"
+              let dt = peek(ps)
+              let nx = peek(advance(ps))
+              if dt.kind == 1 and nx.kind == 4 and (dt.text == "include" or dt.text == "link" or dt.text == "pkg" or dt.text == "cflags" or dt.text == "ldflags") {
+                let val = nx.text
+                if dt.text == "include" {
+                    let pfx = string_slice(val, 0, 1)
+                    if pfx == "<" or pfx == "\"" { cIncludes = appendString(cIncludes, val) }
+                    else { cIncludes = appendString(cIncludes, "<" + val + ">") }
+                } else {
+                if dt.text == "link"  { cFlags = appendString(cFlags, "-l" + val) }
+                else { if dt.text == "pkg" { cFlags = appendString(cFlags, "pkg:" + val) }
+                else { cFlags = appendString(cFlags, val) } }   // cflags / ldflags: raw
+                }
+                ps = advance(advance(ps))
+              } else {
                 let isA = false
                 if peek(ps).kind == 230 {
                     isA = true
@@ -1891,6 +1914,7 @@ creator parseProgram(tokens: Token[]) -> Program {
                 } else {
                     ps = advance(ps)
                 }
+              }
             }
             if peek(ps).kind == 103 { ps = advance(ps) } // }
         } else {
@@ -2042,7 +2066,7 @@ creator parseProgram(tokens: Token[]) -> Program {
         modules: modules, functions: functions, externs: externs,
         entrySpec: entrySpec, interrupts: interrupts, atoms: atoms,
         machines: machines, eventTypes: eventTypes, tables: tables,
-        tests: tests
+        tests: tests, cIncludes: cIncludes, cFlags: cFlags
     }
 }
 

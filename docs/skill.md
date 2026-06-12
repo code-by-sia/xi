@@ -416,6 +416,31 @@ let tax = readConfig<Tax>("tax.yaml")
 Hot-reload: inject `ApplicationConfig`, call `cfg.watch("app.yaml", "config.changed")`,
 run `Events.runAsync()`, and handle `ConfigChanged` in a `listener`.
 
+## C interop / porting a C library (`extern "C"`)
+
+Declare the C functions in an `extern "C"` block and add a build directive so
+`xc` links the library. The signatures *are* the binding.
+
+```x
+import "std/ffi.xi"
+extern "C" {
+    link "sqlite3"                                       // -> -lsqlite3
+    // also: pkg "name", cflags "-I…", ldflags "-L…", include "<h.h>"
+    producer sqlite3_open(path: cstring, ppDb: &mut Ptr) -> Integer
+    producer sqlite3_close(db: Ptr) -> Integer
+}
+
+let db = empty Ptr                                       // empty Ptr = NULL
+sqlite3_open(toCString(":memory:"), &mut db)             // &mut x = C out-param
+```
+
+- `Ptr` = `void*` (opaque handle); `cstring` = `const char*`; `&mut x` = address-of
+  (out-params); `empty Ptr` = null.
+- A Xi `String` is not a `cstring` — bridge with `toCString(s)` / `fromCString(p)`
+  from `std/ffi`.
+- Declare externs **or** `include` a header for the same function, not both
+  (conflicting C declarations). For a simple port, externs + `link` only.
+
 ## A complete program
 
 ```x

@@ -155,6 +155,8 @@ mapper ctypeToXName(ctype: String) -> String {
         "xc_bool_t"    -> "Bool"
         "xc_char_t"    -> "Char"
         "xc_size_t"    -> "Size"
+        "void*"        -> "Ptr"
+        "const char*"  -> "cstring"
         _ -> {
             // strip leading "xc_" and trailing "_t"
             if string_len(ctype) > 5 { return string_slice(ctype, 3, string_len(ctype) - 2) }
@@ -786,6 +788,8 @@ mapper xnameToCtype(xname: String) -> String {
         "Integer" -> "xc_integer_t"
         "Bool"    -> "xc_bool_t"
         "Char"    -> "xc_char_t"
+        "Ptr"     -> "void*"
+        "cstring" -> "const char*"
         _         -> "xc_" + xname + "_t"
     }
 }
@@ -886,6 +890,7 @@ mapper primCtypeK(k: Integer) -> String {
         265 -> "void"
         266 -> "xc_size_t"
         267 -> "const char*"
+        269 -> "void*"
         _   -> ""
     }
 }
@@ -4994,10 +4999,37 @@ mapper genMachineDefs(prog: Program) -> String {
     return out + "\n"
 }
 
+// FFI build metadata from `extern "C"` directives: emit each `include "..."`
+// as a real `#include`, plus a `/* XC-BUILD-FLAGS: ... */` marker that compile_c
+// scans to extend the cc command line (link libs, -I/-L, pkg-config names).
+mapper genBuildMeta(prog: Program) -> String {
+    let out = ""
+    let nf = stringArrLen(prog.cFlags)
+    if nf > 0 {
+        let flags = ""
+        let i = 0
+        while i < nf {
+            if i > 0 { flags = flags + " " }
+            flags = flags + stringArrGet(prog.cFlags, i)
+            i = i + 1
+        }
+        out = out + "/* XC-BUILD-FLAGS: " + flags + " */\n"
+    }
+    let ni = stringArrLen(prog.cIncludes)
+    let j = 0
+    while j < ni {
+        out = out + "#include " + stringArrGet(prog.cIncludes, j) + "\n"
+        j = j + 1
+    }
+    if string_len(out) > 0 { out = out + "\n" }
+    return out
+}
+
 mapper genAll(prog: Program, srcPath: String) -> String {
     let tail = genEntry(prog, srcPath)
     if inTestMode() and funcSpecLen(prog.tests) > 0 { tail = genTestRunner(prog, srcPath) }
     return genHeader()
+         + genBuildMeta(prog)
          + genInterruptDefs(prog)
          + genForwardDecls(prog)
          + genRefinedTypedefs(prog)

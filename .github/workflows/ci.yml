@@ -27,6 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # examples/sqlite_demo.xi links libsqlite3 (the FFI demo). macOS ships it
+      # in the SDK; Ubuntu needs the -dev package for the linker.
+      - name: Install example dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
       - name: Bootstrap (download seed, compile, self-rebuild)
         run: ./compiler/bootstrap.sh
 

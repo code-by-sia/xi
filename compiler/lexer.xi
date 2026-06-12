@@ -249,6 +249,7 @@ mapper kwKind(word: String) -> Integer {
         "Size"        -> 266
         "cstring"     -> 267
         "Bytes"       -> 268
+        "Ptr"         -> 269     // opaque C pointer (void*) — FFI handle
         else          -> 1     // IDENT
     }
 }

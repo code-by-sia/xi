@@ -23,6 +23,7 @@ const sidebars = {
     'events',
     'web',
     'threading',
+    'ffi',
     'internals',
     {
       type: 'category',

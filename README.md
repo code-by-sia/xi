@@ -85,11 +85,16 @@ separate `module App { … }` block — both forms work.
   exceptions.
 - **`where`-guarded overloading**, `match`, optionals (`T?`), arrays (`T[]`),
   and a `Bytes` type for binary data.
+- **C interop** — port a C library by declaring it in an `extern "C"` block with
+  `link`/`pkg`/`cflags` build directives; `Ptr`/`cstring` types, `&mut`
+  out-params, and a `std/ffi` String↔cstring bridge. See
+  [C interop](https://code-by-sia.github.io/x/ffi) (e.g. a SQLite binding).
 - **Multi-file projects** with `import` and `namespace`.
 - **A growing standard library** — math, text, bytes, convert, **serialization
   (json / yaml / xml)**, **crypto (SHA/HMAC/base64/CSPRNG)**, fs, path,
   **net (TCP sockets)**, **http (HTTP/1.1 client)**, **web (REST framework)**,
-  **thread (share-nothing threads + channels)**, process, time — see
+  **thread (share-nothing threads + channels)**, process, time, **ffi (C
+  interop)** — see
   [the standard library](https://code-by-sia.github.io/x/stdlib) and
   [serialization](https://code-by-sia.github.io/x/serialization).
 - **Native, dependency-light output**: Xi → C99 → a native binary via your `cc`.
