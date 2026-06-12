@@ -83,4 +83,12 @@ module App {}
 $ xc greeting.xi && ./build/greeting
 ```
 
+## Showcase
+
+See Xi in a real application: **[eXstream](https://github.com/code-by-sia/eXstream)**
+is a music-streaming service whose backend is a set of Xi microservices (auth,
+file storage, playlist) behind an API gateway, with a React front end and Docker
+deployment — an end-to-end example of modules, dependency injection, the web
+framework, and JWT auth.
+
 Ready? Head to [Getting started](getting-started.md).

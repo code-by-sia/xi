@@ -166,6 +166,15 @@ library, and the compiler internals — lives in the repository at
 **[github.com/code-by-sia/x](https://github.com/code-by-sia/x)**
 (rendered at [code-by-sia.github.io/x](https://code-by-sia.github.io/x/)).
 
+## Showcase
+
+**[eXstream](https://github.com/code-by-sia/eXstream)** is a full real-world app
+built with Xi — a music-streaming service whose backend is a set of Xi
+microservices (auth, file storage, playlist) behind an API gateway, with a React
+front end and Docker deployment. It's a good end-to-end example of structuring a
+larger project with modules, dependency injection, the web framework, and JWT
+auth.
+
 ## Project layout
 
 ```

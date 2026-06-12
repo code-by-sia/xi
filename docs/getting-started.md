@@ -95,6 +95,8 @@ x> :quit
   [standard library](stdlib.md).
 - [CLI & REPL](cli.md) for `xc`/`xi` options, `xi test`, `xi skill`, and `xi update`.
 - `xi skill > SKILL.md` produces a single-file language guide for AI coding agents.
+- A full real-world app: **[eXstream](https://github.com/code-by-sia/eXstream)**, a
+  music-streaming service with Xi microservices, a React front end, and Docker.
 
 > Building the compiler from source (it's self-hosting) is covered in
 > [Compiler internals](internals.md) and the repository `README` — you don't need
