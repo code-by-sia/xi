@@ -195,6 +195,62 @@ static int append_file(const char* dst, const char* src) {
     return 0;
 }
 
+/* Scan the generated C for a `/​* XC-BUILD-FLAGS: ... *​/` marker (emitted from
+   `extern "C"` build directives) and expand it into extra cc flags. Tokens:
+     pkg:NAME  -> the output of `pkg-config --cflags --libs NAME`
+     <other>   -> appended literally (e.g. -lsqlite3, -I/x, -L/y). */
+static void xc_build_flags(const char* cpath, char* out, size_t outsz) {
+    out[0] = '\0';
+    FILE* f = fopen(cpath, "rb");
+    if (!f) return;
+    char line[4096];
+    char content[2048]; content[0] = '\0';
+    int scanned = 0;
+    /* The marker is emitted as a top-level comment near the file head. Match
+       only when the (whitespace-trimmed) line *starts* with it, so the same
+       text appearing inside a string literal deep in the generated C — which
+       happens when the compiler compiles its own codegen.xi — is ignored. */
+    while (fgets(line, sizeof(line), f) && scanned < 60) {
+        scanned++;
+        const char* p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (strncmp(p, "/* XC-BUILD-FLAGS:", 18) == 0) {
+            const char* m = p + 18;
+            char* end = strstr(m, "*/");
+            char tmp[2048];
+            snprintf(tmp, sizeof(tmp), "%s", m);
+            if (end) { size_t off = (size_t)(end - m); if (off < sizeof(tmp)) tmp[off] = '\0'; }
+            snprintf(content, sizeof(content), "%s", tmp);
+            break;
+        }
+    }
+    fclose(f);
+    if (!content[0]) return;
+    size_t used = 0;
+    char* save = NULL;
+    char* tok = strtok_r(content, " \t\r\n", &save);
+    while (tok && used + 1 < outsz) {
+        if (strncmp(tok, "pkg:", 4) == 0) {
+            char cmd[512];
+            snprintf(cmd, sizeof(cmd), "pkg-config --cflags --libs %s 2>/dev/null", tok + 4);
+            FILE* pf = popen(cmd, "r");
+            if (pf) {
+                char pbuf[1024];
+                if (fgets(pbuf, sizeof(pbuf), pf)) {
+                    pbuf[strcspn(pbuf, "\n")] = '\0';
+                    int n = snprintf(out + used, outsz - used, " %s", pbuf);
+                    if (n > 0) used += (size_t)n;
+                }
+                pclose(pf);
+            }
+        } else {
+            int n = snprintf(out + used, outsz - used, " %s", tok);
+            if (n > 0) used += (size_t)n;
+        }
+        tok = strtok_r(NULL, " \t\r\n", &save);
+    }
+}
+
 xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
     char* cp = xc_string_to_cstr(cpath);
     char* bp = xc_string_to_cstr(binpath);
@@ -205,6 +261,10 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
        definitions (which reference the generated structs) share the TU. */
     const char* helpers = getenv("XC_HELPERS");
     if (helpers && helpers[0]) append_file(cp, helpers);
+
+    /* User FFI flags from `extern "C"` directives (link libs, -I/-L, pkg-config). */
+    char extra[4096]; extra[0] = '\0';
+    xc_build_flags(cp, extra, sizeof(extra));
 
     /* Optional TLS (std/web HTTPS): opt-in via XC_TLS so default builds stay
        dependency-light. When set, enable XC_HAVE_TLS and link OpenSSL — flags
@@ -244,7 +304,7 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
     }
 
     /* cc -std=c99 -O2 -I<dir> <cpath> <dir>/runtime.c -o <binpath> -lm -lpthread [tls] */
-    size_t need = strlen(cp) + strlen(bp) + 3 * strlen(dir) + strlen(tls) + 256;
+    size_t need = strlen(cp) + strlen(bp) + 3 * strlen(dir) + strlen(tls) + strlen(extra) + 256;
     char* cmd = (char*)malloc(need);
     if (!cmd) { free(cp); free(bp); return 1; }
     /* -w plus explicit -Wno-* because GCC 14 (Ubuntu 24.04) promotes these to
@@ -252,8 +312,8 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
     snprintf(cmd, need,
              "cc -std=c99 -O2 -w -Wno-implicit-int -Wno-implicit-function-declaration "
              "-Wno-int-conversion -Wno-incompatible-pointer-types "
-             "-I%s %s %s/runtime.c -o %s -lm -lpthread %s",
-             dir, cp, dir, bp, tls);
+             "-I%s %s %s/runtime.c -o %s -lm -lpthread %s%s",
+             dir, cp, dir, bp, tls, extra);
 
     int rc = system(cmd);
     free(cmd); free(cp); free(bp);

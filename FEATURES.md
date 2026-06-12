@@ -79,6 +79,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | String concatenation with `+` (auto-coercion of scalars) | ✓ |
 | `extern "C"` blocks | ✓ (declaration) |
 | `export "C"` functions | ✓ |
+| **C library FFI** — `extern "C"` build directives (`link`/`pkg`/`cflags`/`ldflags`/`include`), `Ptr`/`cstring` types, `&mut` out-params, `std/ffi` String↔cstring bridge | ✓ |
 
 ## Standard library (`std/*.xi`)
 
@@ -100,6 +101,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `http` | **HTTP/1.1 client** over `net` (get/post/request, header lookup, URL parse); `https://` with `XC_TLS=1` |
 | `process` | env vars, run shell command, exit |
 | `time` | monotonic nanos, sleep |
+| `ffi` | **C interop** — `toCString`/`fromCString` (String ↔ `cstring`) for porting C libraries via `extern "C"` |
 
 ## Toolchain
 

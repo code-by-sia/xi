@@ -451,6 +451,10 @@ static inline xc_string_t number_to_str(xc_number_t  n) { return xc_number_to_st
 /* File I/O */
 xc_string_t file_read_all(xc_string_t path);
 
+/* FFI bridge: Xi String <-> C cstring (const char*). */
+const char* xstd_cstr(xc_string_t s);
+xc_string_t xstd_from_cstr(const char* p);
+
 /* Diagnostics: set the current source file, then report an error at a line and
    exit(1) with `xc: <file>:<line>: error: <msg>`. */
 void diag_set_file(xc_string_t path);

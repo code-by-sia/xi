@@ -152,6 +152,12 @@ xc_bool_t xc_string_matches(xc_string_t s, const char* pattern) {
 
 /* ─── File I/O ───────────────────────────────────────────────────────────── */
 
+/* FFI bridge: Xi String <-> C cstring (const char*). Non-inline so user `extern
+   "C"` declarations can link against them. xstd_cstr returns a NUL-terminated
+   copy (heap); xstd_from_cstr copies the C string into a managed Xi string. */
+const char* xstd_cstr(xc_string_t s) { return xc_string_to_cstr(s); }
+xc_string_t xstd_from_cstr(const char* p) { return xc_string_from_cstr(p ? p : ""); }
+
 xc_string_t file_read_all(xc_string_t path) {
     char* cpath = xc_string_to_cstr(path);
     FILE* fp = fopen(cpath, "rb");
