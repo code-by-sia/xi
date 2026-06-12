@@ -142,6 +142,7 @@ Everything a `module` block can contain:
 | `license` | string | — | license (metadata) |
 | `includes` | string[] | `["./**"]` when set | globs of files that belong to this module |
 | `excludes` | string[] | `[]` | globs to drop from the include set |
+| `dependencies` | string[] | `[]` | URLs to source archives, fetched by `xi install` (see below) |
 | `bind I -> Impl [as singleton]` | — | auto | DI override / scope ([DI](dependency-injection.md)) |
 | `bind I -> readConfig("file")` | — | — | config-backed binding ([config](config.md)) |
 | `[async] entry [(deps)] main(...) { … }` | — | — | the module's entry point (may also be top-level) |
@@ -170,3 +171,43 @@ of modules into one binary each.
 
 The block may be named (`module App { … }`), anonymous (`module { … }`), or
 `module Test { … }` (whose binds win under `xi test`).
+
+## Dependencies (`dependencies` + `xi install`)
+
+A module can declare third-party libraries as `dependencies` — a list of URLs to
+**source archives** (a `.tar.gz` or `.zip`, e.g. a GitHub release tarball):
+
+```x title="server.xi"
+import "std/log.xi"
+
+module App {
+    id           = "server"
+    includes     = ["./main/**"]
+    dependencies = ["https://github.com/code-by-sia/xi-sqlite/archive/refs/tags/v0.1.0.tar.gz"]
+
+    async entry (logger: Logger) main(args: String[]) {
+        logger.info(sqlite.version())     // a function from the dependency
+    }
+}
+```
+
+```console
+$ xi install server.xi      # download + extract each dependency into ./modules
+  fetching https://github.com/code-by-sia/xi-sqlite/archive/refs/tags/v0.1.0.tar.gz
+xi install: 1/1 fetched into ./modules
+$ xc server.xi && ./build/server
+```
+
+- **`xi install [file]`** downloads every dependency archive and extracts it into
+  a `modules/` directory beside your project (`.tar.gz`/`.tgz` via `tar`, `.zip`
+  via `unzip`). With no file, it installs the dependencies of every buildable
+  module it finds. Needs `curl` (and `unzip` for `.zip`) on `PATH`.
+- **At build time** `xc` automatically folds `modules/**` into the source gather,
+  so installed libraries compile in with **no extra `import`** — reference their
+  functions by their `namespace` (e.g. `sqlite.version()`). Commit `modules/` or
+  re-run `xi install`, your choice — it's just source.
+- A dependency is **plain Xi source**: a library should use a `namespace` and
+  must not declare its own `entry`/`module` (those are for applications).
+
+> Dependencies are fetched over the network and compiled into your program —
+> only depend on archives you trust.

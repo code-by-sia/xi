@@ -263,10 +263,10 @@ module App {
     license     = "MIT"
     includes    = ["./**"]          // files that belong to this module (default)
     excludes    = ["scratch/**"]    // ...minus these
+    dependencies = ["https://example.com/xi-sqlite-0.1.0.tar.gz"]  // source archives
 
-    async entry (logger: Logger) main(args: String[]) -> Integer {  // entry can live inside
+    async entry (logger: Logger) main(args: String[]) {  // entry can live inside
         logger.info("up")
-        return 0
     }
 }
 ```
@@ -274,6 +274,12 @@ module App {
 
 Multiple modules can share a folder (each owns its `entry main` + `includes`/
 `excludes`); build one with `xc file.xi` or all with `xc --all`.
+
+**Dependencies:** list `.tar.gz`/`.zip` source-archive URLs in `dependencies`,
+then `xi install [file]` downloads + extracts them into `./modules`, which `xc`
+auto-gathers at build time (reference their functions by `namespace` — no
+`import` needed). A library dependency is plain Xi source with a `namespace` and
+no `entry`/`module`.
 
 ## Logging (std/log)
 

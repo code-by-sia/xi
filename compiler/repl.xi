@@ -98,7 +98,7 @@ mapper buildProgram(decls: String, stmts: String) -> String {
 }
 
 // The toolchain version. Bump this when cutting a release (matches the tag).
-mapper xiVersion() -> String { return "0.0.70" }
+mapper xiVersion() -> String { return "0.0.71" }
 
 // Directory part of a path (everything before the last '/'); "." if none.
 mapper dirOf(path: String) -> String {
@@ -353,6 +353,12 @@ async entry main(args: String[]) -> Integer {
         if sub == "skill" {
             doSkill()
             return 0
+        }
+        if sub == "install" {
+            // Fetch each module's `dependencies` archives into ./modules.
+            let target = ""
+            if args.len >= 3 { target = " " + args.data[2] }
+            return run_command(xc + " --install" + target)
         }
         if sub == "test" {
             if args.len < 3 {

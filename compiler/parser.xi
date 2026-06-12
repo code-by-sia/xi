@@ -268,7 +268,8 @@ type ModuleSpec = {
     version:     String,
     license:     String,
     includes:    String[],  // source globs for this module (default ["./**"])
-    excludes:    String[]   // globs to drop (default [])
+    excludes:    String[],  // globs to drop (default [])
+    dependencies: String[]  // URLs to source archives, fetched by `xi install`
 }
 
 // A top-level function or creator
@@ -1481,6 +1482,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
     let mLic = ""
     let mIncludes: String[] = []    // unset -> file+imports only; set -> glob-gather
     let mExcludes: String[] = []
+    let mDeps: String[] = []        // dependency archive URLs (xi install)
     let mEntry = FuncSpec {
         isCreator: false, isAsync: false, kind: "entry", name: "main",
         params: "xc_arr_string_t args", retCtype: "xc_integer_t",
@@ -1557,6 +1559,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
                     if peek(ps2).kind == 105 { ps2 = advance(ps2) }   // ]
                     if key == "includes" { mIncludes = items }
                     if key == "excludes" { mExcludes = items }
+                    if key == "dependencies" { mDeps = items }
                 } else {
                 if peekAt(ps2, 1).kind == 111 {              // `=` "value"
                     let val = peekAt(ps2, 2).text
@@ -1581,7 +1584,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
     let spec = ModuleSpec {
         name: name, bindings: bindings,
         id: mId, title: mTitle, description: mDesc, version: mVer, license: mLic,
-        includes: mIncludes, excludes: mExcludes
+        includes: mIncludes, excludes: mExcludes, dependencies: mDeps
     }
     return ModuleResult { spec: spec, ps: ps2, entry: mEntry, hasEntry: mHasEntry }
 }

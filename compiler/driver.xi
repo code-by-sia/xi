@@ -337,6 +337,10 @@ predicate matchesAny(pats: String[], rel: String) {
     while i < n { if globMatch(stringArrGet(pats, i), rel) { return true }  i = i + 1 }
     return false
 }
+// True if `path` contains any .xi file (used to detect installed ./modules deps).
+predicate dirHasXi(path: String) {
+    return run_command("find '" + path + "' -name '*.xi' 2>/dev/null | grep -q .") == 0
+}
 mapper splitLines(s: String) -> String[] {
     let out: String[] = []
     let n = string_len(s)
@@ -378,6 +382,7 @@ mapper moduleGlobs(prog: Program, which: Integer) -> String[] {
 // matches `inc` and not `exc`. Returns the merged LoadResult.
 creator gatherSources(srcPath: String, inc: String[], exc: String[]) -> LoadResult {
     let base = dirOf(srcPath)
+    if string_len(base) == 0 { base = "." }   // bare filename -> current directory
     run_command("find '" + base + "' -name '*.xi' > /tmp/xi-srcs.txt 2>/dev/null")
     let files = splitLines(file_read_all("/tmp/xi-srcs.txt"))
     let acc = loadModule(srcPath, emptyStrings())
@@ -402,8 +407,69 @@ creator gatherSources(srcPath: String, inc: String[], exc: String[]) -> LoadResu
     return LoadResult { tokens: toks, visited: visited, qnames: qn, qrepl: qr }
 }
 
+// ── Dependencies: `xi install` fetches module dependency archives ────────────
+// Download one archive URL and extract it into ./modules (handles .tar.gz / .zip).
+producer installOne(url: String) -> Integer {
+    system.stdout.writeln("  fetching " + url)
+    let sh = "set -e; mkdir -p modules; tmp=$(mktemp -d); "
+    sh = sh + "if ! curl -fsSL '" + url + "' -o \"$tmp/a\"; then echo '  download failed'; rm -rf \"$tmp\"; exit 1; fi; "
+    sh = sh + "case '" + url + "' in "
+    sh = sh + "*.zip) unzip -oq \"$tmp/a\" -d modules ;; "
+    sh = sh + "*) tar -xzf \"$tmp/a\" -C modules ;; "
+    sh = sh + "esac; rm -rf \"$tmp\""
+    return run_command(sh)
+}
+
+// Parse a module file and fetch every URL in its `dependencies` field.
+producer installDeps(srcPath: String) -> Integer {
+    let lr = loadModule(srcPath, emptyStrings())
+    let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
+    let tokens = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
+    let prog = parseProgram(tokens)
+    let total = 0
+    let fails = 0
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let deps = moduleSpecGet(prog.modules, i).dependencies
+        let j = 0
+        let dn = stringArrLen(deps)
+        while j < dn {
+            total = total + 1
+            if installOne(stringArrGet(deps, j)) != 0 { fails = fails + 1 }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    if total == 0 {
+        system.stdout.writeln("xi install: no dependencies declared in " + srcPath)
+        return 0
+    }
+    system.stdout.writeln("xi install: " + int_to_string(total - fails) + "/" + int_to_string(total) + " fetched into ./modules")
+    if fails > 0 { return 1 }
+    return 0
+}
+
+// `xc --install` with no file: install deps for every buildable module found.
+producer installAll() -> Integer {
+    run_command("find . -name '*.xi' -not -path '*/build/*' -not -path '*/modules/*' -not -path '*/.git/*' | sort > /tmp/xi-inst.txt 2>/dev/null")
+    let files = splitLines(file_read_all("/tmp/xi-inst.txt"))
+    let fails = 0
+    let i = 0
+    let n = stringArrLen(files)
+    while i < n {
+        let f = stringArrGet(files, i)
+        if isBuildableModule(f) {
+            if installDeps(f) != 0 { fails = fails + 1 }
+        }
+        i = i + 1
+    }
+    if fails > 0 { return 1 }
+    return 0
+}
+
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
-mapper xcVersion() -> String { return "0.0.70" }
+mapper xcVersion() -> String { return "0.0.71" }
 
 // Compile one source file (resolving imports + module source sets) to a native
 // binary. Returns 0 on success.
@@ -421,6 +487,11 @@ producer buildOne(srcPath: String) -> Integer {
     // matching .xi files under the source's directory and re-parse the merged set.
     let inc = moduleGlobs(prog, 0)
     let exc = moduleGlobs(prog, 1)
+    // Installed dependencies under ./modules join the gather automatically, so
+    // `xi install`ed libraries compile in without an explicit include.
+    let modBase = dirOf(srcPath)
+    if string_len(modBase) == 0 { modBase = "." }
+    if dirHasXi(modBase + "/modules") { inc = appendString(inc, "modules/**") }
     if stringArrLen(inc) > 0 or stringArrLen(exc) > 0 {
         if stringArrLen(inc) == 0 { inc = ["./**"] }   // default when only excludes given
         system.stdout.writeln("xc: gathering module sources ...")
@@ -510,6 +581,10 @@ async entry main(args: String[]) -> Integer {
         return 0
     }
     if srcPath == "--all" { return buildAll() }
+    if srcPath == "--install" {
+        if args.len >= 3 { return installDeps(args.data[2]) }
+        return installAll()
+    }
     return buildOne(srcPath)
 }
 
