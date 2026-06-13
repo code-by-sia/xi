@@ -16,7 +16,8 @@ type GCtx = {
     depNames: String[],
     depTypes: String[],
     retCtype: String,
-    fnTag:    String        // mangled name of the enclosing fn (for catch helpers)
+    fnTag:    String,       // mangled name of the enclosing fn (for catch helpers)
+    selfClass: String       // enclosing class name in a method body ("" otherwise)
 }
 
 type StmtRes = { code: String, ctx: GCtx, pos: Integer }
@@ -72,19 +73,31 @@ mapper matchBrace(toks: Token[], openIdx: Integer) -> Integer {
 }
 
 // ── context helpers ───────────────────────────────────────────────
-creator mkGCtx(prog: Program) -> GCtx => GCtx { prog: prog, symNames: [], symTypes: [], depNames: [], depTypes: [], retCtype: "", fnTag: "" }
+creator mkGCtx(prog: Program) -> GCtx => GCtx { prog: prog, symNames: [], symTypes: [], depNames: [], depTypes: [], retCtype: "", fnTag: "", selfClass: "" }
 
 mapper withRet(ctx: GCtx, ret: String) -> GCtx {
     return GCtx {
         prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
-        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ret, fnTag: ctx.fnTag
+        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ret, fnTag: ctx.fnTag,
+        selfClass: ctx.selfClass
     }
 }
 
 mapper withTag(ctx: GCtx, tag: String) -> GCtx {
     return GCtx {
         prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
-        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ctx.retCtype, fnTag: tag
+        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ctx.retCtype, fnTag: tag,
+        selfClass: ctx.selfClass
+    }
+}
+
+// Mark the enclosing class so unqualified calls to sibling methods resolve to
+// `xc_<Class>_<name>_impl(self, ...)`.
+mapper withSelfClass(ctx: GCtx, cls: String) -> GCtx {
+    return GCtx {
+        prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
+        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ctx.retCtype, fnTag: ctx.fnTag,
+        selfClass: cls
     }
 }
 
@@ -96,7 +109,8 @@ mapper addSym(ctx: GCtx, name: String, typ: String) -> GCtx {
         depNames: ctx.depNames,
         depTypes: ctx.depTypes,
         retCtype: ctx.retCtype,
-        fnTag: ctx.fnTag
+        fnTag: ctx.fnTag,
+        selfClass: ctx.selfClass
     }
 }
 
@@ -108,7 +122,8 @@ mapper addDep(ctx: GCtx, name: String, typ: String) -> GCtx {
         depNames: appendString(ctx.depNames, name),
         depTypes: appendString(ctx.depTypes, typ),
         retCtype: ctx.retCtype,
-        fnTag: ctx.fnTag
+        fnTag: ctx.fnTag,
+        selfClass: ctx.selfClass
     }
 }
 
@@ -653,6 +668,46 @@ mapper funcRetXType(prog: Program, name: String) -> String {
     while i < n {
         let fs = funcSpecGet(prog.functions, i)
         if fs.name == name { return resolveX(prog, ctypeToXName(fs.retCtype)) }
+        i = i + 1
+    }
+    return ""
+}
+
+// Is `name` a method of class `cls`? Used to resolve unqualified (and recursive)
+// calls inside a method body to a self-dispatched `xc_<cls>_<name>_impl` call.
+predicate isSelfMethodC(prog: Program, cls: String, name: String) {
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        if cs.name == cls {
+            let mi = 0
+            let mn = methodSpecLen(cs.methList)
+            while mi < mn {
+                if methodSpecGet(cs.methList, mi).name == name { return true }
+                mi = mi + 1
+            }
+            return false
+        }
+        i = i + 1
+    }
+    return false
+}
+
+mapper selfMethodRetXType(prog: Program, cls: String, name: String) -> String {
+    let i = 0
+    let n = classSpecLen(prog.classes)
+    while i < n {
+        let cs = classSpecGet(prog.classes, i)
+        if cs.name == cls {
+            let mi = 0
+            let mn = methodSpecLen(cs.methList)
+            while mi < mn {
+                let ms = methodSpecGet(cs.methList, mi)
+                if ms.name == name { return resolveX(prog, ctypeToXName(ms.retCtype)) }
+                mi = mi + 1
+            }
+        }
         i = i + 1
     }
     return ""
@@ -2214,6 +2269,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     code = "(!(" + al.code + ").ok)"
                     typ = "Bool"
                 } else {
+                if string_len(ctx.selfClass) > 0 and isSelfMethodC(ctx.prog, ctx.selfClass, bname) {
+                    // Unqualified (or recursive) call to a sibling method.
+                    let sargs = "self"
+                    if string_len(al.code) > 0 { sargs = "self, " + al.code }
+                    code = "xc_" + ctx.selfClass + "_" + bname + "_impl(" + sargs + ")"
+                    typ = selfMethodRetXType(ctx.prog, ctx.selfClass, bname)
+                } else {
                 if isFuncNameC(ctx.prog, bname) {
                     code = "xc_" + bname + "(" + al.code + ")"
                     typ = funcRetXType(ctx.prog, bname)
@@ -2225,6 +2287,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = bname + "(" + al.code + ")"
                         typ = ""
                     }
+                }
                 }
                 }
                 }
@@ -3958,7 +4021,7 @@ mapper genClassMethods(prog: Program) -> String {
                 out = out + "static " + ms.retCtype + " " + implName + "(void* self_ptr" + pstr + ") {\n"
                 out = out + "    xc_" + cs.name + "_t* self = (xc_" + cs.name + "_t*)self_ptr;\n"
                 out = out + funcDepPrologue(prog, ms.fnDeps)
-                let ctx = withTag(withRet(seedFuncDeps(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.fnDeps), ms.retCtype), tag)
+                let ctx = withSelfClass(withTag(withRet(seedFuncDeps(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.fnDeps), ms.retCtype), tag), cs.name)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
                 if overloaded and isLastOfName(cs, mi) {

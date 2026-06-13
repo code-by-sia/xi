@@ -245,6 +245,11 @@ async entry (logger: Logger) main(args: String[]) -> Integer {   // entry deps i
 module App {}     // add `bind Greeter -> FormalGreeter` here to override
 ```
 
+Inside a class, call sibling methods **unqualified** — `helper(x)` or a recursive
+`self`-call `factorial(n - 1)` — no `self.` prefix. They dispatch on `self`,
+including private helpers not in the interface and `where`-overloaded methods.
+Use `field` directly for injected `deps`/fields.
+
 Function/method deps use the same `(dep: I)` form:
 `consumer (logger: Logger) report(msg: String) { logger.info(msg) }`.
 
