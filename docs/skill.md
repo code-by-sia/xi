@@ -18,6 +18,43 @@ and then to a native binary. Fetch the latest copy with `xi skill`.
 - String concatenation is `+`; scalars (Integer/Number/Bool) auto-coerce to text
   inside a `+` chain. `int_to_string(n)` also works.
 
+## Recommended practices (how to structure an app)
+
+Follow these by default — they make Xi code idiomatic and testable:
+
+- **Model behavior as an `interface` + a `class`, and depend on the interface.**
+  Define an `interface` for each service/component and one (or more) `class`
+  implementations; inject it by interface (`deps { repo: PlaylistRepository }`)
+  so implementations are swappable and `module Test { bind … }` can substitute a
+  double. Don't wrap everything in a class, though — `entry main` needs no class,
+  and small pure helpers can be free functions (`mapper`/`predicate`).
+- **Keep layers separated.** Split a project into clear layers, each in its own
+  file (and `namespace`): domain *types*, *repository*/data-access interfaces,
+  *service*/business-logic interfaces, *web* handlers (`WebRequestHandler`), and a
+  thin *entry*. Higher layers depend on lower-layer **interfaces**, never on
+  concrete classes — let DI wire them.
+- **Use `module`s to organize and build.** Give each app a `module App { id … }`
+  with `includes`/`excludes`; put several services in one repo as separate modules
+  and build them all with `xc --all` (each → its own binary). See
+  [Multi-file](multi-file.md).
+- **Put settings in configuration, not in code.** Describe config as an
+  `interface` and `bind … -> readConfig("app.yaml")` (or generic
+  `readConfig<T>(...)`), with a `module Test` config for tests; inject it like any
+  dependency. Supports YAML/JSON/XML and hot-reload via `ApplicationConfig`. See
+  [Typed configuration](#typed-configuration-stdconfig) / [config](config.md).
+- **Reuse dependencies — don't reinvent them.** If a library already exists, add
+  its archive URL to the module's `dependencies` and run `xi install` instead of
+  writing it yourself. For example, use **[xi-sqlite](https://github.com/code-by-sia/xi-sqlite)**
+  for SQLite rather than hand-writing the binding:
+  ```x
+  module App {
+      id           = "server"
+      dependencies = ["https://github.com/code-by-sia/xi-sqlite/archive/refs/tags/v0.1.0.tar.gz"]
+  }
+  ```
+  `xi install` fetches it into `./modules` (auto-compiled in); call its functions
+  by `namespace`. Write your own `extern "C"` binding only when no library exists.
+
 ## Hello, world
 
 ```x
