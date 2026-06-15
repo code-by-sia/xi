@@ -24,6 +24,7 @@ const sidebars = {
     'web',
     'threading',
     'ffi',
+    'wasm',
     'internals',
     {
       type: 'category',

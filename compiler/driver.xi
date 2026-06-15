@@ -12,6 +12,7 @@
 extern "C" {
     predicate xstd_file_exists(path: String) -> Bool
     mapper    get_env(name: String, dflt: String) -> String
+    mapper    set_env(name: String, val: String) -> Integer
     mapper    run_command(cmd: String) -> Integer
     consumer  diag_set_file(path: String)
     consumer  diag_error(line: Integer, msg: String)
@@ -623,7 +624,12 @@ producer buildOne(srcPath: String) -> Integer {
         if string_len(get_env("XC_KEEP_C", "")) == 0 {
             run_command("rm -f '" + outPath + "'")
         }
-        system.stdout.writeln("xc: built executable " + binPath)
+        if get_env("XC_TARGET", "") == "wasm" {
+            system.stdout.writeln("xc: built WebAssembly " + binPath + ".{html,js,wasm}")
+            system.stdout.writeln("xc: serve it, e.g.  python3 -m http.server -d " + outDir + "  then open " + base + ".html")
+        } else {
+            system.stdout.writeln("xc: built executable " + binPath)
+        }
         return 0
     }
     system.stderr.writeln("xc: C compilation failed")
@@ -669,12 +675,51 @@ producer buildAll() -> Integer {
     return 0
 }
 
+// The value of a `--target <t>` / `--target=<t>` flag anywhere in args, or "".
+mapper argTarget(args: String[]) -> String {
+    let i = 1
+    while i < args.len {
+        let a = args.data[i]
+        if a == "--target" and i + 1 < args.len { return args.data[i + 1] }
+        if startsWith2(a, "--target=") { return string_slice(a, 9, string_len(a)) }
+        i = i + 1
+    }
+    return ""
+}
+
+// The first positional argument (subcommand or source path), skipping over a
+// `--target <t>` pair so `xc --target wasm app.xi` resolves `app.xi`.
+mapper cliSource(args: String[]) -> String {
+    let i = 1
+    while i < args.len {
+        let a = args.data[i]
+        if a == "--target" {
+            i = i + 2
+        } else {
+            if startsWith2(a, "--target=") {
+                i = i + 1
+            } else {
+                return a
+            }
+        }
+    }
+    return ""
+}
+
 async entry main(args: String[]) -> Integer {
     if args.len < 2 {
-        system.stdout.writeln("Usage: xc <source.xi>   (or: xc --all, xc version)")
+        system.stdout.writeln("Usage: xc <source.xi>   (or: xc --all, xc --target wasm <source.xi>, xc version)")
         return 1
     }
-    let srcPath = args.data[1]
+    let tgt = argTarget(args)
+    if string_len(tgt) > 0 {
+        if tgt != "wasm" and tgt != "native" {
+            system.stderr.writeln("xc: unknown --target '" + tgt + "' (expected: native, wasm)")
+            return 1
+        }
+        set_env("XC_TARGET", tgt)
+    }
+    let srcPath = cliSource(args)
     if srcPath == "version" or srcPath == "--version" or srcPath == "-v" {
         system.stdout.writeln("xc " + xcVersion())
         return 0

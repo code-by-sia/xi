@@ -110,6 +110,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 |---------|--------|
 | Self-hosting compiler (written in Xi, compiles its own source) | ✓ |
 | Native binaries via C99 backend (compiler invokes `cc`) | ✓ |
+| WebAssembly target (`xc --target wasm`, via Emscripten) | ✓ |
 | `file:line` diagnostics on lexer/parser errors | ✓ (initial) |
 | REPL / run tool (`xi`) | ✓ |
 | `xc version` / `xi version`; `xi update` (self-updates both `xc` and `xi`) | ✓ |
