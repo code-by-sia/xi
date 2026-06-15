@@ -100,6 +100,8 @@ separate `module App { … }` block — both forms work.
   [the standard library](https://code-by-sia.github.io/x/stdlib) and
   [serialization](https://code-by-sia.github.io/x/serialization).
 - **Native, dependency-light output**: Xi → C99 → a native binary via your `cc`.
+- **Runs on the web too**: the same source compiles to WebAssembly with
+  `xc --target wasm` (via Emscripten). See [the WASM guide](https://code-by-sia.github.io/x/wasm).
 
 Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:
 **[code-by-sia.github.io/x](https://code-by-sia.github.io/x/)**.

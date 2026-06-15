@@ -38,6 +38,25 @@ xc --all: built 2 module(s), 0 failed
 A C compiler (`cc`) must be on your `PATH`, since `xc` builds the native binary by
 compiling generated C. `xc version` prints the toolchain version.
 
+### WebAssembly — `xc --target wasm`
+
+Because `xc` compiles through portable C99, the same program can target the web.
+`xc --target wasm <source.xi>` routes the generated C + runtime through
+[Emscripten](https://emscripten.org) (`emcc`) and emits `build/<name>.{html,js,wasm}`
+instead of a native binary:
+
+```console
+$ xc --target wasm examples/wasm_demo.xi
+xc: built WebAssembly build/wasm_demo.{html,js,wasm}
+xc: serve it, e.g.  python3 -m http.server -d build  then open wasm_demo.html
+```
+
+Open the generated `.html` in a browser (`stdout`/`stderr` show in the page
+console), or run the `.js` under Node. Requires `emcc` on your `PATH`
+(`brew install emscripten`). The default target is `native`; pass
+`--target native` to be explicit. See [WebAssembly](wasm.md) for what runs in
+the browser sandbox and what doesn't.
+
 ### Dependencies — `xi install`
 
 A module can list third-party libraries as `dependencies` (URLs to `.tar.gz` /
@@ -57,6 +76,7 @@ Needs `curl` (and `unzip` for `.zip`). See
 | Environment variable | Meaning | Default |
 |----------------------|---------|---------|
 | `XC_OUT` | output directory for the built binary | `build` |
+| `XC_TARGET` | build target: `native` or `wasm` (same as `--target`) | `native` |
 | `XC_KEEP_C` | keep the generated C instead of deleting it | unset |
 | `XC_RUNTIME` | C runtime location (set by the installed wrapper) | bundled |
 | `XC_STD` | search root for `import "std/..."` (set by the wrapper) | bundled |

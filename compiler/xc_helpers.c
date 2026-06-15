@@ -251,6 +251,16 @@ static void xc_build_flags(const char* cpath, char* out, size_t outsz) {
     }
 }
 
+/* Set an environment variable in the current process. The driver uses this to
+   pass the selected `--target` through to compile_c (read via getenv below). */
+xc_integer_t set_env(xc_string_t name, xc_string_t value) {
+    char* nm = xc_string_to_cstr(name);
+    char* vl = xc_string_to_cstr(value);
+    int rc = setenv(nm, vl, 1);
+    free(nm); free(vl);
+    return (xc_integer_t)(rc == 0 ? 0 : 1);
+}
+
 xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
     char* cp = xc_string_to_cstr(cpath);
     char* bp = xc_string_to_cstr(binpath);
@@ -301,6 +311,34 @@ xc_integer_t compile_c(xc_string_t cpath, xc_string_t binpath) {
                                 "-I/opt/homebrew/opt/nghttp2/include -L/opt/homebrew/opt/nghttp2/lib "
                                 "-lnghttp2");
         }
+    }
+
+    /* ── WebAssembly target (XC_TARGET=wasm): compile the same generated C +
+       runtime through Emscripten into <binpath>.{html,js,wasm}. Single-threaded,
+       and without the native FFI/TLS link flags — host libraries (OpenSSL,
+       -l<lib> from pkg-config, etc.) aren't available in the browser sandbox. */
+    const char* target = getenv("XC_TARGET");
+    if (target && strcmp(target, "wasm") == 0) {
+        if (system("command -v emcc >/dev/null 2>&1") != 0) {
+            fprintf(stderr,
+                "xc: --target wasm needs Emscripten (emcc) on PATH.\n"
+                "    install it with:  brew install emscripten\n"
+                "    or see https://emscripten.org/docs/getting_started/downloads.html\n");
+            free(cp); free(bp); return 1;
+        }
+        size_t wneed = strlen(cp) + strlen(bp) + 3 * strlen(dir) + 512;
+        char* wcmd = (char*)malloc(wneed);
+        if (!wcmd) { free(cp); free(bp); return 1; }
+        snprintf(wcmd, wneed,
+                 "emcc -std=c99 -O2 -w -Wno-implicit-int -Wno-implicit-function-declaration "
+                 "-Wno-int-conversion -Wno-incompatible-pointer-types "
+                 "-I%s %s %s/runtime.c -o %s.html -lm "
+                 "-sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sASYNCIFY",
+                 dir, cp, dir, bp);
+        int wrc = system(wcmd);
+        free(wcmd); free(cp); free(bp);
+        if (wrc == -1) return 1;
+        return (xc_integer_t)(wrc == 0 ? 0 : 1);
     }
 
     /* cc -std=c99 -O2 -I<dir> <cpath> <dir>/runtime.c -o <binpath> -lm -lpthread [tls] */
