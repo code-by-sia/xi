@@ -64,6 +64,65 @@ mapper joinPath(dir: String, rel: String) -> String {
     return dir + "/" + rel
 }
 
+mapper dropLast(a: String[]) -> String[] {
+    let out: String[] = []
+    let n = stringArrLen(a)
+    let i = 0
+    while i < n - 1 { out = appendString(out, stringArrGet(a, i))  i = i + 1 }
+    return out
+}
+
+// Canonicalize a path: collapse `.` and `..` segments and `//`, so that the same
+// file reached via different spellings (e.g. `a/./b`, `a/x/../b`, `./a/b`) maps
+// to one key. This makes import de-duplication (the `visited` set) reliable.
+mapper canonPath(p: String) -> String {
+    let n = string_len(p)
+    let abs = false
+    if n > 0 and string_char_at(p, 0) == 47 { abs = true }
+    let parts: String[] = []
+    let start = 0
+    let i = 0
+    while i <= n {
+        let atSep = false
+        if i == n { atSep = true } else { if string_char_at(p, i) == 47 { atSep = true } }
+        if atSep {
+            if i > start {
+                let seg = string_slice(p, start, i)
+                if seg == "." {
+                    // drop
+                } else {
+                    if seg == ".." {
+                        let pl = stringArrLen(parts)
+                        if pl > 0 and stringArrGet(parts, pl - 1) != ".." {
+                            parts = dropLast(parts)
+                        } else {
+                            if not abs { parts = appendString(parts, "..") }
+                        }
+                    } else {
+                        parts = appendString(parts, seg)
+                    }
+                }
+            }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    let m = stringArrLen(parts)
+    if m == 0 {
+        if abs { return "/" }
+        return "."
+    }
+    let out = ""
+    if abs { out = "/" }
+    let j = 0
+    while j < m {
+        if j > 0 { out = out + "/" }
+        out = out + stringArrGet(parts, j)
+        j = j + 1
+    }
+    return out
+}
+
 // Resolve an import: first relative to the importing file, then relative to the
 // standard-library/search root in $XC_STD (default ".").  This lets programs
 // `import "std/math.xi"` from anywhere the library is installed.
@@ -177,7 +236,8 @@ mapper renameTok(t: Token, prefix: String, exports: String[]) -> Token {
 // a call argument, so we build it via a return-cast here).
 creator emptyStrings() -> String[] => []
 
-creator loadModule(path: String, visited: String[]) -> LoadResult {
+creator loadModule(rawPath: String, visited: String[]) -> LoadResult {
+    let path = canonPath(rawPath)   // dedup key: same file via any spelling
     if strArrContains(visited, path) {
         return LoadResult { tokens: [], visited: visited, qnames: [], qrepl: [] }
     }
@@ -341,6 +401,44 @@ predicate matchesAny(pats: String[], rel: String) {
 predicate dirHasXi(path: String) {
     return run_command("find '" + path + "' -name '*.xi' 2>/dev/null | grep -q .") == 0
 }
+predicate containsSub(s: String, sub: String) {
+    let n = string_len(s)
+    let m = string_len(sub)
+    if m == 0 { return true }
+    let i = 0
+    while i + m <= n {
+        if string_slice(s, i, i + m) == sub { return true }
+        i = i + 1
+    }
+    return false
+}
+// Does the file declare its own `entry` or `module`? Such a file is an app/demo,
+// not library code, so it must not be folded into a consumer's build.
+predicate declaresEntryOrModule(path: String) {
+    let toks = tokenise(file_read_all(path))
+    let n = tokenArrLen(toks)
+    let i = 0
+    while i < n {
+        let k = tokenArrGet(toks, i).kind
+        if k == 219 { return true }   // entry
+        if k == 210 { return true }   // module
+        i = i + 1
+    }
+    return false
+}
+// A gathered dependency file under ./modules that is NOT library source: an
+// example/test/demo (own entry/module, a *_test.xi, or under examples/tests).
+// These often `import "../src/..."`, which would double-load the library, and
+// carry their own entry — so they're excluded from the consumer's build.
+predicate isDepNonLib(path: String, rel: String) {
+    if not startsWith2(rel, "modules/") { return false }
+    if containsSub(rel, "/examples/") or containsSub(rel, "/example/") { return true }
+    if containsSub(rel, "/tests/") or containsSub(rel, "/test/") { return true }
+    if containsSub(rel, "/.claude/") or containsSub(rel, "/build/") { return true }
+    if endsWith2(baseNameOf(rel), "_test.xi") { return true }
+    if declaresEntryOrModule(path) { return true }
+    return false
+}
 mapper splitLines(s: String) -> String[] {
     let out: String[] = []
     let n = string_len(s)
@@ -394,8 +492,9 @@ creator gatherSources(srcPath: String, inc: String[], exc: String[]) -> LoadResu
     let n = stringArrLen(files)
     while i < n {
         let f = stringArrGet(files, i)
+        let cf = canonPath(f)
         let rel = relPath(base, f)
-        if f != srcPath and not strArrContains(visited, f) and matchesAny(inc, rel) and not matchesAny(exc, rel) {
+        if cf != canonPath(srcPath) and not strArrContains(visited, cf) and not isDepNonLib(f, rel) and matchesAny(inc, rel) and not matchesAny(exc, rel) {
             let sub = loadModule(f, visited)
             visited = sub.visited
             toks = concatTokens(toks, sub.tokens)
