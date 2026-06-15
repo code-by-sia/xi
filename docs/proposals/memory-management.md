@@ -1,7 +1,9 @@
 # Proposal: Memory management — does Ξ need a GC?
 
-> **Status: draft / exploration.** This document weighs the options and
-> recommends a direction. **Nothing here is implemented yet.**
+> **Status: accepted direction (phased), implementation pending.** This document
+> weighs the options and commits to a path: a phased hybrid (arenas → ARC →
+> opt-in borrows) in which **the function effect kinds drive the analysis**.
+> Phase 1's per-thread arenas are shipped; the rest is designed, not yet built.
 
 ## The question
 
@@ -56,6 +58,53 @@ imperative language:
 - **Share-nothing threads.** Threads exchange only copied channel payloads, so
   memory ownership never crosses a thread boundary — no concurrent collector or
   atomic refcounts required.
+
+## The lever: effect kinds already encode ownership
+
+Every Ξ function declares an **effect kind** — the verb you write instead of
+`fn`. That keyword is not just documentation; it is a contract about what the
+function may do, and therefore about how values flow through it. A normal
+language has to *recover* this information with whole-program escape analysis or
+make the programmer *spell it out* with lifetime annotations. Ξ has it stated up
+front, on every function, in a word the author already had to choose.
+
+Read each kind as an ownership/escape rule:
+
+| Kind | Contract (what it may do) | Memory consequence |
+|------|---------------------------|--------------------|
+| `mapper` | pure `T -> U`; no I/O, no mutation, no storing | args **borrowed** (no copy, no retain); only the fresh return escapes → caller owns it |
+| `projector` | pure structural extraction; returns a part of its input | return **borrows from** the argument — no allocation at all; arg must outlive the result |
+| `predicate` | pure `T -> Bool` | args **borrowed**; result is scalar → **nothing escapes** |
+| `reducer` | `(Acc, T) -> Acc` fold | `Acc` is **moved** in and out (ownership threads through, no retain); `T` borrowed — enables in-place accumulator reuse |
+| `creator` | constructs instances | the **ownership origin**: returns a freshly **owned** heap value |
+| `producer` | `() -> T`, often I/O | effectful; returns **owned** (typically fresh) |
+| `consumer` | side-effecting, no return | terminal **sink**: may take ownership of its inputs (free them, or store them) |
+| `action` | impure; may mutate `self`/state | may **retain** an argument into long-lived state |
+
+Two consequences follow, and they are the heart of this proposal:
+
+1. **Escape analysis becomes a lookup, not a pass.** A `mapper`/`predicate`/
+   `projector` *cannot* (by enforced contract) stash an argument anywhere
+   observable, so its arguments provably do not escape. That is precisely the
+   fact a borrow checker extracts from lifetimes and an optimiser extracts from
+   global escape analysis — here it is given by one keyword. The compiler can
+   pass those arguments by **borrow** and skip both the copy and the refcount,
+   *automatically*, with no `&T` syntax and nothing for the user to learn.
+
+2. **Retains happen only at the kinds that take ownership.** A reference count is
+   bumped only where a value genuinely changes owner — a `creator`/`producer`
+   return handed into storage, an argument captured by an `action`, a value
+   moved into a `consumer`. Everywhere else (the overwhelmingly common pure
+   path) the value is borrowed and the count is never touched. ARC's main cost —
+   count traffic — is concentrated exactly where ownership actually moves.
+
+This is the "restrict developers to do certain things in certain functions"
+point made precise: the compiler **enforces** each kind's contract (a `mapper`
+that performs I/O, mutates, or calls an effectful function is a *compile error*),
+and **in exchange** it is allowed to apply aggressive borrow/no-retain codegen
+that would be unsound without the guarantee. Enforcement is not a tax — it is
+what *buys* the optimisation. The discipline the author accepts when they type
+`mapper` is the same discipline the allocator relies on.
 
 ## The design space
 
@@ -132,10 +181,14 @@ and which must outlive it (and so go on the long-lived heap).
   and the model gets fuzzy at the edges (partial escapes). Reasonable as a
   *later* optimisation over A+C, not as the first step.
 
-## Recommendation — a phased, hybrid path
+## Recommendation — effect-kind-driven, phased
 
 No single mechanism wins outright, so combine the ones that respect the
-philosophy and skip the one that doesn't (tracing GC):
+philosophy (arenas, ARC, borrows), skip the one that doesn't (tracing GC), and —
+the decision this revision makes — **drive all of them from the effect kinds**
+rather than from a separate analysis pass or new lifetime syntax. The phases
+below are ordered by effort, but they share one engine: the per-kind ownership
+contract above.
 
 1. **Phase 1 — bounded lifetimes for long-running programs (small, do first).**
    Keep allocate-and-leak as the default (it's optimal for CLIs and the
@@ -149,29 +202,60 @@ philosophy and skip the one that doesn't (tracing GC):
      unaffected; the share-nothing channel copy makes this safe. (Still freed at
      thread *exit*, not per scope/iteration — that's the remaining Phase-1 work.)
 
-2. **Phase 2 — automatic reference counting for escaping heap values.** Make ARC
-   the general answer for values that outlive their scope (strings, arrays, boxed
-   instances). Give `own`/`move`/`dup` real meaning as ownership-transfer hints
-   that elide counts, and add a `weak` reference for the rare back-edge. This
-   delivers GC-like ease with no runtime dependency and predictable timing — the
-   best fit for all three commitments.
+2. **Phase 2 — effect-kind borrow inference (the new core; do before ARC).**
+   Before adding any counting, exploit what the kinds already prove. Pure kinds
+   (`mapper`, `predicate`, `projector`) take their arguments **by borrow**: no
+   copy, no retain, because the contract guarantees the argument cannot escape.
+   `reducer` threads its accumulator by **move**. This is the escape analysis and
+   the "opt-in borrow" of the original plan — but *derived, automatic, and free*,
+   because the keyword supplies the fact a borrow checker would otherwise demand
+   as a lifetime annotation. Prerequisite and enabler: **enforce purity** — a
+   `mapper`/`predicate`/`projector` that performs I/O, mutates, or calls an
+   effectful function becomes a compile error. That check is independently good
+   (it makes the kinds mean what they say) and it is what makes the borrow codegen
+   sound.
 
-3. **Phase 3 (exploration) — opt-in borrows for hot paths.** Turn the existing
-   `&T` / `&mut T` into a *small, local, optional* borrow rule (no lifetime
-   syntax) so performance-critical code can pass by reference and skip both the
-   copy and the refcount. Strictly opt-in; the language stays learnable without it.
+3. **Phase 3 — automatic reference counting for the values that genuinely
+   escape.** With borrows handling the pure majority, ARC carries only the
+   minority that crosses an ownership boundary: a `creator`/`producer` return
+   stored past its scope, an argument an `action` retains into state, a value a
+   `consumer` takes. The compiler inserts retain/release only at those kind
+   boundaries, so count traffic is small by construction. `own`/`move`/`dup`
+   (already in the grammar) become explicit ownership-transfer hints that elide
+   counts; `weak` covers the rare back-edge. GC-like ease, no runtime dependency,
+   predictable timing — and far less counting than a kind-blind ARC.
 
-4. **Rejected: a default tracing GC**, and **any external GC/runtime library** —
-   both break "fast + least-dependency," and ARC recovers most of the ease.
+4. **Phase 4 (exploration) — explicit borrows where the kind isn't enough.** The
+   `&T` / `&mut T` types remain as an *opt-in* escape hatch for the cases the
+   effect kind can't classify on its own (e.g. passing a large owned value into
+   an `action` you want borrowed, not retained). Small, local rules; no lifetime
+   syntax. Most code never needs it because Phase 2 already borrows wherever a
+   pure kind proves it safe.
+
+5. **Rejected: a default tracing GC**, and **any external GC/runtime library** —
+   both break "fast + least-dependency," and the effect-kind borrows + ARC
+   recover the ease.
+
+The reordering matters: in the original plan, borrows/escape analysis were the
+*last*, hardest, optional phase. Recognising that the effect kinds already carry
+the ownership information **promotes borrow inference to the core mechanism and
+demotes ARC to a fallback**, which is both less runtime cost and less compiler
+machinery than an ARC-first design.
 
 ### Why this fits the philosophy
 
-- **Fast:** bump-arena + ARC + optional borrows are all deterministic and
-  close-to-C; no stop-the-world pauses.
+- **Fast:** bump-arena + effect-kind borrows + ARC-on-escape are all
+  deterministic and close-to-C; no stop-the-world pauses. Most values are
+  borrowed, so the common path touches no counts at all.
 - **Least dependency:** everything is generated C over libc — no GC runtime, no
   third-party library.
-- **Easy:** the default path (arenas + ARC) needs zero new concepts from the
-  user; borrowing exists only for those who opt in.
+- **Easy:** the user learns *nothing new*. They already pick `mapper` vs
+  `creator` vs `consumer`; the allocator simply reads that choice. No lifetime
+  syntax, no annotations — the borrow discipline rides on the effect verb the
+  author was already writing.
+- **Coherent:** the same effect kinds that drive dispatch, purity, and
+  documentation now also drive memory. One concept, paying for itself several
+  times over.
 
 ## Interactions to keep in mind
 
@@ -186,13 +270,27 @@ philosophy and skip the one that doesn't (tracing GC):
 
 ## Open questions
 
-- Refcount **granularity**: only heap values (strings/arrays/boxes), or all
-  compounds? (Leaning: only heap-backed values; small structs stay pure copies.)
-- **Cycle policy**: rely on the immutable/acyclic model + `weak`, or ship a small
+- **Purity enforcement scope (Phase 2 prerequisite):** exactly which operations
+  disqualify a `mapper`/`predicate`/`projector` — clearly I/O, mutation, and
+  calling an `action`/`consumer`/`producer`; but what about calling another
+  `mapper` (fine) or reading process-lifetime DI singletons (probably fine, since
+  they never free)? The call graph must classify "pure-callable" cleanly.
+- **`projector` return-borrow lifetime:** a projector returns a view into its
+  argument, so the result must not outlive the input. With Phase-2 borrows this
+  is usually local and checkable, but storing a projector result needs a copy or
+  a retain on the underlying value — decide the rule.
+- **`reducer` move semantics:** confirm the accumulator can always be moved (not
+  retained) through a fold, including when the reducer is used by a higher-order
+  collection op that itself holds the accumulator.
+- **Refcount granularity** (Phase 3): only heap values (strings/arrays/boxes), or
+  all compounds? (Leaning: only heap-backed values; small structs stay pure
+  copies.)
+- **Cycle policy:** rely on the immutable/acyclic model + `weak`, or ship a small
   opt-in cycle detector?
-- Where exactly does **Phase-1 arena** scoping attach — the `scope` block, a new
-  `arena { }`, or purely implicit in `web.serve`/request handlers?
-- Is **escape analysis** (Phase E) worth it on top of ARC, or does ARC already
-  cover enough?
+- Where exactly does the **Phase-1 arena** scoping attach — the `scope` block, a
+  new `arena { }`, or purely implicit in `web.serve`/request handlers?
 - Do we want a compile-time **leak/ownership lint** (warn when an `own` value is
-  dropped without being consumed) as a gentle on-ramp to Phase 3?
+  dropped without being consumed) as a gentle on-ramp to explicit borrows?
+- **Resolved by this revision:** "is escape analysis worth it on top of ARC?" —
+  yes, and it comes for free from the effect kinds, which is why borrow inference
+  is now Phase 2 (ahead of ARC) rather than an optional late phase.
