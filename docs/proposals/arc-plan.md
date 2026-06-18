@@ -133,16 +133,35 @@ large Ξ program, so if retain/release is wrong it will crash or leak while
 compiling itself. Roll out in slices that each keep `selfhost.sh` byte-identical
 **and** runnable, under AddressSanitizer.
 
-- **3a — Infrastructure, no frees.** Add the header + `xc_rc_alloc`/`retain`/
-  `release`/immortal; route all allocations through them; intern literals;
-  mark arena/singleton blocks immortal. **Insert no `release` calls yet** —
-  behaviour is identical to today (leak-on-exit), so risk is ~zero. Validates the
-  header layout, literal interning, and arena composition in isolation.
-- **3b — Release owned locals in pure functions.** The safest slice: pure-kind
-  bodies borrow their params, so only locals and the return need handling. Insert
-  scope-exit `release` for owned locals, `move` the return out. Pure functions are
-  the majority of the compiler, so this exercises the machinery hard while the
-  rules are simplest. Gate: self-host runs clean under ASan.
+- **3a — Infrastructure, no frees. (SHIPPED.)** Header + `xc_rc_alloc`/
+  `xc_rc_immortal`/`xc_retain`/`xc_release` behind a compile-time `-DXC_ARC`
+  flag; computed strings and boxed instances route through `xc_rc_alloc`;
+  literals/arena/singleton blocks are immortal (magic-absent → retain/release
+  no-op). Behaviour-neutral: default build byte-identical, `XC_ARC` builds run
+  correctly and ASan/UBSan-clean. (Literals use the magic-absent path rather than
+  interning — no codegen change needed; the 8-byte read before a `.rodata` literal
+  is safe in practice since literals are never at a segment start.)
+- **3b — Release owned values. (BLOCKED on codegen shape — see below.)** The
+  intended safest slice was "release owned locals in pure functions." Attempting
+  it surfaced that correct ARC needs more than scope-exit releases, and the
+  current **direct token→C codegen has no IR to attach the needed points to**:
+  - **Value semantics share buffers.** `let b = a` copies the `{data,len}` fat
+    pointer, so `a` and `b` alias one heap buffer; releasing both double-frees.
+    Correct ARC therefore needs a **retain on every copy** (binding, argument
+    pass, field/array store), not just releases.
+  - **Temporaries.** `f(a + b)` allocates a concat result that is never bound;
+    releasing it requires wrapping every owned sub-expression
+    (`({ T _t = …; R = f(_t); xc_release(_t.data); R; })`) across all expression
+    forms — pervasive.
+  - **Move-on-return.** A returned owned local must *not* be released (caller owns
+    it), so returns need move analysis.
+  These are exactly what an SSA/ownership IR provides. The current codegen emits C
+  string-by-string from the token stream with no per-value ownership tracking, so
+  doing 3b–3d safely there is error-prone (double-frees). **Recommendation:** 3b+
+  should be built on a small ownership IR (or a dedicated codegen pass that
+  introduces named temporaries for every owned value), undertaken as its own
+  project. Until then, the practical leak is already solved by the shipped arenas
+  (Phase 1), and 3a stands as the runtime foundation.
 - **3c — Full ownership transfer at call boundaries.** Extend to
   `producer`/`creator`/`consumer`/`action`: retain on store, consume on
   consumer params, release-old on rebind, retain on field/array writes.

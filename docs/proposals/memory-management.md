@@ -248,6 +248,14 @@ contract above.
    (already in the grammar) become explicit ownership-transfer hints that elide
    counts; `weak` covers the rare back-edge. GC-like ease, no runtime dependency,
    predictable timing — and far less counting than a kind-blind ARC.
+   - **Shipped: 3a runtime infrastructure** (opt-in `-DXC_ARC`): the rc header +
+     `xc_rc_alloc`/`xc_retain`/`xc_release`, behaviour-neutral by default.
+   - **Blocked: 3b+ release insertion.** Correct ARC needs retain-on-copy (value
+     semantics share buffers), temporary tracking, and move-on-return — which the
+     current direct token→C codegen has no IR to host safely. This wants a small
+     ownership IR / codegen pass as its own project. See
+     [arc-plan.md](arc-plan.md). Meanwhile the practical leak is already solved by
+     the Phase-1 arenas.
 
 4. **Phase 4 (exploration) — explicit borrows where the kind isn't enough.** The
    `&T` / `&mut T` types remain as an *opt-in* escape hatch for the cases the
