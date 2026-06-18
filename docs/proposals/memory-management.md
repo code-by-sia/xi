@@ -199,8 +199,21 @@ contract above.
    - **Shipped: per-thread arenas.** Each spawned thread allocates its values
      (strings, JSON nodes) from its own arena, freed when the thread finishes —
      so a thread reclaims everything it used on exit. The main thread is
-     unaffected; the share-nothing channel copy makes this safe. (Still freed at
-     thread *exit*, not per scope/iteration — that's the remaining Phase-1 work.)
+     unaffected; the share-nothing channel copy makes this safe.
+   - **Shipped: per-request arena in `web.serve`.** Each connection runs under a
+     fresh arena installed in `xw_serve_conn` (covers HTTP and HTTPS), destroyed
+     once the response is on the wire. The handler's allocations are now reclaimed
+     per request instead of leaking: strings (`xc_str_copy`), the whole JSON path
+     (nodes via `xj_alloc`, their string contents via `xj_adup_n`, object/array
+     backing via the arena-aware `xc_arena_regrow`, and the stringify buffer), and
+     **DI instances** (`xc_new_<Class>` → `xc_obj_alloc`). The per-request
+     request/response structs that were malloc'd are freed explicitly. Safe
+     because the response body/ctype are malloc'd *copies* (`xstd_resp_set`), so
+     they outlive the arena — the same share-nothing rule as threads: a value a
+     handler stashes into global state must be copied, not retained. Measured: a
+     server's heap is flat across thousands of requests (`leaks` reports zero),
+     ASan/UBSan-clean. This completes the Phase-1 goal — long-running servers no
+     longer leak — without ARC.
 
 2. **Phase 2 — effect-kind borrow inference (the new core; do before ARC).**
    Before adding any counting, exploit what the kinds already prove. Pure kinds

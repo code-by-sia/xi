@@ -4268,7 +4268,7 @@ mapper genConstructors(prog: Program) -> String {
         let cs = classSpecGet(prog.classes, i)
         let cn = cs.name
         out = out + "static xc_" + cn + "_t* xc_new_" + cn + "(void) {\n"
-        out = out + "    xc_" + cn + "_t* o = (xc_" + cn + "_t*)malloc(sizeof(xc_" + cn + "_t));\n"
+        out = out + "    xc_" + cn + "_t* o = (xc_" + cn + "_t*)xc_obj_alloc(sizeof(xc_" + cn + "_t));\n"
         out = out + "    if (!o) abort();\n"
         out = out + "    memset(o, 0, sizeof(xc_" + cn + "_t));\n"
         let di = 0

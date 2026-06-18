@@ -461,6 +461,11 @@ void diag_set_file(xc_string_t path);
 void diag_error(xc_integer_t line, xc_string_t msg);
 void diag_warn(xc_integer_t line, xc_string_t msg);
 
+/* Boxed-instance allocator used by generated xc_new_<Class>. Routes through the
+   active thread/request arena (so DI instances are reclaimed with it), else
+   malloc. */
+void* xc_obj_alloc(size_t n);
+
 /* ─── Interrupts (resumable conditions) ──────────────────────────────────────
    A dynamic stack of handlers. `try` pushes one and setjmp()s the skip target;
    `signal` finds the nearest matching handler, calls it (stack intact) for a
