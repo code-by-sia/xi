@@ -214,6 +214,17 @@ contract above.
    effectful function becomes a compile error. That check is independently good
    (it makes the kinds mean what they say) and it is what makes the borrow codegen
    sound.
+   - **Shipped: purity enforcement** (`checkPurity` in codegen, run right after
+     `checkMachines`). A pure-kind body may not perform direct I/O
+     (`system.stdout`/`stderr`/`stdin`) nor call an *unambiguously*-impure
+     function — one whose every definition is a `consumer` or `action`.
+     Deliberately allowed, to stay sound against false positives: `extern "C"`
+     callees (trusted at their declared kind — e.g. `diag_error`, `run_command`),
+     `producer` and `creator` (producer is the generic `() -> T` kind, often pure
+     like `json.parse`; creator only allocates), and any overloaded name that has
+     a non-impure definition. The remaining Phase-2 work is the **borrow codegen**
+     itself, which only starts to pay once Phase 3's ARC gives copies/retains a
+     cost worth eliding.
 
 3. **Phase 3 — automatic reference counting for the values that genuinely
    escape.** With borrows handling the pure majority, ARC carries only the

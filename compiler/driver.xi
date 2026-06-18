@@ -603,6 +603,7 @@ producer buildOne(srcPath: String) -> Integer {
     }
 
     checkMachines(prog)              // static machine-graph validation
+    checkPurity(prog)                // pure-kind functions must stay side-effect-free
 
     system.stdout.writeln("xc: generating C ...")
     let cSource = genAll(prog, srcPath)

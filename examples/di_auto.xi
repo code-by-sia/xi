@@ -42,8 +42,9 @@ class Foo implements Service {
     }
 }
 
-// A function with its own dependency block.
-mapper { logger: Logger } describe(name: String) -> String {
+// A function with its own dependency block. It logs (a side effect) and returns
+// a value, so it's a `producer`, not a pure `mapper`.
+producer { logger: Logger } describe(name: String) -> String {
     logger.log("describing " + name)
     return "<" + name + ">"
 }

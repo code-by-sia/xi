@@ -119,6 +119,18 @@ predicate isAdult(p: Person) { return p.age >= 18 }
 consumer log(msg: String) { system.stdout.writeln(msg) }
 ```
 
+> **Purity is enforced.** `mapper`, `predicate`, and `projector` are pure: the
+> compiler rejects a body that does I/O (`system.stdout`/`stderr`/`stdin`) or
+> calls an effectful function (a `consumer` or `action`). If a function needs a
+> side effect, give it an effectful kind — usually `producer` (effect + returns a
+> value) or `consumer`/`action`. This isn't bookkeeping for its own sake: the
+> guarantee is what lets the compiler treat a pure function's arguments as
+> borrowed (no copy, no reference-count traffic). See the
+> [memory-management plan](proposals/memory-management.md). Calls into
+> `extern "C"` functions are trusted at their declared kind, and calling a
+> `producer`/`creator` from a pure function is allowed (constructing or producing
+> a value is not a side effect on the caller's inputs).
+
 A one-expression body can be written **inline** with `=>` — sugar for
 `{ return <expr> }` (bounded to its line; use a `{ block }` for multi-line). It
 works for any kind, including methods and `where`-overloads:
