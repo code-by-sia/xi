@@ -157,11 +157,31 @@ compiling itself. Roll out in slices that each keep `selfhost.sh` byte-identical
     it), so returns need move analysis.
   These are exactly what an SSA/ownership IR provides. The current codegen emits C
   string-by-string from the token stream with no per-value ownership tracking, so
-  doing 3b–3d safely there is error-prone (double-frees). **Recommendation:** 3b+
-  should be built on a small ownership IR (or a dedicated codegen pass that
-  introduces named temporaries for every owned value), undertaken as its own
-  project. Until then, the practical leak is already solved by the shipped arenas
-  (Phase 1), and 3a stands as the runtime foundation.
+  doing 3b–3d safely there is error-prone (double-frees).
+
+  **Key finding — the rules cannot be staged.** An attempt to land a narrow first
+  slice ("release owned `String` locals only") showed the ARC rules are *mutually
+  dependent for soundness*: releasing locals is only correct if every value that
+  *flows out of* a local is also accounted for. e.g.
+
+  ```
+  let s = a + b              // owned local, rc 1
+  return Foo { name: s }     // s's buffer is now shared by Foo.name
+  // releasing s on the way out -> Foo.name dangles (use-after-free)
+  ```
+
+  So "release locals" requires "retain on store into a field/array", which
+  requires knowing whether each sub-expression is owned or borrowed — i.e. the
+  per-expression ownership tag. A partial ARC therefore isn't *safer*; it
+  double-frees / dangles on common patterns. ARC must land as one coherent rule
+  set (retain on copy/store/return-of-borrow, move on owned-return, release at
+  every scope exit, temporaries lifted), built on per-expression ownership.
+
+  **Recommendation:** build 3b–3d on a per-expression ownership tag (an `owned`
+  bit threaded through `ExprRes`, ~99 sites) plus the full rule set, as one
+  focused project validated by an ASan self-host — not incremental slices. The
+  runtime side (3a) is done and stands ready. Until that project lands, the
+  practical leak is already solved by the shipped arenas (Phase 1).
 - **3c — Full ownership transfer at call boundaries.** Extend to
   `producer`/`creator`/`consumer`/`action`: retain on store, consume on
   consumer params, release-old on rebind, retain on field/array writes.
