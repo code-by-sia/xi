@@ -56,6 +56,20 @@ typedef struct {
     xc_size_t   len;    /* byte length                                        */
 } xc_string_t;
 
+/* ── Reference counting (memory-management Phase 3; opt-in: -DXC_ARC) ──────────
+ * A small header precedes every rc-managed heap block; the value pointer
+ * (a string's data, an array's data, a boxed instance) points just past it, so
+ * every reader is unchanged. retain/release adjust the count and free at zero.
+ * Pointers without our magic — string literals in .rodata, arena blocks — are
+ * not managed, so retain/release are no-ops on them (the count is "immortal").
+ * With XC_ARC OFF, xc_rc_alloc is plain malloc and retain/release compile to
+ * nothing, so generated programs are byte-for-byte as before. */
+typedef struct { uint32_t rc; uint32_t magic; } xc_rc_hdr;
+void* xc_rc_alloc(size_t n);     /* rc=1 managed block (malloc when !XC_ARC)   */
+void* xc_rc_immortal(size_t n);  /* never-freed managed block                  */
+void  xc_retain(const void* p);  /* ++rc on a managed block; else no-op        */
+void  xc_release(const void* p); /* --rc, free at zero; else no-op             */
+
 static inline xc_string_t xc_string_from_cstr(const char* s) {
     return (xc_string_t){ .data = s, .len = s ? strlen(s) : 0 };
 }
@@ -87,10 +101,10 @@ static inline int xc_str_cmp(xc_string_t a, xc_string_t b) {
     return 0;
 }
 
-/* Concatenate two strings — result is heap-allocated */
+/* Concatenate two strings — result is heap-allocated (rc-managed under XC_ARC) */
 static inline xc_string_t xc_string_concat(xc_string_t a, xc_string_t b) {
     xc_size_t len = a.len + b.len;
-    char* buf = (char*)malloc(len + 1);
+    char* buf = (char*)xc_rc_alloc(len + 1);
     if (!buf) abort();
     memcpy(buf, a.data, a.len);
     memcpy(buf + a.len, b.data, b.len);

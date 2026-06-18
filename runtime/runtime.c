@@ -666,14 +666,52 @@ static void* xc_arena_regrow(void* old, size_t oldn, size_t newn) {
     if (old && oldn) memcpy(p, old, oldn);
     return p;
 }
+/* ── Reference counting (Phase 3; opt-in via -DXC_ARC) ───────────────────────
+ * See runtime.h for the model. With XC_ARC off these are malloc / no-ops, so
+ * behaviour and generated output are unchanged. */
+#ifdef XC_ARC
+#define XC_RC_MAGIC    0x58524321u   /* "XRC!" */
+#define XC_RC_IMMORTAL 0xFFFFFFFFu
+void* xc_rc_alloc(size_t n) {
+    xc_rc_hdr* h = (xc_rc_hdr*)malloc(sizeof(xc_rc_hdr) + n); if (!h) abort();
+    h->rc = 1; h->magic = XC_RC_MAGIC; return (void*)(h + 1);
+}
+void* xc_rc_immortal(size_t n) {
+    xc_rc_hdr* h = (xc_rc_hdr*)malloc(sizeof(xc_rc_hdr) + n); if (!h) abort();
+    h->rc = XC_RC_IMMORTAL; h->magic = XC_RC_MAGIC; return (void*)(h + 1);
+}
+void xc_retain(const void* p) {
+    if (!p) return;
+    xc_rc_hdr* h = ((xc_rc_hdr*)p) - 1;
+    if (h->magic == XC_RC_MAGIC && h->rc != XC_RC_IMMORTAL) h->rc++;
+}
+void xc_release(const void* p) {
+    if (!p) return;
+    xc_rc_hdr* h = ((xc_rc_hdr*)p) - 1;
+    if (h->magic == XC_RC_MAGIC && h->rc != XC_RC_IMMORTAL && --h->rc == 0) free(h);
+}
+#else
+void* xc_rc_alloc(size_t n)    { return malloc(n); }
+void* xc_rc_immortal(size_t n) { return malloc(n); }
+void  xc_retain(const void* p)  { (void)p; }
+void  xc_release(const void* p) { (void)p; }
+#endif
+
 /* Public boxed-instance allocator. Generated xc_new_<Class> calls this (it lives
    in a separate translation unit and can't see the static arena helpers), so DI
    instances created inside a thread/request arena are reclaimed with it; on the
-   main thread (no arena) it is plain malloc, exactly as before. */
-void* xc_obj_alloc(size_t n) { return xc_arena_alloc(n); }
+   main thread (no arena) it is an rc-managed block under XC_ARC, else plain
+   malloc, exactly as before. */
+void* xc_obj_alloc(size_t n) {
+    if (xc_tls_arena) return xc_arena_alloc(n);
+    return xc_rc_alloc(n);
+}
 
 static xc_string_t xc_str_copy(const char* p, xc_size_t n) {
-    char* buf = (char*)xc_arena_alloc(n + 1); if (!buf) abort();
+    /* In an arena (thread/request) the arena owns it; otherwise it's an
+       rc-managed block under XC_ARC (plain malloc when XC_ARC is off). */
+    char* buf = (char*)(xc_tls_arena ? xc_arena_alloc(n + 1) : xc_rc_alloc(n + 1));
+    if (!buf) abort();
     if (n) memcpy(buf, p, n);
     buf[n] = '\0';
     return (xc_string_t){ .data = buf, .len = n };
