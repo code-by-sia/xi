@@ -662,6 +662,122 @@ consumer checkMachines(prog: Program) {
     }
 }
 
+// ── Purity enforcement (Phase 2 of the memory-management plan) ──────────────
+// A pure-kind function — mapper / predicate / projector — promises no observable
+// side effects; that promise is exactly what lets the compiler pass its
+// arguments by borrow (they cannot escape). We enforce it: a pure-kind body must
+// not perform direct I/O (system.stdout/stderr/stdin) nor call an
+// unambiguously-impure function (one whose *every* definition is a `consumer` or
+// `action`). Notes on what is deliberately allowed:
+//   - extern "C" functions are trusted at their declared kind and never count as
+//     impure callees (we can't see their bodies; the FFI boundary is the author's
+//     contract — e.g. diag_error/run_command).
+//   - `producer` and `creator` are not treated as impure: `producer` is the
+//     generic `() -> T` kind (often, but not always, pure — e.g. json.parse), and
+//     `creator` only allocates a fresh value. Calling them is fine.
+//   - an overloaded name with any non-(consumer/action) definition is not
+//     flagged — conservative, so we never reject a legitimate pure call.
+
+// Single switch for the diagnostic severity (warn while bootstrapping, error
+// once the tree is known clean).
+consumer diag_purity(line: Integer, msg: String) { diag_error(line, msg) }
+
+predicate isPureKind(k: String) {
+    return k == "mapper" or k == "predicate" or k == "projector"
+}
+
+// Names that are impure in *every* user definition (overloads with any other
+// kind are excluded, so the rule is sound against false positives).
+mapper collectImpureNames(prog: Program) -> String[] {
+    let impure: String[] = []   // >=1 consumer/action definition
+    let other:  String[] = []   // >=1 definition of any other kind
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n {
+        let f = funcSpecGet(prog.functions, i)
+        if f.kind == "consumer" or f.kind == "action" { impure = appendString(impure, f.name) }
+        else { other = appendString(other, f.name) }
+        i = i + 1
+    }
+    let ci = 0
+    let cn = classSpecLen(prog.classes)
+    while ci < cn {
+        let cs = classSpecGet(prog.classes, ci)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn {
+            let mth = methodSpecGet(cs.methList, mi)
+            if mth.kind == "consumer" or mth.kind == "action" { impure = appendString(impure, mth.name) }
+            else { other = appendString(other, mth.name) }
+            mi = mi + 1
+        }
+        ci = ci + 1
+    }
+    let out: String[] = []
+    let k = 0
+    let m = stringArrLen(impure)
+    while k < m {
+        let nm = stringArrGet(impure, k)
+        if not strArrContains(other, nm) and not strArrContains(out, nm) {
+            out = appendString(out, nm)
+        }
+        k = k + 1
+    }
+    return out
+}
+
+// Scan one pure-kind body's tokens for I/O and impure calls. String literals are
+// single tokens, so names that appear only inside generated-code strings (as in
+// codegen itself) never match — only real call sites do.
+consumer scanPureBody(kind: String, fname: String, toks: Token[], impure: String[]) {
+    let n = tokenArrLen(toks)
+    let i = 0
+    while i < n {
+        let k = gkind(toks, i)
+        // direct I/O:  system . (stdout|stderr|stdin)
+        if k == 1 and gtext(toks, i) == "system" and i + 2 < n and gkind(toks, i + 1) == 107 {
+            let f2 = gtext(toks, i + 2)
+            if f2 == "stdout" or f2 == "stderr" or f2 == "stdin" {
+                diag_purity(tokenArrGet(toks, i).line,
+                    "pure " + kind + " '" + fname + "' must not perform I/O (system." + f2 + "); use a producer/consumer/action")
+            }
+        }
+        // impure call:  IDENT (
+        if k == 1 and i + 1 < n and gkind(toks, i + 1) == 100 {
+            let callee = gtext(toks, i)
+            if callee != fname and strArrContains(impure, callee) {
+                diag_purity(tokenArrGet(toks, i).line,
+                    "pure " + kind + " '" + fname + "' must not call impure '" + callee + "'; make it a producer/consumer/action")
+            }
+        }
+        i = i + 1
+    }
+}
+
+consumer checkPurity(prog: Program) {
+    let impure = collectImpureNames(prog)
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n {
+        let f = funcSpecGet(prog.functions, i)
+        if isPureKind(f.kind) { scanPureBody(f.kind, f.name, f.bodyTokens, impure) }
+        i = i + 1
+    }
+    let ci = 0
+    let cn = classSpecLen(prog.classes)
+    while ci < cn {
+        let cs = classSpecGet(prog.classes, ci)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn {
+            let mth = methodSpecGet(cs.methList, mi)
+            if isPureKind(mth.kind) { scanPureBody(mth.kind, mth.name, mth.bodyTokens, impure) }
+            mi = mi + 1
+        }
+        ci = ci + 1
+    }
+}
+
 mapper funcRetXType(prog: Program, name: String) -> String {
     let i = 0
     let n = funcSpecLen(prog.functions)
