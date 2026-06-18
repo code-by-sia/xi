@@ -654,6 +654,23 @@ static void xc_arena_destroy(xc_arena* a) {
     while (b) { xc_ablock* nx = b->next; free(b); b = nx; }
     free(a);
 }
+/* Arena-aware grow. With an active arena we can't realloc a bump-allocated
+   block, so allocate a fresh one and copy the live prefix; the old block is
+   reclaimed when the arena is destroyed. Without an arena, plain realloc. Used
+   by the JSON object/array backing arrays (xj_grow) and the stringify buffer
+   (xj_sb) — request-scoped scratch whose result is copied out before the arena
+   is freed. (oldn = bytes to preserve.) */
+static void* xc_arena_regrow(void* old, size_t oldn, size_t newn) {
+    if (!xc_tls_arena) return realloc(old, newn);
+    void* p = xc_arena_alloc(newn);
+    if (old && oldn) memcpy(p, old, oldn);
+    return p;
+}
+/* Public boxed-instance allocator. Generated xc_new_<Class> calls this (it lives
+   in a separate translation unit and can't see the static arena helpers), so DI
+   instances created inside a thread/request arena are reclaimed with it; on the
+   main thread (no arena) it is plain malloc, exactly as before. */
+void* xc_obj_alloc(size_t n) { return xc_arena_alloc(n); }
 
 static xc_string_t xc_str_copy(const char* p, xc_size_t n) {
     char* buf = (char*)xc_arena_alloc(n + 1); if (!buf) abort();
@@ -781,17 +798,30 @@ static char* xj_strdup_n(const char* p, size_t n) {
     s[n] = '\0';
     return s;
 }
+/* Arena-aware copy for JSON/YAML *node* contents (string values, object keys,
+   yaml line text). These live exactly as long as their arena-allocated node
+   (xj_alloc), are never freed or realloc'd individually, so they belong in the
+   same region — and so a per-request/-thread arena reclaims them too. Falls back
+   to malloc when no arena is active (main thread), matching prior behaviour.
+   NOT used for event topic/type (which must outlive a request) nor for the
+   stringify accumulator / parse scratch (which are realloc'd or free'd). */
+static char* xj_adup_n(const char* p, size_t n) {
+    char* s = (char*)xc_arena_alloc(n + 1); if (!s) abort();
+    if (n) memcpy(s, p, n);
+    s[n] = '\0';
+    return s;
+}
 xc_Json_t xstd_json_string(xc_string_t v) {
     struct xc_json_node* n = xj_alloc(XJ_STRING);
-    n->str = xj_strdup_n(v.data, v.len);
+    n->str = xj_adup_n(v.data, v.len);
     return n;
 }
 
 static void xj_grow(struct xc_json_node* c) {
     if (c->len < c->cap) return;
     long ncap = c->cap ? c->cap * 2 : 4;
-    c->items = (struct xc_json_node**)realloc(c->items, (size_t)ncap * sizeof(*c->items));
-    c->keys  = (char**)realloc(c->keys, (size_t)ncap * sizeof(*c->keys));
+    c->items = (struct xc_json_node**)xc_arena_regrow(c->items, (size_t)c->len * sizeof(*c->items), (size_t)ncap * sizeof(*c->items));
+    c->keys  = (char**)xc_arena_regrow(c->keys, (size_t)c->len * sizeof(*c->keys), (size_t)ncap * sizeof(*c->keys));
     if (!c->items || !c->keys) abort();
     c->cap = ncap;
 }
@@ -807,7 +837,7 @@ xc_Json_t xstd_json_push(xc_Json_t arr, xc_Json_t v) {
 
 xc_Json_t xstd_json_set(xc_Json_t obj, xc_string_t key, xc_Json_t v) {
     if (!obj || obj->kind != XJ_OBJECT) return obj;
-    char* k = xj_strdup_n(key.data, key.len);
+    char* k = xj_adup_n(key.data, key.len);
     for (long i = 0; i < obj->len; i++) {       /* replace existing key */
         if (strcmp(obj->keys[i], k) == 0) { obj->items[i] = v; free(k); return obj; }
     }
@@ -858,7 +888,7 @@ static void xj_sb_putn(xj_sb* s, const char* p, size_t n) {
     if (s->len + n + 1 > s->cap) {
         size_t nc = s->cap ? s->cap : 64;
         while (s->len + n + 1 > nc) nc *= 2;
-        s->buf = (char*)realloc(s->buf, nc); if (!s->buf) abort();
+        s->buf = (char*)xc_arena_regrow(s->buf, s->len, nc); if (!s->buf) abort();
         s->cap = nc;
     }
     memcpy(s->buf + s->len, p, n); s->len += n; s->buf[s->len] = '\0';
@@ -1138,19 +1168,19 @@ static struct xc_json_node* xj_scalar_from_text(const char* s, size_t n) {
     while (n > 0 && (s[0]==' '||s[0]=='\t')) { s++; n--; }
     while (n > 0 && (s[n-1]==' '||s[n-1]=='\t')) n--;
     if (n >= 2 && ((s[0]=='"'&&s[n-1]=='"')||(s[0]=='\''&&s[n-1]=='\''))) {
-        struct xc_json_node* nd = xj_alloc(XJ_STRING); nd->str = xj_strdup_n(s+1, n-2); return nd;
+        struct xc_json_node* nd = xj_alloc(XJ_STRING); nd->str = xj_adup_n(s+1, n-2); return nd;
     }
-    if (n == 0) { struct xc_json_node* nd = xj_alloc(XJ_STRING); nd->str = xj_strdup_n("",0); return nd; }
+    if (n == 0) { struct xc_json_node* nd = xj_alloc(XJ_STRING); nd->str = xj_adup_n("",0); return nd; }
     if ((n==4 && memcmp(s,"null",4)==0) || (n==1 && s[0]=='~')) return xj_alloc(XJ_NULL);
     if (n==4 && memcmp(s,"true",4)==0)  { struct xc_json_node* nd=xj_alloc(XJ_BOOL); nd->b=1; return nd; }
     if (n==5 && memcmp(s,"false",5)==0) { struct xc_json_node* nd=xj_alloc(XJ_BOOL); nd->b=0; return nd; }
     if (n < 63) { char tmp[64]; memcpy(tmp,s,n); tmp[n]='\0'; char* e; errno=0;
         double d = strtod(tmp,&e); if (e==tmp+n && e!=tmp && errno==0) {
             struct xc_json_node* nd=xj_alloc(XJ_NUMBER); nd->num=d; return nd; } }
-    { struct xc_json_node* nd=xj_alloc(XJ_STRING); nd->str=xj_strdup_n(s,n); return nd; }
+    { struct xc_json_node* nd=xj_alloc(XJ_STRING); nd->str=xj_adup_n(s,n); return nd; }
 }
 static void xj_obj_set_n(struct xc_json_node* o, const char* k, size_t kn, struct xc_json_node* v) {
-    xj_grow(o); o->keys[o->len]=xj_strdup_n(k,kn); o->items[o->len]=v; o->len++;
+    xj_grow(o); o->keys[o->len]=xj_adup_n(k,kn); o->items[o->len]=v; o->len++;
 }
 static void xj_arr_push_n(struct xc_json_node* a, struct xc_json_node* v) {
     xj_grow(a); a->keys[a->len]=NULL; a->items[a->len]=v; a->len++;
@@ -1274,7 +1304,7 @@ xc_Json_t xstd_yaml_parse(xc_string_t src) {
         size_t e=end; while (e>p && (src.data[e-1]==' '||src.data[e-1]=='\r')) e--;
         int seq=0;
         if (src.data[p]=='-' && (p+1>=e || src.data[p+1]==' ')) { seq=1; p++; if (p<e && src.data[p]==' ') p++; }
-        L[n].indent=indent; L[n].seq=seq; L[n].content=xj_strdup_n(src.data+p, e-p); n++;
+        L[n].indent=indent; L[n].seq=seq; L[n].content=xj_adup_n(src.data+p, e-p); n++;
     }
     if (n == 0) { free(L); return xj_alloc(XJ_NULL); }
     long idx = 0;
@@ -1370,7 +1400,7 @@ static struct xc_json_node* xx_element(xx_parser* P, const char** tag, size_t* t
     int self = 0;
     if (P->p<P->end && *P->p=='/') { self=1; P->p++; }
     if (P->p<P->end && *P->p=='>') P->p++;
-    if (self) { struct xc_json_node* nd=xj_alloc(XJ_STRING); nd->str=xj_strdup_n("",0); return nd; }
+    if (self) { struct xc_json_node* nd=xj_alloc(XJ_STRING); nd->str=xj_adup_n("",0); return nd; }
     struct xc_json_node* obj = xj_alloc(XJ_OBJECT);
     xj_sb text = {0,0,0};
     int hasChild = 0;
@@ -1742,6 +1772,17 @@ static void xw_serve_conn(void* conn, xw_rd_fn rd, xw_wr_fn wr) {
     }
     struct xc_web_response rs; memset(&rs, 0, sizeof(rs));
     struct xc_web_response* resp = NULL;
+    /* Per-request arena (memory-management Phase 1). The handler's value
+       allocations — strings (xc_str_copy), JSON nodes (xj_alloc) — come from a
+       region that is freed once the response is on the wire, so a long-running
+       server reclaims each request instead of leaking it. This is safe because
+       the response body/ctype are malloc'd *copies* (see xstd_resp_set), so they
+       outlive the arena; only a value the handler stashes into global state would
+       dangle — the same share-nothing rule the per-thread arena already relies
+       on. prev/restore keeps it correct if serve runs inside a thread arena. */
+    xc_arena* prevArena = xc_tls_arena;
+    xc_arena* reqArena  = xc_arena_new();
+    xc_tls_arena = reqArena;
     if (xc_web_handler_fn && req.method) {
         xc_web_handler_fn(&req, &rs);
         resp = &rs;
@@ -1759,6 +1800,17 @@ static void xw_serve_conn(void* conn, xw_rd_fn rd, xw_wr_fn wr) {
         status, xw_reason(status), ctype, blen);
     wr(conn, head, hl);
     if (blen) wr(conn, body, (long)blen);
+    /* Response sent: reclaim the request arena and the per-request malloc'd
+       parts (response body/ctype copies, the dispatch-allocated struct, and the
+       parsed request fields — all previously leaked once per request). */
+    if (resp) {
+        if (resp->body)  free(resp->body);
+        if (resp->ctype) free(resp->ctype);
+        if (resp != &rs) free(resp);     /* dispatch path malloc'd the struct */
+    }
+    free(req.method); free(req.path); free(req.query); free(req.headers); free(req.body);
+    xc_tls_arena = prevArena;
+    xc_arena_destroy(reqArena);
     free(buf);
 }
 
