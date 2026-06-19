@@ -1,9 +1,37 @@
 # Proposal: Memory management — does Ξ need a GC?
 
-> **Status: accepted direction (phased), implementation pending.** This document
-> weighs the options and commits to a path: a phased hybrid (arenas → ARC →
-> opt-in borrows) in which **the function effect kinds drive the analysis**.
-> Phase 1's per-thread arenas are shipped; the rest is designed, not yet built.
+> **Status: RESOLVED / closed.** The practical goal — long-running programs stop
+> leaking — is met by **region reclamation**: per-thread arenas, a per-request
+> arena in `web.serve`, and a user-marked **`scope { }`** block for main-thread
+> loops, with strings/JSON/instances all arena-aware. **Purity** is enforced
+> (the effect-kind borrow guarantee), and the **ARC runtime foundation (3a)** is
+> shipped behind `-DXC_ARC`. Full ARC (3b+) is **deferred as documented future
+> work**: implementing it showed the rules can't be staged and that reclaiming
+> the common build-use-discard pattern needs *escape analysis* on top of the
+> effect kinds — a very large effort whose payoff the arenas already capture for
+> every long-running context that exists in practice. See the Resolution section.
+
+## Resolution (what shipped, and why we stopped here)
+
+| Mechanism | Status | Reclaims |
+|-----------|--------|----------|
+| Per-thread arena | shipped | everything a spawned thread allocates, freed at thread exit |
+| Per-request arena (`web.serve`) | shipped | every request's strings/JSON/DTOs/instances, freed after the response |
+| `scope { }` block | shipped | a marked block's allocations, freed at block end (main-thread loops) — measured 435 MB → 1.85 MB on a 3M-iteration loop |
+| Arena-aware values | shipped | `xc_string_concat`, `int/number→string`, `xc_str_copy`, JSON, boxed instances all route through the active arena |
+| Purity enforcement | shipped | makes `mapper`/`predicate`/`projector` borrow-safe |
+| ARC 3a runtime (`-DXC_ARC`) | shipped | rc header + retain/release/immortal; behaviour-neutral by default |
+| ARC 3b+ (release insertion) + escape analysis | **deferred** | needs per-expression ownership *and* escape info; arenas already cover the practical cases |
+
+The deciding insight: arenas reclaim by **region**, which exactly matches where
+long-running programs actually allocate-and-discard (a request, a thread, a loop
+iteration). Full ARC's only marginal gain over this is reclaiming individual
+values that escape their region mid-computation — and reclaiming the *common*
+such pattern (build → pass to a `consumer` → drop) soundly needs escape analysis,
+because the effect kind bounds effects but not whether a callee *keeps* the
+argument. That is a disproportionate effort for the residual benefit, so ARC 3b+
+stays designed-and-deferred ([arc-plan.md](arc-plan.md)) with its runtime
+foundation in place, ready if a future need justifies it.
 
 ## The question
 

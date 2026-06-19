@@ -86,9 +86,27 @@ Because threads are share-nothing, each thread allocates its values from its own
 and returns). So a thread reclaims everything it allocated on exit — there's no
 cross-thread garbage, and the main thread is unaffected (it keeps the usual
 allocate-and-free-at-exit behaviour). Data sent over a channel is copied, so it
-survives the sender's cleanup. (This is the per-thread slice of the
-[memory-management plan](proposals/memory-management.md); note the arena is freed
-at thread *exit*, not per loop iteration.)
+survives the sender's cleanup.
+
+Ξ reclaims memory by **region**, in three places: per **thread** (above), per
+**request** (`web.serve` frees each request's allocations), and — for a
+long-running loop on the main thread — wherever you write a **`scope { }`**
+block:
+
+```x
+loop {
+    scope {
+        let line = "row-" + int_to_string(n)   // freed when the scope ends,
+        process(line)                           // so the loop stays flat
+    }
+}
+```
+
+Everything allocated inside the `scope` (strings, lists, objects) is freed when
+the block ends. The one rule — the same as threads — is that a value must not
+**escape** its region: copy out anything you need to keep, and don't `return` out
+of a `scope` block. See [`examples/scope_demo.xi`](https://github.com/code-by-sia/x/blob/main/examples/scope_demo.xi)
+and the [memory-management notes](proposals/memory-management.md).
 
 ## Notes & limits
 
