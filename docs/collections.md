@@ -277,9 +277,25 @@ for k in ages.keys() {
 - A `Map<K, V>` is a mutable handle (reference semantics). Iteration order is
   unspecified.
 
+## Lazy infinite sources — `generateSequence`
+
+`generateSequence(seed) { next }` is a lazy source whose value starts at `seed`
+and advances through the generator each step. It fuses into the sequence loop like
+any other source, so it's only as long as the bounded terminal asks for — **always
+bound it** with `take`, `takeWhile`, or `first`:
+
+```x
+generateSequence(1) { it * 2 }.take(8).toList()        // [1,2,4,…,128]
+generateSequence(1) { it + 1 }.take(10).fold(0) { a, b => a + b }   // 55
+generateSequence(0) { it + 2 }.takeWhile { it < 10 }.toList()      // [0,2,4,6,8]
+```
+
+See `examples/generate_sequence_demo.xi`.
+
 ## What's next
 
-The containers (`List`/`Set`/`Map`), the eager functional API, lazy sequences,
-`Pair<A, B>`, and `zip`/`partition`/`unzip` are all in. The one remaining proposal
-item is infinite sequence sources (`generateSequence`), which needs first-class
-closures — see the [closures & generics proposal](proposals/closures.md).
+The collection layer is complete: containers (`List`/`Set`/`Map`), the eager
+functional API, lazy sequences (incl. `generateSequence`), `Pair<A, B>`, and
+`zip`/`partition`/`unzip`. The remaining language-level work — first-class
+closures and generics — is tracked in the
+[closures & generics proposal](proposals/closures.md).

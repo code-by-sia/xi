@@ -1,12 +1,16 @@
 # Proposal: Closures & generics (the remaining collections work)
 
-> **Status: draft / design.** The collections layer is implemented — `List`/`Set`/
-> `Map`, the eager functional API, lazy `Sequence`s, `Pair<A,B>`, and
-> `zip`/`partition`/`unzip` all ship (see [Collections](../collections.md)). The
-> one collections item left, `generateSequence` (infinite sources), needs
-> **first-class closures**, which is the real subject of this proposal — along with
-> the **generics** that would let user types/functions be parameterized the way the
-> built-in containers already are.
+> **Status: draft / design.** The collections layer is **complete** — `List`/`Set`/
+> `Map`, the eager functional API, lazy `Sequence`s, `Pair<A,B>`,
+> `zip`/`partition`/`unzip`, and now **`generateSequence`** (infinite sources) all
+> ship (see [Collections](../collections.md); `generateSequence` fuses the inlined
+> generator into the sequence loop, so it needed no first-class closures).
+>
+> What remains is the genuinely large language work this proposal exists for —
+> **first-class closures** (lambdas as *values*: passed, stored, returned) and
+> **generics** (monomorphized user types/functions). These are a deliberate
+> multi-step effort, not a collections gap; everything the collections layer needs
+> is now built.
 
 ## Why these two
 

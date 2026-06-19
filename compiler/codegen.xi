@@ -1340,6 +1340,25 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             pos: q, xtyp: tname
         , owned: false }
     }
+    if k == 1 and txt == "generateSequence" and gkind(toks, pos + 1) == 100 {
+        // generateSequence(seed) { [p =>] next } .<lazy ops> .<terminal> — a fused
+        // lazy recurrence source: the value starts at `seed` and advances through
+        // the inlined generator each step. Must be bounded by a take/takeWhile/
+        // first in the chain, or it loops forever.
+        let se = genExpr(toks, pos + 2, ctx)
+        let seedX = se.xtyp
+        let aq = se.pos
+        if gkind(toks, aq) == 101 { aq = aq + 1 }                 // ')'
+        let bo = aq                                               // '{'
+        let close = matchBrace(toks, bo)
+        let arrow = lambdaArrow(toks, bo + 1, close)
+        let gp = "it"
+        let bstart = bo + 1
+        if arrow >= 0 { gp = gtext(toks, bo + 1)  bstart = arrow + 1 }
+        let gbody = genExpr(toks, bstart, addSym(ctx, gp, seedX))
+        let dotp = close + 1                                      // first '.' of the chain
+        return genSequenceChain(toks, dotp - 2, "", seedX, ctx, true, se.code, gbody.code, gp)
+    }
     if k == 1 and txt == "listOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
         let first = genExpr(toks, pos + 2, ctx)
         let ec = xnameToCtype(first.xtyp)
@@ -1560,17 +1579,25 @@ mapper lambdaArrow(toks: Token[], start: Integer, close: Integer) -> Integer {
 // Lazy sequences: `list.asSequence().<lazy ops>.<terminal>` fuses the whole
 // chain into ONE loop (no intermediate lists). `p` is at the `.` of asSequence;
 // `src` is the source list code, `elemX0` its element xtype.
-mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, ctx: GCtx) -> ExprRes {
+mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, ctx: GCtx, genMode: Bool, seedC: String, genBodyC: String, genParam: String) -> ExprRes {
     let u = int_to_string(p)
     let sv = "_sq" + u
     let iv = "_qi" + u
+    let gv = "_gv" + u
     let q = p + 2
     if gkind(toks, q) == 100 { q = q + 1  if gkind(toks, q) == 101 { q = q + 1 } }   // ()
     let curVar = "_e" + u + "_0"
     let curX = elemX0
     let curC = xnameToCtype(curX)
+    let genC = curC                                        // running-value (seed) type for generateSequence
     let pre = ""                                            // decls before the loop (counters)
+    // list source: read the i-th element; generate source: read the running value
+    // then advance it via the inlined generator (so a `continue` later is safe).
     let inner = "        " + curC + " " + curVar + " = *(" + curC + "*)xstd_list_at(" + sv + ", " + iv + ");\n"
+    if genMode {
+        inner = "        " + genC + " " + curVar + " = " + gv + ";\n"
+              + "        { " + genC + " " + genParam + " = " + curVar + "; " + gv + " = (" + genBodyC + "); }\n"
+    }
     let step = 0
     let going = true
     while going and gkind(toks, q) == 107 {
@@ -1620,6 +1647,10 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
     // terminal at q (`.fld(...)` or `.fld { ... }`)
     let head = "({ xc_List_t " + sv + " = " + src + "; " + pre + "\n"
     let loopHdr = "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+    if genMode {
+        head = "({ " + genC + " " + gv + " = " + seedC + "; " + pre + "\n"   // seed the recurrence
+        loopHdr = "      for (;;) {\n"                                       // infinite; a take/takeWhile/first bounds it
+    }
     let tf = gtext(toks, q + 1)
     if tf == "toList" or tf == "toSet" {
         let add = "xstd_list_push"
@@ -2058,7 +2089,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if k == 107 or k == 129 {
             let fld = gtext(toks, p + 1)
             if isListXType(typ) and fld == "asSequence" {
-                let fr = genSequenceChain(toks, p, code, listElemXName(typ), ctx)
+                let fr = genSequenceChain(toks, p, code, listElemXName(typ), ctx, false, "", "", "")
                 code = fr.code
                 typ = fr.xtyp
                 p = fr.pos
