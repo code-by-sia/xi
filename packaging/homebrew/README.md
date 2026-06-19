@@ -4,7 +4,7 @@ The Xi toolchain installs via Homebrew on macOS (Apple Silicon + Intel) and
 Linux:
 
 ```sh
-brew install code-by-sia/x/xi
+brew install code-by-sia/xi/xi
 xi version
 brew upgrade xi        # later, to update
 ```
@@ -26,7 +26,7 @@ only external requirement is a C compiler (`cc` / `clang` / `gcc`) on `PATH` —
 
 ## One-time tap setup
 
-Homebrew resolves `brew install code-by-sia/x/xi` to the repo
+Homebrew resolves `brew install code-by-sia/xi/xi` to the repo
 `github.com/code-by-sia/homebrew-x`, file `Formula/xi.rb`. Create it once:
 
 ```sh
