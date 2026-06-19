@@ -29,9 +29,13 @@ iteration). Full ARC's only marginal gain over this is reclaiming individual
 values that escape their region mid-computation — and reclaiming the *common*
 such pattern (build → pass to a `consumer` → drop) soundly needs escape analysis,
 because the effect kind bounds effects but not whether a callee *keeps* the
-argument. That is a disproportionate effort for the residual benefit, so ARC 3b+
-stays designed-and-deferred ([arc-plan.md](arc-plan.md)) with its runtime
-foundation in place, ready if a future need justifies it.
+argument. Implementation attempts also showed the ARC rules can't be staged into
+individually-safe slices (releasing a local is only sound if values flowing out
+of it are retained), so full ARC needs a per-expression ownership IR
+(`owned`-tagged `ExprRes` + retain-on-copy/store/return-of-borrow). That is a
+disproportionate effort for the residual benefit, so ARC 3b+ stays
+designed-and-deferred — its runtime foundation (the opt-in `XC_ARC` rc header +
+`xc_retain`/`xc_release`) is in place, ready if a future need justifies it.
 
 ## The question
 
@@ -278,12 +282,14 @@ contract above.
    predictable timing — and far less counting than a kind-blind ARC.
    - **Shipped: 3a runtime infrastructure** (opt-in `-DXC_ARC`): the rc header +
      `xc_rc_alloc`/`xc_retain`/`xc_release`, behaviour-neutral by default.
-   - **Blocked: 3b+ release insertion.** Correct ARC needs retain-on-copy (value
-     semantics share buffers), temporary tracking, and move-on-return — which the
-     current direct token→C codegen has no IR to host safely. This wants a small
-     ownership IR / codegen pass as its own project. See
-     [arc-plan.md](arc-plan.md). Meanwhile the practical leak is already solved by
-     the Phase-1 arenas.
+   - **Deferred: 3b+ release insertion.** Correct ARC needs retain-on-copy (value
+     semantics share buffers), temporary tracking, and move-on-return — none of
+     which the current direct token→C codegen can host safely without a
+     per-expression ownership IR (`owned`-tagged `ExprRes`). The rules are also
+     mutually dependent (no safe partial subset). This is a sizeable codegen
+     project whose only gain over the shipped arenas is reclaiming mid-computation
+     escapes — so it's deferred. Meanwhile the practical leak is solved by the
+     Phase-1 arenas (`scope { }`, per-thread, per-request).
 
 4. **Phase 4 (exploration) — explicit borrows where the kind isn't enough.** The
    `&T` / `&mut T` types remain as an *opt-in* escape hatch for the cases the

@@ -29,7 +29,7 @@ const sidebars = {
     {
       type: 'category',
       label: 'Proposals (draft)',
-      items: ['proposals/collections', 'proposals/memory-management', 'proposals/arc-plan', 'proposals/typed-events', 'proposals/state-machines'],
+      items: ['proposals/collections', 'proposals/memory-management', 'proposals/typed-events', 'proposals/state-machines'],
     },
   ],
 };
