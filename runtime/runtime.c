@@ -702,9 +702,31 @@ void  xc_release(const void* p) { (void)p; }
    instances created inside a thread/request arena are reclaimed with it; on the
    main thread (no arena) it is an rc-managed block under XC_ARC, else plain
    malloc, exactly as before. */
-void* xc_obj_alloc(size_t n) {
+/* General value allocator: the active thread/request/scope arena when one is
+   installed (reclaimed in bulk by that arena), else an rc-managed block under
+   XC_ARC / plain malloc otherwise. Used for strings, conversions, and boxed
+   instances so they are all reclaimed by an enclosing arena. */
+void* xc_heap_alloc(size_t n) {
     if (xc_tls_arena) return xc_arena_alloc(n);
     return xc_rc_alloc(n);
+}
+void* xc_obj_alloc(size_t n) { return xc_heap_alloc(n); }
+
+/* ── `scope { }` block: a user-marked arena freed when the block ends ─────────
+ * enter installs a fresh arena (everything allocated inside comes from it) and
+ * returns the previous one; leave frees the block's arena and restores it. This
+ * lets a long-running main-thread loop reclaim each iteration without ARC. Same
+ * share-nothing rule as the other arenas: a value that must outlive the scope
+ * has to be copied out (e.g. returned into an outer-thread/heap value). */
+void* xc_scope_enter(void) {
+    xc_arena* prev = xc_tls_arena;
+    xc_tls_arena = xc_arena_new();
+    return (void*)prev;
+}
+void xc_scope_leave(void* prev) {
+    xc_arena* cur = xc_tls_arena;
+    xc_tls_arena = (xc_arena*)prev;
+    if (cur) xc_arena_destroy(cur);
 }
 
 static xc_string_t xc_str_copy(const char* p, xc_size_t n) {

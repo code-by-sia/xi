@@ -2765,6 +2765,16 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let body = genStmts(toks, pos + 2, close, ctx)
         return StmtRes { code: "    for(;;) {\n" + body + "    }\n", ctx: ctx, pos: close + 1 }
     }
+    // `scope { ... }` — run the body under a fresh arena, freed when it ends, so
+    // a long-running (main-thread) loop reclaims each iteration. Don't `return`
+    // out of a scope block (it would skip the arena restore); values that must
+    // outlive the scope must be copied out.
+    if k == 211 {
+        let close = matchBrace(toks, pos + 1)
+        let body = genStmts(toks, pos + 2, close, ctx)
+        let code = "    { void* _sc = xc_scope_enter();\n" + body + "      xc_scope_leave(_sc); }\n"
+        return StmtRes { code: code, ctx: ctx, pos: close + 1 }
+    }
     if k == 249 { return StmtRes { code: "    break;\n", ctx: ctx, pos: pos + 1 } }
     if k == 250 { return StmtRes { code: "    continue;\n", ctx: ctx, pos: pos + 1 } }
     if k == 246 {

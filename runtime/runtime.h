@@ -69,6 +69,18 @@ void* xc_rc_alloc(size_t n);     /* rc=1 managed block (malloc when !XC_ARC)   *
 void* xc_rc_immortal(size_t n);  /* never-freed managed block                  */
 void  xc_retain(const void* p);  /* ++rc on a managed block; else no-op        */
 void  xc_release(const void* p); /* --rc, free at zero; else no-op             */
+/* Arena-aware value allocator (the active arena, else rc/malloc). Strings and
+   conversions route through it so an enclosing arena (thread/request/scope)
+   reclaims them. */
+void* xc_heap_alloc(size_t n);
+/* Copy a C string into arena-aware heap memory. */
+static inline xc_string_t xc_heap_strdup(const char* s) {
+    size_t n = s ? strlen(s) : 0;
+    char* b = (char*)xc_heap_alloc(n + 1);
+    if (n) memcpy(b, s, n);
+    b[n] = '\0';
+    return (xc_string_t){ .data = b, .len = n };
+}
 
 static inline xc_string_t xc_string_from_cstr(const char* s) {
     return (xc_string_t){ .data = s, .len = s ? strlen(s) : 0 };
@@ -101,10 +113,11 @@ static inline int xc_str_cmp(xc_string_t a, xc_string_t b) {
     return 0;
 }
 
-/* Concatenate two strings — result is heap-allocated (rc-managed under XC_ARC) */
+/* Concatenate two strings — result is heap-allocated (arena-aware: reclaimed by
+   an enclosing thread/request/scope arena, else rc-managed/malloc). */
 static inline xc_string_t xc_string_concat(xc_string_t a, xc_string_t b) {
     xc_size_t len = a.len + b.len;
-    char* buf = (char*)xc_rc_alloc(len + 1);
+    char* buf = (char*)xc_heap_alloc(len + 1);
     if (!buf) abort();
     memcpy(buf, a.data, a.len);
     memcpy(buf + a.len, b.data, b.len);
@@ -241,13 +254,13 @@ static inline xc_string_t xc_number_to_string(xc_number_t n) {
         snprintf(buf, sizeof(buf), "%lld", (long long)(xc_integer_t)n);
     else
         snprintf(buf, sizeof(buf), "%g", n);
-    return xc_string_from_cstr(strdup(buf));
+    return xc_heap_strdup(buf);
 }
 
 static inline xc_string_t xc_integer_to_string(xc_integer_t n) {
     char buf[32];
     snprintf(buf, sizeof(buf), "%lld", (long long)n);
-    return xc_string_from_cstr(strdup(buf));
+    return xc_heap_strdup(buf);
 }
 
 static inline xc_string_t xc_bool_to_string(xc_bool_t b) {
@@ -479,6 +492,12 @@ void diag_warn(xc_integer_t line, xc_string_t msg);
    active thread/request arena (so DI instances are reclaimed with it), else
    malloc. */
 void* xc_obj_alloc(size_t n);
+
+/* `scope { }` block hooks: enter installs a fresh arena (freed at leave) and
+   returns the previous one to restore. Reclaims a loop iteration on the main
+   thread. */
+void* xc_scope_enter(void);
+void  xc_scope_leave(void* prev);
 
 /* ─── Interrupts (resumable conditions) ──────────────────────────────────────
    A dynamic stack of handlers. `try` pushes one and setjmp()s the skip target;
