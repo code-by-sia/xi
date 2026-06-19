@@ -6,8 +6,8 @@ slug: /
 ---
 
 <div class="hero-x">
-  <img class="hero-x__logo hero-x__logo--light" src="/x/img/logo.svg" alt="Xi logo" width="88" height="88" />
-  <img class="hero-x__logo hero-x__logo--dark" src="/x/img/logo-white.svg" alt="Xi logo" width="88" height="88" />
+  <img class="hero-x__logo hero-x__logo--light" src="/xi/img/logo.svg" alt="Xi logo" width="88" height="88" />
+  <img class="hero-x__logo hero-x__logo--dark" src="/xi/img/logo-white.svg" alt="Xi logo" width="88" height="88" />
   <h1 class="hero-x__title">The Ξ (Xi) Programming Language</h1>
   <p class="hero-x__tagline">
     A statically-typed, ahead-of-time compiled language that makes
@@ -16,7 +16,7 @@ slug: /
     through C, and self-hosting.
   </p>
   <p class="hero-x__cta">
-    <a class="button button--primary button--lg" href="/x/getting-started">Get started →</a>
+    <a class="button button--primary button--lg" href="/xi/getting-started">Get started →</a>
     <a class="button button--secondary button--lg" href="https://github.com/code-by-sia/xi">GitHub</a>
   </p>
 </div>
