@@ -56,27 +56,27 @@ separate `module App { … }` block — both forms work.
   function kind, they're DI-injectable and can call predicates.
 - **Interrupts** — resumable conditions: a function `signal`s and **suspends**;
   an enclosing `try`/`catch` decides to `recover` (resume) or `skip` (abandon).
-  See [Interrupts](https://code-by-sia.github.io/x/interrupts).
+  See [Interrupts](https://code-by-sia.github.io/xi/interrupts).
 - **Atoms** — active-state stores: an immutable `state` changed only via
-  `transition` reducers (Redux-style). See [Atoms](https://code-by-sia.github.io/x/atoms).
+  `transition` reducers (Redux-style). See [Atoms](https://code-by-sia.github.io/xi/atoms).
 - **Machines** — finite state machines as immutable values: named `states`,
   machine-wide `data`, transitions with parameters, `where` guards and `update`
   clauses, `.can(...)`, and illegal moves that raise the resumable
-  `IllegalTransition` interrupt. See [Machines](https://code-by-sia.github.io/x/machines).
+  `IllegalTransition` interrupt. See [Machines](https://code-by-sia.github.io/xi/machines).
 - **Events** — built-in typed publish/subscribe. Producers `publish(topic, dto)`
   any DTO; the `listener` kind subscribes to a topic and receives the **typed**
   value (no JSON). The default transport queues in memory with zero serialization;
   bind your own `PublisherService`/`ConsumerService` to go external — producers and
   listeners are unchanged. Deliver synchronously (`Events.run`) or on a worker
-  thread (`Events.runAsync`). See [Events](https://code-by-sia.github.io/x/events).
+  thread (`Events.runAsync`). See [Events](https://code-by-sia.github.io/xi/events).
 - **Web framework** — implement `WebRequestHandler` and route by overloading
   `action handle(req, res)` with `where` guards; `res.send(dto)` / `req.parse(T)`
   auto-(de)serialize via a pluggable `WebTransport` (JSON by default). No manual
   JSON. Plain HTTP by default; opt-in **HTTPS** (`web.serveTLS`, `XC_TLS=1`) and
-  **HTTP/2** (`web.serveHttp2`, `XC_HTTP2=1`). See [Web](https://code-by-sia.github.io/x/web).
+  **HTTP/2** (`web.serveHttp2`, `XC_HTTP2=1`). See [Web](https://code-by-sia.github.io/xi/web).
 - **Share-nothing threading** — `parallel { }` blocks run on OS threads and yield
   a `Thread` handle (`stop`/`wait`/`running`); threads talk only over thread-safe
-  channels. See [Threading](https://code-by-sia.github.io/x/threading).
+  channels. See [Threading](https://code-by-sia.github.io/xi/threading).
 - **Refined types** carry constraints (`type Age = Number where value >= 0`)
   that are **checked at construction**.
 - **Sum / algebraic types** (`type Shape = | Circle { r: Number } | Empty`) with
@@ -88,7 +88,7 @@ separate `module App { … }` block — both forms work.
 - **C interop** — port a C library by declaring it in an `extern "C"` block with
   `link`/`pkg`/`cflags` build directives; `Ptr`/`cstring` types, `&mut`
   out-params, and a `std/ffi` String↔cstring bridge. See
-  [C interop](https://code-by-sia.github.io/x/ffi) (e.g. a SQLite binding).
+  [C interop](https://code-by-sia.github.io/xi/ffi) (e.g. a SQLite binding).
 - **Multi-file projects** with `import` and `namespace`, plus a module
   `dependencies` field — list source-archive URLs and `xi install` fetches them
   into `./modules` (auto-compiled in, no manual `import`).

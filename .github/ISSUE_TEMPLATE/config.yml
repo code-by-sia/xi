@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Documentation
-    url: https://github.com/code-by-sia/x/tree/main/docs
+    url: https://github.com/code-by-sia/xi/tree/main/docs
     about: Read the guide and reference before filing — start at docs/index.md.
   - name: Security vulnerability
-    url: https://github.com/code-by-sia/x/security/policy
+    url: https://github.com/code-by-sia/xi/security/policy
     about: Report security issues privately. Do not open a public issue.
