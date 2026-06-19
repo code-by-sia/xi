@@ -97,26 +97,26 @@ separate `module App { … }` block — both forms work.
   **net (TCP sockets)**, **http (HTTP/1.1 client)**, **web (REST framework)**,
   **thread (share-nothing threads + channels)**, process, time, **ffi (C
   interop)** — see
-  [the standard library](https://code-by-sia.github.io/x/stdlib) and
-  [serialization](https://code-by-sia.github.io/x/serialization).
+  [the standard library](https://code-by-sia.github.io/xi/stdlib) and
+  [serialization](https://code-by-sia.github.io/xi/serialization).
 - **Native, dependency-light output**: Xi → C99 → a native binary via your `cc`.
 - **Runs on the web too**: the same source compiles to WebAssembly with
-  `xc --target wasm` (via Emscripten). See [the WASM guide](https://code-by-sia.github.io/x/wasm).
+  `xc --target wasm` (via Emscripten). See [the WASM guide](https://code-by-sia.github.io/xi/wasm).
 
 Full feature matrix: **[FEATURES.md](FEATURES.md)**. Full guide:
-**[code-by-sia.github.io/x](https://code-by-sia.github.io/x/)**.
+**[code-by-sia.github.io/xi](https://code-by-sia.github.io/xi/)**.
 
 ## Quick start
 
 On macOS (Apple Silicon + Intel) and Linux, install with **Homebrew**:
 
 ```sh
-brew install code-by-sia/x/xi
+brew install code-by-sia/xi/xi
 brew upgrade xi        # later, to update
 ```
 
 Or download a prebuilt toolchain for your platform from the
-**[releases page](https://github.com/code-by-sia/x/releases)**, unpack it, and
+**[releases page](https://github.com/code-by-sia/xi/releases)**, unpack it, and
 put its `bin/` on your `PATH`:
 
 ```sh
@@ -144,7 +144,7 @@ the standard library; the `bin/` wrappers set `XC_RUNTIME` / `XC_STD` for you.
 You need a C compiler (`cc` / `clang` / `gcc`) on `PATH`, since `xc` produces
 native binaries via C. (To build from source instead, run
 `./compiler/bootstrap.sh` — see
-[github.com/code-by-sia/x](https://github.com/code-by-sia/x).)
+[github.com/code-by-sia/xi](https://github.com/code-by-sia/xi).)
 
 Runs on **Linux** (x86_64/arm64) and **macOS** (arm64/x86_64). On **Windows**,
 use **WSL2** and follow the Linux steps, or run the toolchain in **Docker** (no
@@ -165,8 +165,8 @@ The image downloads a published release; pin one with
 Full documentation — the language guide, dependency injection & IoC, decision
 tables, interrupts, atoms, state machines, events, serialization, the standard
 library, and the compiler internals — lives in the repository at
-**[github.com/code-by-sia/x](https://github.com/code-by-sia/x)**
-(rendered at [code-by-sia.github.io/x](https://code-by-sia.github.io/x/)).
+**[github.com/code-by-sia/xi](https://github.com/code-by-sia/xi)**
+(rendered at [code-by-sia.github.io/xi](https://code-by-sia.github.io/xi/)).
 
 ## Showcase
 

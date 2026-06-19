@@ -9,7 +9,7 @@
 #   3. published releases, newest first — so an in-progress release whose asset
 #      isn't uploaded yet is skipped and the PREVIOUS release is used instead.
 #
-#   XC_BOOTSTRAP_REPO=owner/name  (default: code-by-sia/x)
+#   XC_BOOTSTRAP_REPO=owner/name  (default: code-by-sia/xi)
 #   GH_TOKEN / GITHUB_TOKEN       used for the GitHub API (avoids rate limits)
 #
 # Diagnostics go to stderr so stdout is just the binary path.
@@ -20,7 +20,7 @@ if [ -n "${XC_SEED:-}" ]; then
     echo "$XC_SEED"; exit 0
 fi
 
-REPO="${XC_BOOTSTRAP_REPO:-code-by-sia/x}"
+REPO="${XC_BOOTSTRAP_REPO:-code-by-sia/xi}"
 
 os=$(uname -s); arch=$(uname -m)
 case "$os" in

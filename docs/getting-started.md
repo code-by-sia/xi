@@ -5,14 +5,14 @@
 ### Homebrew (macOS + Linux)
 
 ```sh
-brew install code-by-sia/x/xi
+brew install code-by-sia/xi/xi
 brew upgrade xi        # later, to update
 ```
 
 ### Tarball (any supported platform)
 
 Download the toolchain for your platform from the
-**[releases page](https://github.com/code-by-sia/x/releases)**, unpack it, and put
+**[releases page](https://github.com/code-by-sia/xi/releases)**, unpack it, and put
 its `bin/` on your `PATH`:
 
 ```sh

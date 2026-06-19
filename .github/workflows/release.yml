@@ -182,14 +182,14 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           scripts/update-formula.sh "$VERSION"
 
-      - name: Push to code-by-sia/homebrew-x
+      - name: Push to code-by-sia/homebrew-xi
         if: steps.gate.outputs.go == 'true'
         env:
           TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
           VER="${GITHUB_REF_NAME#v}"
-          git clone "https://x-access-token:${TOKEN}@github.com/code-by-sia/homebrew-x.git" tap
+          git clone "https://x-access-token:${TOKEN}@github.com/code-by-sia/homebrew-xi.git" tap
           mkdir -p tap/Formula
           cp packaging/homebrew/xi.rb tap/Formula/xi.rb
           cd tap

@@ -19,7 +19,7 @@ const config = {
   favicon: 'img/logo.svg',
 
   url: 'https://code-by-sia.github.io',
-  baseUrl: '/x/',
+  baseUrl: '/xi/',
   organizationName: 'code-by-sia',
   projectName: 'x',
 
@@ -43,7 +43,7 @@ const config = {
           path: '../docs',
           routeBasePath: '/',
           sidebarPath: require.resolve('./sidebars.js'),
-          editUrl: 'https://github.com/code-by-sia/x/edit/main/',
+          editUrl: 'https://github.com/code-by-sia/xi/edit/main/',
         },
         blog: false,
         theme: {customCss: require.resolve('./src/css/custom.css')},
@@ -59,12 +59,12 @@ const config = {
         logo: {alt: 'Xi logo', src: 'img/logo.svg', srcDark: 'img/logo-white.svg'},
         items: [
           ...(xiVersion ? [{
-            href: 'https://github.com/code-by-sia/x/releases',
+            href: 'https://github.com/code-by-sia/xi/releases',
             label: `v${xiVersion}`,
             position: 'right',
             className: 'navbar-version-badge',
           }] : []),
-          {href: 'https://github.com/code-by-sia/x', label: 'GitHub', position: 'right'},
+          {href: 'https://github.com/code-by-sia/xi', label: 'GitHub', position: 'right'},
         ],
       },
       footer: {

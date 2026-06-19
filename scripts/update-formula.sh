@@ -12,7 +12,7 @@
 # for target in {macos-arm64, macos-x86_64, linux-x86_64, linux-arm64}.
 set -euo pipefail
 
-REPO="code-by-sia/x"
+REPO="code-by-sia/xi"
 TARGETS=(macos-arm64 macos-x86_64 linux-x86_64 linux-arm64)
 
 raw="${1:?usage: update-formula.sh <version> [asset-dir]}"
@@ -54,7 +54,7 @@ cat > "$OUT" <<EOF
 
 # Homebrew formula for the Ξ (Xi) programming language toolchain.
 #
-# This file is the source of truth for the \`code-by-sia/homebrew-x\` tap; the
+# This file is the source of truth for the \`code-by-sia/homebrew-xi\` tap; the
 # release workflow regenerates the version/url/sha256 lines via
 # \`scripts/update-formula.sh\` and pushes the result to the tap repo. See
 # packaging/homebrew/README.md for the one-time tap setup.

@@ -17,7 +17,7 @@ FROM debian:stable-slim
 
 # Pin a release with --build-arg XI_VERSION=vX.Y.Z; default is the latest release.
 ARG XI_VERSION=latest
-ARG XI_REPO=code-by-sia/x
+ARG XI_REPO=code-by-sia/xi
 # Docker buildx sets TARGETARCH automatically (amd64 / arm64).
 ARG TARGETARCH=amd64
 

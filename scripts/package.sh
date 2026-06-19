@@ -51,7 +51,7 @@ Install (this tarball): put bin/ on your PATH, e.g.
   xi                 # interactive REPL
 
 Or install with Homebrew (macOS + Linux):
-  brew install code-by-sia/x/xi
+  brew install code-by-sia/xi/xi
 
 Requires a C compiler (cc / clang / gcc) on PATH.
 EOF

@@ -29,7 +29,7 @@ point at the subdirectory), so no separate repository is needed.
 
    ```toml
    [grammars.x]
-   repository = "https://github.com/code-by-sia/x"
+   repository = "https://github.com/code-by-sia/xi"
    commit = "<sha from step 1>"
    path = "editors/tree-sitter-x"
    ```

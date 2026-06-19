@@ -116,7 +116,7 @@ mapper dirOf(path: String) -> String {
 // `xi update` — download the latest release bundle for this platform from GitHub
 // and replace the installed xc/xi binaries, runtime, and stdlib in place.
 consumer doUpdate(progPath: String) {
-    let repo = get_env("XI_UPDATE_REPO", "code-by-sia/x")
+    let repo = get_env("XI_UPDATE_REPO", "code-by-sia/xi")
     let root = dirOf(dirOf(progPath))          // libexec/xi -> bundle root
     let sh = "set -e\n"
     sh = sh + "REPO=\"$1\"; ROOT=\"$2\"; CUR=\"$3\"\n"
@@ -159,7 +159,7 @@ consumer doUpdate(progPath: String) {
 // print it to stdout, so it can be piped to a file or read by an AI agent.
 // Status/errors go to stderr so stdout stays pure markdown (`xi skill > SKILL.md`).
 consumer doSkill() {
-    let repo = get_env("XI_SKILL_REPO", "code-by-sia/x")
+    let repo = get_env("XI_SKILL_REPO", "code-by-sia/xi")
     let ref = get_env("XI_SKILL_REF", "main")
     let url = get_env("XI_SKILL_URL",
         "https://raw.githubusercontent.com/" + repo + "/" + ref + "/docs/skill.md")

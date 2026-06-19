@@ -17,7 +17,7 @@ slug: /
   </p>
   <p class="hero-x__cta">
     <a class="button button--primary button--lg" href="/x/getting-started">Get started →</a>
-    <a class="button button--secondary button--lg" href="https://github.com/code-by-sia/x">GitHub</a>
+    <a class="button button--secondary button--lg" href="https://github.com/code-by-sia/xi">GitHub</a>
   </p>
 </div>
 
@@ -31,11 +31,11 @@ Xi — [install the toolchain](getting-started.md) and go.
 On macOS (Apple Silicon + Intel) and Linux, install with **Homebrew**:
 
 ```sh
-brew install code-by-sia/x/xi
+brew install code-by-sia/xi/xi
 ```
 
 Or grab a prebuilt tarball from the
-[releases page](https://github.com/code-by-sia/x/releases) and put its `bin/` on
+[releases page](https://github.com/code-by-sia/xi/releases) and put its `bin/` on
 your `PATH`. Either way you get `xc` (compiler) and `xi` (run tool + REPL); you
 just need a C compiler (`cc`) on `PATH`. Full steps:
 [Getting started](getting-started.md).

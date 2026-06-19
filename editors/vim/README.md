@@ -31,10 +31,10 @@ Point the manager at this repo (the plugin lives in `editors/vim`).
 
 ```vim
 " vim-plug
-Plug 'code-by-sia/x', { 'rtp': 'editors/vim' }
+Plug 'code-by-sia/xi', { 'rtp': 'editors/vim' }
 
 " lazy.nvim
-{ "code-by-sia/x", config = function() end }   -- then add editors/vim to runtimepath
+{ "code-by-sia/xi", config = function() end }   -- then add editors/vim to runtimepath
 ```
 
 Or symlink for local development:
