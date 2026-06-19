@@ -282,4 +282,4 @@ for k in ages.keys() {
 The containers (`List`/`Set`/`Map`), the eager functional API, lazy sequences,
 `Pair<A, B>`, and `zip`/`partition`/`unzip` are all in. The one remaining proposal
 item is infinite sequence sources (`generateSequence`), which needs first-class
-closures — see the [collections proposal](proposals/collections.md).
+closures — see the [closures & generics proposal](proposals/closures.md).
