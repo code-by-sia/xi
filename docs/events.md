@@ -158,9 +158,28 @@ language's general primitive-array-in-struct support; `String[]` and arrays of
 
 - `Events.run()` delivers **synchronously** on the calling thread;
   `Events.runAsync()` delivers on a background worker thread (the queue is
-  thread-safe). Either way, run the pump to drain the queue.
-- A listener receives the DTO only (not the topic string).
-- The codec encodes `String[]` and arrays of `event` types; arrays of primitive
-  numbers/bools await general primitive-array-in-struct support.
+  thread-safe). Either way, run the pump to drain the queue. Richer policies
+  (batching, retries, dead-letters) layer on as a custom `ConsumerService`.
+- The codec encodes `String[]`, arrays of `event` types, **and** primitive
+  `Integer[]`/`Number[]`/`Bool[]` payload fields.
+
+### Advanced / not built-in
+
+These are deliberate boundaries of the current model, with the practical
+work-around noted; none block normal use:
+
+- **The firing topic inside a listener.** A `listener (e: T) on "orders.paid"` is
+  bound to one topic, which it already knows statically, so it receives just the
+  typed DTO. *One* listener spanning *several* topics (wildcards) that needs to
+  know which fired isn't built — use a listener per topic, or carry the topic as a
+  field on the DTO.
+- **Wire schema / version negotiation.** External transports serialize by the
+  event's **type name**, so producer and consumer must agree on the shape. To
+  evolve an event across versions, version the type itself (a `version` field, or
+  a new event type) — there's no automatic cross-version negotiation.
+- **Multiple external buses at once.** A program binds **one** transport
+  (`PublisherService`/`ConsumerService`); routing different topics to different
+  external buses isn't expressible directly — implement a fan-out transport that
+  dispatches per topic.
 
 See `examples/typed_event_demo.xi`.
