@@ -387,6 +387,14 @@ extern "C" {
 
 // ── Parsing helpers ────────────────────────────────────────────────
 
+// A binary/prefix operator that still needs a right operand — used to let a
+// machine `where` guard continue onto the next line when it ends mid-expression.
+predicate expectsOperand(k: Integer) {
+    if k == 225 or k == 226 or k == 227 { return true }   // and / or / not
+    if k >= 112 and k <= 122 { return true }              // == != < > <= >= + - * / %
+    return false
+}
+
 // Parse a function kind keyword and return the kind string
 type KindResult = { kind: String, ps: PState, ok: Bool }
 
@@ -1786,18 +1794,41 @@ mapper parseMachine(ps: PState) -> MachineResult {
                 if peek(ps2).kind == 109 { ps2 = advance(ps2) }   // ->
                 let toState = peek(ps2).text
                 ps2 = advance(ps2)
-                // optional `where <guard>` (collected to the end of its line)
+                // optional `where <guard>` — spans lines while inside parens or
+                // after an operator that still expects an operand, so a guard can
+                // wrap naturally; ends at `update`, `}`, EOF, or a line break at a
+                // complete point (the next transition).
                 let hasGuard = false
                 let guardTokens: Token[] = []
                 if peek(ps2).kind == 242 {
                     hasGuard = true
-                    let wline = peek(ps2).line
                     ps2 = advance(ps2)
                     let gc = true
+                    let depth = 0
                     while gc {
                         let gt = peek(ps2)
-                        if gt.kind == 0 or gt.kind == 103 or gt.line != wline or gt.text == "update" { gc = false }
-                        else { guardTokens = appendToken(guardTokens, gt) ps2 = advance(ps2) }
+                        if gt.kind == 0 or gt.kind == 103 or gt.text == "update" {
+                            gc = false
+                        } else {
+                            guardTokens = appendToken(guardTokens, gt)
+                            if gt.kind == 100 { depth = depth + 1 }
+                            if gt.kind == 101 { depth = depth - 1 }
+                            ps2 = advance(ps2)
+                            let nx = peek(ps2)
+                            if nx.kind == 0 or nx.kind == 103 or nx.text == "update" {
+                                gc = false
+                            } else {
+                                // Stop at a line break only when the expression is
+                                // complete: not inside parens, and neither the line's
+                                // last token nor the next line's first token is an
+                                // operator awaiting an operand (so `a\n and b` and
+                                // `a and\n b` both continue; a new transition, which
+                                // starts with an identifier, stops).
+                                if nx.line != gt.line and depth <= 0 and not expectsOperand(gt.kind) and not expectsOperand(nx.kind) {
+                                    gc = false
+                                }
+                            }
+                        }
                     }
                 }
                 // optional `update { f: expr, ... }`

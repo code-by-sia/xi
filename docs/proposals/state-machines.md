@@ -34,8 +34,10 @@
   reports unknown state references (error) and unreachable / dead-end states
   (warning) for every machine. Guard *exhaustiveness* analysis is still open.
 
-- **Multi-line guards.** A transition `where` guard is collected to the end of its
-  line; a guard spanning several lines isn't supported (use a helper predicate).
+- ~~**Multi-line guards.**~~ **Done.** A transition `where` guard now spans lines
+  while inside parens or where an operator still expects an operand, so both
+  `where a\n      and b` and `where (a\n      and b)` work; it ends at `update`,
+  the machine's `}`, or a line break at a complete point (the next transition).
 
 - ~~**Primitive arrays in `state`/`data`.**~~ **Done.** Fields typed `Integer[]`,
   `Number[]`, `Bool[]` work in `data` (and `state`), including an empty `[]`
