@@ -122,3 +122,30 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Full ownership / borrow checking | ✗ (relies on C; planned) |
 | LLVM backend | ✗ (uses C as the intermediate) |
 | Result-of-array `T[]!` | ✗ (use `T[]`; codegen limitation) |
+
+## Memory management
+
+The strategy follows the three commitments — **fast, least-dependency, easy** —
+so there is **no tracing GC** (it would add a runtime and unpredictable pauses).
+Instead:
+
+- **Default: allocate-and-leak.** Heap values are `malloc`'d and reclaimed on
+  process exit. This is optimal for the common case — CLIs and the compiler itself
+  run once and exit — with zero bookkeeping.
+- **Arenas reclaim regions** where leaking would hurt (long-running programs).
+  A region's allocations are freed in one shot when it ends:
+  - **per-thread** — a spawned thread frees everything it allocated on exit;
+  - **per-request** — `web.serve` frees each request after the response is sent;
+  - **`scope { … }`** — an explicit, user-marked region (e.g. a loop body).
+  The one rule (same as threads): a value must not **escape** its region — copy
+  out anything that has to outlive it.
+- **Enforced purity** (`mapper`/`predicate`/`projector` may not do I/O or call
+  effectful functions) is what lets the compiler treat a pure function's arguments
+  as **borrowed** — no copy, no reference-count traffic — soundly.
+- **ARC is designed and deferred.** An opt-in reference-count runtime exists
+  (`-DXC_ARC`), but full automatic reclamation needs a per-expression ownership IR
+  and only adds value over arenas for mid-computation escapes — a disproportionate
+  effort, so it's not the default. Tracing GC is rejected outright.
+
+See [Atoms](docs/atoms.md), [Threading](docs/threading.md), and the language
+guide's note on effect kinds for the user-facing surface.

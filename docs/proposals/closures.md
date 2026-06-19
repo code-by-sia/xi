@@ -39,8 +39,7 @@ A closure lowers to an env struct (captured values) + a function pointer — the
 same shape the `parallel { }` block already lifts to; **no new runtime**. Capture
 is **by value** (matches Ξ's value semantics, stays share-nothing-friendly). A
 closure passed to a *fused* sequence never escapes → **zero allocation**; an
-escaping one is reclaimed by the arena/`scope` model (see the memory-management
-notes).
+escaping one is reclaimed by the arena/`scope` model.
 
 ## What this unblocks
 

@@ -125,8 +125,7 @@ consumer log(msg: String) { system.stdout.writeln(msg) }
 > side effect, give it an effectful kind — usually `producer` (effect + returns a
 > value) or `consumer`/`action`. This isn't bookkeeping for its own sake: the
 > guarantee is what lets the compiler treat a pure function's arguments as
-> borrowed (no copy, no reference-count traffic). See the
-> [memory-management plan](proposals/memory-management.md). Calls into
+> borrowed (no copy, no reference-count traffic). Calls into
 > `extern "C"` functions are trusted at their declared kind, and calling a
 > `producer`/`creator` from a pure function is allowed (constructing or producing
 > a value is not a side effect on the caller's inputs).
