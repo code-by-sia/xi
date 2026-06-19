@@ -956,6 +956,7 @@ mapper builtinForPath(path: String) -> String {
 
 // X type name -> C element type
 mapper xnameToCtype(xname: String) -> String {
+    if isPairXType(xname) { return "xc_pair_t" }
     match xname {
         "String"  -> "xc_string_t"
         "Number"  -> "xc_number_t"
@@ -966,6 +967,39 @@ mapper xnameToCtype(xname: String) -> String {
         "cstring" -> "const char*"
         _         -> "xc_" + xname + "_t"
     }
+}
+
+// ── Pair<A,B> xtype encoding ──────────────────────────────────────────────────
+// "Pair(" + aXtype + ")(" + bXtype + ")". Balanced parens let nested element
+// types (e.g. Pair<List_integer, List_integer> from partition/unzip) parse
+// unambiguously; the C representation is always the uniform xc_pair_t.
+predicate isPairXType(t: String) { return startsWith2(t, "Pair(") }
+mapper pairXtype(a: String, b: String) -> String => "Pair(" + a + ")(" + b + ")"
+
+// Content of the `which`-th (0|1) balanced-paren group in a Pair xtype.
+mapper pairElem(t: String, which: Integer) -> String {
+    let n = string_len(t)
+    let i = 0
+    let group = 0
+    while i < n {
+        if string_char_at(t, i) == 40 {          // '(' opens a group
+            let depth = 1
+            let start = i + 1
+            let j = start
+            while j < n and depth > 0 {
+                let c = string_char_at(t, j)
+                if c == 40 { depth = depth + 1 }
+                if c == 41 { depth = depth - 1 }
+                if depth > 0 { j = j + 1 }
+            }
+            if group == which { return string_slice(t, start, j) }
+            group = group + 1
+            i = j + 1
+        } else {
+            i = i + 1
+        }
+    }
+    return ""
 }
 
 // X type name -> array typedef suffix
@@ -1335,7 +1369,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         return ExprRes { code: "({ " + body + "_s; })", pos: p, xtyp: "Set_" + arrSuffixOf(first.xtyp) , owned: false }
     }
     if k == 1 and txt == "mapOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
-        let k1 = genExpr(toks, pos + 2, ctx)
+        let k1 = genAnd(toks, pos + 2, ctx)   // genAnd, not genExpr, so the `to` stays for us
         let kc = xnameToCtype(k1.xtyp)
         let q = k1.pos
         if gkind(toks, q) == 1 and gtext(toks, q) == "to" { q = q + 1 }   // `k to v`
@@ -1345,7 +1379,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                  + "xstd_map_put(_m, (" + kc + "[]){ " + k1.code + " }, (" + vc + "[]){ " + v1.code + " }); "
         let p = v1.pos
         while gkind(toks, p) == 106 {
-            let kk = genExpr(toks, p + 1, ctx)
+            let kk = genAnd(toks, p + 1, ctx)   // genAnd so `to` stays for us
             let qq = kk.pos
             if gkind(toks, qq) == 1 and gtext(toks, qq) == "to" { qq = qq + 1 }
             let vv = genExpr(toks, qq, ctx)
@@ -2350,6 +2384,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = code + ".data"
                         typ = "ptr:" + xnameFromArrSuffix(string_slice(typ, 4, string_len(typ)))
                     } else {
+                        if isPairXType(typ) and (fld == "first" or fld == "second") {
+                            // Pair<A,B>.first / .second — cast the stored value back to A/B.
+                            let pex = pairElem(typ, 0)
+                            if fld == "second" { pex = pairElem(typ, 1) }
+                            code = "(*(" + xnameToCtype(pex) + "*)((" + code + ")." + fld + "))"
+                            typ = pex
+                        } else {
                         if typ == "String" and fld == "length" {
                             // string `.length` -> runtime length
                             code = "xstd_strlen(" + code + ")"
@@ -2358,6 +2399,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                             let ft = fieldTypeNameC(ctx.prog, typ, fld)
                             code = code + "." + fld
                             typ = ft
+                        }
                         }
                     }
                 }
@@ -2651,6 +2693,17 @@ mapper genExpr(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         } else {
             cont = false
         }
+    }
+    // `a to b` — build a Pair<A,B> (low precedence, right of `||`). Bind both
+    // sides to addressable temporaries (works for struct and scalar types alike).
+    if gkind(toks, p) == 1 and gtext(toks, p) == "to" {
+        let right = genExpr(toks, p + 1, ctx)
+        let lc = xnameToCtype(typ)
+        let rc = xnameToCtype(right.xtyp)
+        let u = int_to_string(p)
+        let pcode = "({ " + lc + " _pa" + u + " = " + code + "; " + rc + " _pb" + u + " = " + right.code
+                  + "; xc_pair_make(&_pa" + u + ", sizeof(" + lc + "), &_pb" + u + ", sizeof(" + rc + ")); })"
+        return ExprRes { code: pcode, pos: right.pos, xtyp: pairXtype(typ, right.xtyp), owned: true }
     }
     return ExprRes { code: code, pos: p, xtyp: typ , owned: false }
 }

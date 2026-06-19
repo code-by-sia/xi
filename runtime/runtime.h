@@ -82,6 +82,17 @@ static inline xc_string_t xc_heap_strdup(const char* s) {
     return (xc_string_t){ .data = b, .len = n };
 }
 
+/* Pair<A,B> — a runtime-generic 2-tuple. Both members are stored by value behind
+   arena-aware pointers (so any A/B work without a monomorphized struct); the
+   compiler tracks the concrete A/B types and casts `.first`/`.second` back. Used
+   by `a to b`, zip/unzip, and partition. */
+typedef struct { void* first; void* second; } xc_pair_t;
+static inline xc_pair_t xc_pair_make(const void* a, xc_size_t as, const void* b, xc_size_t bs) {
+    void* fa = xc_heap_alloc(as); memcpy(fa, a, as);
+    void* fb = xc_heap_alloc(bs); memcpy(fb, b, bs);
+    return (xc_pair_t){ .first = fa, .second = fb };
+}
+
 static inline xc_string_t xc_string_from_cstr(const char* s) {
     return (xc_string_t){ .data = s, .len = s ? strlen(s) : 0 };
 }
