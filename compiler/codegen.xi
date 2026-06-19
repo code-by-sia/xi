@@ -2506,6 +2506,7 @@ mapper genAdd(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let code = left.code
     let typ = left.xtyp
     let p = left.pos
+    let resOwned = left.owned     // ARC: a concat result is freshly owned
     let cont = true
     while cont {
         let k = gkind(toks, p)
@@ -2514,8 +2515,10 @@ mapper genAdd(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             if typ == "String" or right.xtyp == "String" {
                 code = "xc_string_concat(" + toStrC(code, typ) + ", " + toStrC(right.code, right.xtyp) + ")"
                 typ = "String"
+                resOwned = true
             } else {
                 code = "(" + code + " + " + right.code + ")"
+                resOwned = false
             }
             p = right.pos
         } else {
@@ -2523,13 +2526,14 @@ mapper genAdd(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 let right = genMul(toks, p + 1, ctx)
                 code = "(" + code + " - " + right.code + ")"
                 typ = "Number"
+                resOwned = false
                 p = right.pos
             } else {
                 cont = false
             }
         }
     }
-    return ExprRes { code: code, pos: p, xtyp: typ , owned: false }
+    return ExprRes { code: code, pos: p, xtyp: typ , owned: resOwned }
 }
 
 // ── integer ranges:  a..b (inclusive) / a until b / a downTo b / ... step n ──
