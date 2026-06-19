@@ -569,7 +569,7 @@ producer installAll() -> Integer {
 }
 
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
-mapper xcVersion() -> String { return "0.0.76" }
+mapper xcVersion() -> String { return "0.0.77" }
 
 // Compile one source file (resolving imports + module source sets) to a native
 // binary. Returns 0 on success.
