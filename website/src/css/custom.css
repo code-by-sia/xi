@@ -59,3 +59,20 @@
   .hero-x__title { font-size: 2rem; }
   .hero-x__tagline { font-size: 1.05rem; }
 }
+
+/* Version badge in the navbar (label comes from compiler/driver.xi at build). */
+.navbar-version-badge {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+  margin-right: 0.25rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  color: var(--ifm-color-emphasis-700);
+}
+.navbar-version-badge:hover {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}

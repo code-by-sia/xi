@@ -1,5 +1,16 @@
 // @ts-check
 const {themes} = require('prism-react-renderer');
+const fs = require('fs');
+const path = require('path');
+
+// Single source of truth for the language version: the compiler's xcVersion().
+// Read at build time so the navbar badge tracks releases with no extra bump.
+let xiVersion = '';
+try {
+  const drv = fs.readFileSync(path.join(__dirname, '../compiler/driver.xi'), 'utf8');
+  const m = drv.match(/xcVersion\(\)\s*->\s*String\s*\{\s*return\s*"([^"]+)"/);
+  if (m) xiVersion = m[1];
+} catch (e) { /* leave blank if unreadable */ }
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -47,6 +58,12 @@ const config = {
         title: 'The Ξ Programming Language',
         logo: {alt: 'Xi logo', src: 'img/logo.svg', srcDark: 'img/logo-white.svg'},
         items: [
+          ...(xiVersion ? [{
+            href: 'https://github.com/code-by-sia/x/releases',
+            label: `v${xiVersion}`,
+            position: 'right',
+            className: 'navbar-version-badge',
+          }] : []),
           {href: 'https://github.com/code-by-sia/x', label: 'GitHub', position: 'right'},
         ],
       },
