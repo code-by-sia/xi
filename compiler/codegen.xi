@@ -1503,6 +1503,9 @@ predicate isListFunc(fld: String) {
     if fld == "map"      { return true }
     if fld == "filter"   { return true }
     if fld == "filterNot"{ return true }
+    if fld == "partition"{ return true }
+    if fld == "zip"      { return true }
+    if fld == "unzip"    { return true }
     if fld == "forEach"  { return true }
     if fld == "fold"     { return true }
     if fld == "reduce"   { return true }
@@ -1818,6 +1821,36 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         return ExprRes { code: code, pos: q, xtyp: "List_List_" + suf , owned: false }
     }
 
+    if fld == "zip" {
+        // zip(ys): List<A> x List<B> -> List<Pair<A,B>>, truncated to the shorter.
+        let bX = listElemXName(argX)
+        let bC = xnameToCtype(bX)
+        let pX = pairXtype(elemX, bX)
+        let ys = "_ys" + u
+        let nn = "_n" + u
+        let code = "({ " + declSv + "xc_List_t " + ys + " = (" + argCode + ");\n"
+                 + "      xc_List_t " + rv + " = xstd_list_new(sizeof(xc_pair_t));\n"
+                 + "      xc_integer_t " + nn + " = xstd_list_len(" + sv + "); xc_integer_t _m" + u + " = xstd_list_len(" + ys + "); if (_m" + u + " < " + nn + ") " + nn + " = _m" + u + ";\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < " + nn + "; " + iv + " = " + iv + " + 1) {\n"
+                 + "        xc_pair_t _pp" + u + " = xc_pair_make(xstd_list_at(" + sv + ", " + iv + "), sizeof(" + elem + "), xstd_list_at(" + ys + ", " + iv + "), sizeof(" + bC + "));\n"
+                 + "        xstd_list_push(" + rv + ", &_pp" + u + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "List_" + arrSuffixOf(pX) , owned: false }
+    }
+    if fld == "unzip" {
+        // unzip: List<Pair<A,B>> -> Pair<List<A>, List<B>>.
+        let aX = pairElem(elemX, 0)
+        let bX = pairElem(elemX, 1)
+        let aC = xnameToCtype(aX)
+        let bC = xnameToCtype(bX)
+        let la = "_la" + u
+        let lb = "_lb" + u
+        let code = "({ " + declSv + "xc_List_t " + la + " = xstd_list_new(sizeof(" + aC + ")); xc_List_t " + lb + " = xstd_list_new(sizeof(" + bC + "));\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                 + "        xc_pair_t* _pp" + u + " = (xc_pair_t*)xstd_list_at(" + sv + ", " + iv + "); xstd_list_push(" + la + ", _pp" + u + "->first); xstd_list_push(" + lb + ", _pp" + u + "->second); }\n"
+                 + "      xc_pair_make(&" + la + ", sizeof(xc_List_t), &" + lb + ", sizeof(xc_List_t)); })"
+        return ExprRes { code: code, pos: q, xtyp: pairXtype("List_" + arrSuffixOf(aX), "List_" + arrSuffixOf(bX)) , owned: true }
+    }
+
     // ── lambda methods:  { [params =>] body } ──
     let close = matchBrace(toks, q)
     let arrow = lambdaArrow(toks, q + 1, close)
@@ -1889,6 +1922,15 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n      " + loopOpen
                  + "        if (!(" + body.code + ")) xstd_list_push(" + rv + ", &" + p0 + "); } " + rv + "; })"
         return ExprRes { code: code, pos: close + 1, xtyp: typ , owned: false }
+    }
+    if fld == "partition" {
+        // partition { pred }: List<T> -> Pair<List<T> matching, List<T> not>.
+        let yes = "_yes" + u
+        let no = "_no" + u
+        let code = "({ " + declSv + "xc_List_t " + yes + " = xstd_list_new(sizeof(" + elem + ")); xc_List_t " + no + " = xstd_list_new(sizeof(" + elem + "));\n      " + loopOpen
+                 + "        if ((" + body.code + ")) xstd_list_push(" + yes + ", &" + p0 + "); else xstd_list_push(" + no + ", &" + p0 + "); }\n"
+                 + "      xc_pair_make(&" + yes + ", sizeof(xc_List_t), &" + no + ", sizeof(xc_List_t)); })"
+        return ExprRes { code: code, pos: close + 1, xtyp: pairXtype(typ, typ) , owned: true }
     }
     if fld == "forEach" {
         let code = "({ " + declSv + loopOpen + "        (void)(" + body.code + "); } (void)0; })"
