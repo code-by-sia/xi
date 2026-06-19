@@ -157,6 +157,40 @@ nums.asSequence().take(3).sum()      // visits only the first 3 elements
 They chain naturally — `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.
 See `examples/functional_demo.xi`.
 
+## Pairs — `Pair<A, B>`
+
+A two-value tuple. Build one with the `to` infix; read the members with `.first`
+and `.second`. `A` and `B` can be any types (including lists or other pairs).
+
+```x
+let p = "ada" to 36          // Pair<String, Integer>
+p.first                      // "ada"
+p.second                     // 36
+```
+
+Three `List` operations produce or consume pairs:
+
+```x
+names.zip(ages)              // List<Pair<String, Integer>> (truncated to the shorter)
+nums.partition { it > 0 }    // Pair<List<Integer> matching, List<Integer> not>
+pairs.unzip                  // Pair<List<A>, List<B>> — splits a list of pairs back
+```
+
+```x
+let pairs = listOf("ada", "bo").zip(listOf(36, 28))
+for p in pairs { print(p.first + " is " + int_to_string(p.second)) }
+
+let parts = listOf(1, 2, 3, 4).partition { it % 2 == 0 }
+parts.first.len()            // 2  (evens)
+parts.second.len()           // 2  (odds)
+
+let cols = pairs.unzip
+cols.first                   // List<String>  ["ada", "bo"]
+cols.second                  // List<Integer> [36, 28]
+```
+
+See `examples/pairs_demo.xi`.
+
 ## `Set<T>`
 
 `Set<T>` is a hash set of **unique** elements — also a built-in generic, created
@@ -245,8 +279,7 @@ for k in ages.keys() {
 
 ## What's next
 
-The containers (`List`/`Set`/`Map`), the eager functional API, and lazy
-sequences are all in. Remaining proposal items are `zip` / `partition` (they
-need a `Pair`/tuple type) and infinite sequence sources (`generateSequence`,
-which needs first-class closures) — see the
-[collections proposal](proposals/collections.md).
+The containers (`List`/`Set`/`Map`), the eager functional API, lazy sequences,
+`Pair<A, B>`, and `zip`/`partition`/`unzip` are all in. The one remaining proposal
+item is infinite sequence sources (`generateSequence`), which needs first-class
+closures — see the [collections proposal](proposals/collections.md).
