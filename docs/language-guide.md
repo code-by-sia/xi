@@ -317,6 +317,13 @@ for i in 0..100 step 10 { ... }          // custom stride
 
 while cond { ... }
 
+loop { ... }                             // forever; exit with `break` or `return`
+
+for x in items {
+    if skip(x) { continue }              // next iteration
+    if done(x) { break }                 // leave the loop
+}
+
 match status {
     200 -> { return "ok" }
     404 -> { return "missing" }
@@ -338,6 +345,24 @@ match code {
 ```
 
 (An inline arm is bounded to its line; use a `{ block }` for multi-line bodies.)
+
+### Scopes and `unsafe`
+
+```x
+scope {
+    let tmp = build()        // everything allocated here is freed when the
+    use(tmp)                 // block ends — keeps long-running loops flat
+}
+
+unsafe {
+    // escape hatch for low-level/FFI code the normal rules would reject
+}
+```
+
+A `scope { }` block is a memory **region**: its allocations are reclaimed at the
+end of the block (don't let a value escape it). See
+[Memory management](memory.md). An `unsafe { }` block relaxes Xi's safety checks
+for interop-heavy code — see [C interop](ffi.md).
 
 See [Error handling](error-handling.md) for `T!`, `?`, `ok`/`err`, and
 [Multi-file projects](multi-file.md) for `import`/`namespace`.

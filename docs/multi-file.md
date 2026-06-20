@@ -83,7 +83,7 @@ $ xc app.xi && ./build/app
 `import` merges all the parts into one compilation unit (recursively, with
 duplicates resolved once), so you compile just the entry file.
 
-## Module source sets (`includes` / `excludes`)
+## Module source sets (`includes` / `excludes`) {#module-source-sets-includes-excludes}
 
 Instead of listing every `import`, a `module` can declare which files belong to
 it with `includes` / `excludes` globs. When set, `xc <entry.xi>` gathers every

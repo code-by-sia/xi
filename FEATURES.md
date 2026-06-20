@@ -150,5 +150,5 @@ Instead:
   and only adds value over arenas for mid-computation escapes — a disproportionate
   effort, so it's not the default. Tracing GC is rejected outright.
 
-See [Atoms](docs/atoms.md), [Threading](docs/threading.md), and the language
-guide's note on effect kinds for the user-facing surface.
+See **[Memory management](docs/memory.md)** for the full user-facing guide (and
+[Threading](docs/threading.md) for the per-thread arena).
