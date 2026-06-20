@@ -55,12 +55,40 @@ escaping one is reclaimed by the arena/`scope` model.
   on the same zero-cost basis as `T[]`.
 - **Typed events/channels** without the JSON round-trip.
 
-## Phasing
+## Build plan & status
 
-1. **Generics (monomorphization)** — the foundation; also benefits events/channels.
-2. **Closures / lambdas** (`=>` and trailing `{ it }`), capture-by-value.
-3. **`generateSequence`** and first-class functional operators on top.
-4. Extra generic structures (`ArrayDeque`, `PriorityQueue`, ordered maps) on demand.
+First-class closures are a coherent, multi-step codegen subsystem. The steps,
+with the design fixed (mirroring how `Pair` and `parallel {}` already work):
+
+0. **Runtime + type encoding — DONE.** `xc_fn_t { void* fn; void* env; }` (a code
+   pointer + captured-env pointer) and the `Fn(<params>)(<ret>)` xtype encoding
+   (balanced-paren, like `Pair`), with `xnameToCtype(Fn…) = xc_fn_t`. Additive;
+   self-host byte-identical.
+1. **Lambda expression** `(p: T, …) => expr` in `genPrimary` → emit an `xc_fn_t`
+   value `{ .fn = __lam_<id>, .env = <heap env> }`, xtype `Fn(…)(…)`.
+2. **Lambda hoist pass** (mirror `hoistParallel`): for each lambda, emit a
+   top-level `static R __lam_<id>(void* env, params…)` plus an env struct; wire
+   into `genAll` like `hoistParallel`. Keyed by token position so the call site
+   names the same helper.
+3. **Capture analysis:** scan the lambda body for identifiers that are outer
+   locals/params (in scope, not lambda params) and copy them **by value** into the
+   env struct (`NULL` env when capture-free).
+4. **Call-through:** `f(args)` where `f` is `Fn(P…)(R)` → cast `f.fn` to
+   `R(*)(void*, P…)` and invoke `f.fn(f.env, args…)`; result xtype = `R`.
+5. **Function types in signatures** — `parseTypeExpr` parses `(T, …) -> U`.
+6. **The blocker for higher-order functions:** a function-typed *parameter*
+   currently derives its xtype from its ctype (`addParamSym` → `ctypeToXName`),
+   which collapses every `Fn(…)` to the uniform `xc_fn_t` and **loses the
+   signature** needed to call it. So params must carry the full xtype alongside
+   the ctype (a small but cross-cutting change to the param channel). Until then,
+   only *local* closures (bound + called in the same function) work; passing
+   lambdas across function boundaries — the point of higher-order functions —
+   needs this step. **This is why the feature is multi-session, not one-pass.**
+
+**Generics (monomorphization)** is a separate large feature (generalize the
+`T[]` per-element specialization to user types/functions, with inferred type
+args and interface bounds). It is *not* required for closures and is tracked here
+as the second half of the proposal.
 
 ## Why this fits the philosophy
 

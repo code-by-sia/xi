@@ -93,6 +93,13 @@ static inline xc_pair_t xc_pair_make(const void* a, xc_size_t as, const void* b,
     return (xc_pair_t){ .first = fa, .second = fb };
 }
 
+/* Closure value (first-class function): a code pointer plus a captured-environment
+   pointer. A lambda lowers to a top-level `fn(void* env, params…)` and a heap env
+   struct of by-value captures; the call site casts `fn` to the concrete signature
+   recovered from the value's Fn(...) xtype and invokes `fn(env, args…)`. `env` is
+   NULL for a capture-free lambda. (Foundation for the closures proposal.) */
+typedef struct { void* fn; void* env; } xc_fn_t;
+
 static inline xc_string_t xc_string_from_cstr(const char* s) {
     return (xc_string_t){ .data = s, .len = s ? strlen(s) : 0 };
 }

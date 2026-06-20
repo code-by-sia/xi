@@ -957,6 +957,7 @@ mapper builtinForPath(path: String) -> String {
 // X type name -> C element type
 mapper xnameToCtype(xname: String) -> String {
     if isPairXType(xname) { return "xc_pair_t" }
+    if isFnXType(xname) { return "xc_fn_t" }
     match xname {
         "String"  -> "xc_string_t"
         "Number"  -> "xc_number_t"
@@ -975,6 +976,14 @@ mapper xnameToCtype(xname: String) -> String {
 // unambiguously; the C representation is always the uniform xc_pair_t.
 predicate isPairXType(t: String) { return startsWith2(t, "Pair(") }
 mapper pairXtype(a: String, b: String) -> String => "Pair(" + a + ")(" + b + ")"
+
+// Closure type encoding: "Fn(" + csv-of-param-xtypes + ")(" + ret-xtype + ")".
+// Balanced parens (group 0 = params, group 1 = return) reuse the Pair extractor,
+// so nested function/Pair types parse unambiguously; the C type is always xc_fn_t.
+predicate isFnXType(t: String) { return startsWith2(t, "Fn(") }
+mapper fnXtype(paramsCsv: String, ret: String) -> String => "Fn(" + paramsCsv + ")(" + ret + ")"
+mapper fnParamsX(t: String) -> String => pairElem(t, 0)
+mapper fnRetX(t: String) -> String => pairElem(t, 1)
 
 // Content of the `which`-th (0|1) balanced-paren group in a Pair xtype.
 mapper pairElem(t: String, which: Integer) -> String {
