@@ -166,6 +166,8 @@ mapper depTypeOf(ctx: GCtx, name: String) -> String {
 
 // ── name/type predicates over the program ─────────────────────────
 mapper ctypeToXName(ctype: String) -> String {
+    if isFnXType(ctype) { return ctype }    // Fn(...)/Pair(...) carry their own
+    if isPairXType(ctype) { return ctype }  // signature; they're already xtypes
     match ctype {
         "xc_string_t"  -> "String"
         "xc_number_t"  -> "Number"
@@ -1285,6 +1287,84 @@ mapper genVariantLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     , owned: false }
 }
 
+// ── first-class closures: lambdas `(p: T, …) => expr` ─────────────────────────
+// A lambda lowers to a top-level `static R xc_lam_<tag>_<pos>(void* env, params…)`
+// (emitted by hoistLambdas, keyed by token position so the value site names the
+// same helper) and an xc_fn_t value { fn, env }. v1: capture-free (the body sees
+// only the params) with single-token param types; call via the Fn(...) xtype.
+type LamParams = { cparams: String, pctypes: String, bodyStart: Integer, ctx: GCtx }
+
+// `pos` at the lambda's '(' — is it `( … ) =>` (a lambda) rather than a grouped
+// expression?
+predicate isLambdaAt(toks: Token[], pos: Integer) {
+    if gkind(toks, pos) != 100 { return false }
+    let n = tokenArrLen(toks)
+    let rp = pos + 1
+    let pd = 1
+    while rp < n and pd > 0 {
+        let kk = gkind(toks, rp)
+        if kk == 100 { pd = pd + 1 }
+        if kk == 101 { pd = pd - 1 }
+        if pd > 0 { rp = rp + 1 }
+    }
+    return gkind(toks, rp + 1) == 110   // '=>' after the matching ')'
+}
+
+mapper parseLamParams(toks: Token[], pos: Integer, prog: Program) -> LamParams {
+    let p = pos + 1                        // past '('
+    let cparams = ""
+    let pctypes = ""
+    let pctx = mkGCtx(prog)
+    let first = true
+    while gkind(toks, p) != 101 and gkind(toks, p) != 0 {
+        if gkind(toks, p) == 106 { p = p + 1 }    // ,
+        let nm = gtext(toks, p)
+        p = p + 1
+        if gkind(toks, p) == 108 { p = p + 1 }    // :
+        let pc = typeCtypeOf(toks, p)
+        p = p + 1                                  // single-token param type
+        if not first { cparams = cparams + ", "  pctypes = pctypes + "," }
+        cparams = cparams + pc + " " + nm
+        pctypes = pctypes + pc
+        pctx = addSym(pctx, nm, ctypeToXName(pc))
+        first = false
+    }
+    let bs = p
+    if gkind(toks, bs) == 101 { bs = bs + 1 }      // ')'
+    if gkind(toks, bs) == 110 { bs = bs + 1 }      // '=>'
+    return LamParams { cparams: cparams, pctypes: pctypes, bodyStart: bs, ctx: pctx }
+}
+
+mapper genLambda(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let lp = parseLamParams(toks, pos, ctx.prog)
+    let body = genExpr(toks, lp.bodyStart, lp.ctx)
+    let retC = xnameToCtype(body.xtyp)
+    let id = "xc_lam_" + ctx.fnTag + "_" + int_to_string(pos)
+    let fnX = "Fn(" + lp.pctypes + ")(" + retC + ")"
+    return ExprRes { code: "(xc_fn_t){ (void*)" + id + ", (void*)0 }", pos: body.pos, xtyp: fnX , owned: false }
+}
+
+// Emit a top-level C function for every lambda in `toks` (mirrors hoistParallel).
+mapper hoistLambdas(prog: Program, toks: Token[], tag: String) -> String {
+    let out = ""
+    let n = tokenArrLen(toks)
+    let i = 0
+    while i < n {
+        if isLambdaAt(toks, i) {
+            let lp = parseLamParams(toks, i, prog)
+            let body = genExpr(toks, lp.bodyStart, lp.ctx)
+            let retC = xnameToCtype(body.xtyp)
+            let id = "xc_lam_" + tag + "_" + int_to_string(i)
+            let sig = "void* __env"
+            if string_len(lp.cparams) > 0 { sig = sig + ", " + lp.cparams }
+            out = out + "static " + retC + " " + id + "(" + sig + ") {\n"
+                      + "    (void)__env;\n    return (" + body.code + ");\n}\n"
+        }
+        i = i + 1
+    }
+    return out
+}
+
 // ── primary ───────────────────────────────────────────────────────
 mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let k = gkind(toks, pos)
@@ -1443,6 +1523,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     if k == 243 { return ExprRes { code: "value", pos: pos + 1, xtyp: lookupVar(ctx, "value") , owned: false } }
     if k == 238 { return ExprRes { code: "self", pos: pos + 1, xtyp: "self" , owned: false } }
     if k == 100 {
+        if isLambdaAt(toks, pos) { return genLambda(toks, pos, ctx) }
         let inner = genExpr(toks, pos + 1, ctx)
         let p2 = inner.pos
         if gkind(toks, p2) == 101 { p2 = p2 + 1 }
@@ -2495,6 +2576,20 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         } else {
             if k == 100 {
                 let al = genArgs(toks, p, ctx)
+                let _fx = lookupVar(ctx, bname)
+                if isFnXType(_fx) {
+                    // Closure call: cast the stored fn pointer to the signature
+                    // recovered from the value's Fn(...) xtype and invoke it.
+                    let rc = fnRetX(_fx)
+                    let pcs = fnParamsX(_fx)
+                    let sig = rc + "(*)(void*"
+                    if string_len(pcs) > 0 { sig = sig + ", " + pcs }
+                    sig = sig + ")"
+                    let cargs = "(" + bname + ").env"
+                    if string_len(al.code) > 0 { cargs = cargs + ", " + al.code }
+                    code = "((" + sig + ")(" + bname + ").fn)(" + cargs + ")"
+                    typ = ctypeToXName(rc)
+                } else {
                 if bname == "ok" {
                     // ok(x) -> build the enclosing function's Result with .ok=true
                     code = "(" + ctx.retCtype + "){ .ok = true, .value = " + al.code + " }"
@@ -2530,6 +2625,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = bname + "(" + al.code + ")"
                         typ = ""
                     }
+                }
                 }
                 }
                 }
@@ -3520,6 +3616,7 @@ mapper genIfaceDefaults(prog: Program) -> String {
                 let tag = is2.name + "_" + ms.name
                 out = out + hoistCatches(prog, ms.bodyTokens, tag)
                 out = out + hoistParallel(prog, ms.bodyTokens, tag)
+                out = out + hoistLambdas(prog, ms.bodyTokens, tag)
                 out = out + "static " + ms.retCtype + " xc_" + is2.name + "_" + ms.name + "_default_impl(void* self_ptr" + pstr + ") {\n"
                 out = out + "    (void)self_ptr;\n"
                 let ctx = withTag(withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype), tag)
@@ -3842,6 +3939,47 @@ mapper countFuncs(prog: Program, name: String) -> Integer {
 }
 
 // "xc_T_t a, xc_U_t b" -> "a, b"   (argument list for forwarding a call)
+// A single ctype for C emission: a function type Fn(...) becomes the uniform
+// closure value type xc_fn_t (its signature lives in the xtype, recovered at the
+// call site). Other ctypes pass through.
+mapper cTy(ct: String) -> String {
+    if isFnXType(ct) { return "xc_fn_t" }
+    return ct
+}
+// Translate one "ctype name" param segment for C emission (Fn(...) -> xc_fn_t).
+mapper cSigSeg(seg: String) -> String {
+    let n = string_len(seg)
+    let s = 0
+    while s < n and string_char_at(seg, s) == 32 { s = s + 1 }
+    let lastSp = 0 - 1
+    let j = s
+    while j < n { if string_char_at(seg, j) == 32 { lastSp = j }  j = j + 1 }
+    if lastSp < 0 { return seg }
+    let ctype = string_slice(seg, s, lastSp)
+    if isFnXType(ctype) { return string_slice(seg, 0, s) + "xc_fn_t" + string_slice(seg, lastSp, n) }
+    return seg
+}
+// Translate a whole C param list for emission (each Fn(...) param -> xc_fn_t).
+// v1 function types are single-argument, so no commas appear inside Fn(...).
+mapper cSig(params: String) -> String {
+    let out = ""
+    let n = string_len(params)
+    let start = 0
+    let i = 0
+    while i <= n {
+        let atEnd = i == n
+        let isComma = false
+        if not atEnd { if string_char_at(params, i) == 44 { isComma = true } }
+        if atEnd or isComma {
+            out = out + cSigSeg(string_slice(params, start, i))
+            if isComma { out = out + "," }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    return out
+}
+
 mapper paramArgList(cparams: String) -> String {
     let n = string_len(cparams)
     if n == 0 { return "" }
@@ -3898,7 +4036,8 @@ mapper emitOneFunc(prog: Program, fs: FuncSpec) -> String {
     let tag = fs.name
     let out = hoistCatches(prog, fs.bodyTokens, tag)
     out = out + hoistParallel(prog, fs.bodyTokens, tag)
-    out = out + "static " + fs.retCtype + " xc_" + fs.name + "(" + fs.params + ") {\n"
+    out = out + hoistLambdas(prog, fs.bodyTokens, tag)
+    out = out + "static " + cTy(fs.retCtype) + " xc_" + fs.name + "(" + cSig(fs.params) + ") {\n"
     out = out + funcDepPrologue(prog, fs.fnDeps)
     let ctx = withTag(seedFuncDeps(withRet(seedParams(mkGCtx(prog), fs.params), fs.retCtype), fs.fnDeps), tag)
     out = out + genBody2(fs.bodyTokens, ctx)
@@ -4269,6 +4408,7 @@ mapper genClassMethods(prog: Program) -> String {
             if ms.kind == "creator" {
                 out = out + hoistCatches(prog, ms.bodyTokens, tag)
                 out = out + hoistParallel(prog, ms.bodyTokens, tag)
+                out = out + hoistLambdas(prog, ms.bodyTokens, tag)
                 out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "(" + ms.params + ") {\n"
                 out = out + funcDepPrologue(prog, ms.fnDeps)
                 let ctx = withTag(withRet(seedFuncDeps(seedParams(mkGCtx(prog), ms.params), ms.fnDeps), ms.retCtype), tag)
@@ -4279,6 +4419,7 @@ mapper genClassMethods(prog: Program) -> String {
                 if string_len(pstr) > 0 { pstr = ", " + pstr }
                 out = out + hoistCatches(prog, ms.bodyTokens, tag)
                 out = out + hoistParallel(prog, ms.bodyTokens, tag)
+                out = out + hoistLambdas(prog, ms.bodyTokens, tag)
                 // Overloaded (multiple same-named, or `where`-guarded) methods emit
                 // per-overload bodies + a dispatcher; otherwise a single _impl.
                 let overloaded = countMethodName(cs, ms.name) > 1 or ms.hasWhere
@@ -4974,6 +5115,7 @@ mapper genTestRunner(prog: Program, srcPath: String) -> String {
         let t = funcSpecGet(prog.tests, i)
         out = out + hoistCatches(prog, t.bodyTokens, "test" + int_to_string(i))
         out = out + hoistParallel(prog, t.bodyTokens, "test" + int_to_string(i))
+        out = out + hoistLambdas(prog, t.bodyTokens, "test" + int_to_string(i))
         out = out + "static void xc_test_body_" + int_to_string(i) + "(void) {\n"
         out = out + funcDepPrologue(prog, t.fnDeps)
         let ctx = withTag(seedFuncDeps(mkGCtx(prog), t.fnDeps), "test" + int_to_string(i))
@@ -5001,6 +5143,7 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
     let out = genSrcFileDef(srcPath)
     out = out + hoistCatches(prog, es.bodyTokens, "entry")
     out = out + hoistParallel(prog, es.bodyTokens, "entry")
+    out = out + hoistLambdas(prog, es.bodyTokens, "entry")
     out = out + "/* === Entry point === */\n"
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
@@ -5113,7 +5256,7 @@ mapper genFuncForwardDecls(prog: Program) -> String {
     let n = funcSpecLen(prog.functions)
     while i < n {
         let fs = funcSpecGet(prog.functions, i)
-        out = out + "static " + fs.retCtype + " xc_" + fs.name + "(" + fs.params + ");\n"
+        out = out + "static " + cTy(fs.retCtype) + " xc_" + fs.name + "(" + cSig(fs.params) + ");\n"
         i = i + 1
     }
     return out + "\n"
@@ -5156,7 +5299,7 @@ mapper genAtomDecls(prog: Program) -> String {
         let m = funcSpecLen(a.transitions)
         while j < m {
             let fs = funcSpecGet(a.transitions, j)
-            out = out + "static " + fs.retCtype + " xc_" + fs.name + "(" + fs.params + ");\n"
+            out = out + "static " + cTy(fs.retCtype) + " xc_" + fs.name + "(" + cSig(fs.params) + ");\n"
             j = j + 1
         }
         i = i + 1

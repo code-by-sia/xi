@@ -40,6 +40,9 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Decision tables — `decision` kind (`when <cond> => <result>`, `hit first`) | ✓ (MVP) |
 | Purity enforcement (pure kinds cannot mutate or be `async`) | ✓ (reference checks) |
 | Inline function bodies (`mapper f(x) => expr`, sugar for `{ return expr }`; any kind, methods, overloads) | ✓ |
+| First-class closures — lambda `(p: T) => expr` as a value of type `(T) -> U`; bind, call, pass to higher-order functions | ✓ (single typed param, capture-free) |
+| Closures: multiple parameters & environment capture | ✗ (planned) |
+| Generics / monomorphized user types & functions (`T[]` is built-in) | ✗ (planned) |
 | `where`-guarded overloading — free functions **and methods** (runtime overload selection by guard) | ✓ |
 | `match` (literal / string / bool / bound-ident / variant / `_` / `else` patterns; multi-key `(a, b)` arms; inline `-> expr` or `{ block }` bodies) | ✓ |
 | Interrupts — resumable conditions (`interrupt`/`signal`/`try`/`catch`, `skip`+`recover`) | ✓ (MVP) |

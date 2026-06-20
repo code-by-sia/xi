@@ -296,6 +296,6 @@ See `examples/generate_sequence_demo.xi`.
 
 The collection layer is complete: containers (`List`/`Set`/`Map`), the eager
 functional API, lazy sequences (incl. `generateSequence`), `Pair<A, B>`, and
-`zip`/`partition`/`unzip`. The remaining language-level work — first-class
-closures and generics — is tracked in the
-[closures & generics proposal](proposals/closures.md).
+`zip`/`partition`/`unzip`. [First-class closures](language-guide.md#first-class-functions-closures)
+now ship (single typed param, capture-free); multi-parameter lambdas, captures,
+and generics are the remaining language-level work (see `FEATURES.md`).

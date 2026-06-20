@@ -92,6 +92,28 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
             let inner = parseTypeExpr(ps2)
             return TypeResult { ctype: inner.ctype, ps: inner.ps }
         }
+        // Function type  ( T1, T2 ) -> U  — a first-class closure value. Encoded
+        // as Fn(<param ctypes>)(<ret ctype>); the C type is xc_fn_t (translated at
+        // emission), the signature drives the call-site cast.
+        if t.kind == 100 {  // (
+            let pp = advance(ps)                  // past (
+            let pcs = ""
+            if peek(pp).kind != 101 {
+                let pt0 = parseTypeExpr(pp)
+                pcs = pt0.ctype
+                pp = pt0.ps
+                while peek(pp).kind == 106 {      // ,
+                    pp = advance(pp)
+                    let ptn = parseTypeExpr(pp)
+                    pcs = pcs + "," + ptn.ctype
+                    pp = ptn.ps
+                }
+            }
+            if peek(pp).kind == 101 { pp = advance(pp) }   // )
+            if peek(pp).kind == 109 { pp = advance(pp) }   // ->
+            let rt = parseTypeExpr(pp)
+            return TypeResult { ctype: "Fn(" + pcs + ")(" + rt.ctype + ")", ps: rt.ps }
+        }
         // Compound type { field: type, ... }
         if t.kind == 102 {  // {
             // anonymous compound — skip for now, return void*

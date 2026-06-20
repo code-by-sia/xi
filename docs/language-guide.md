@@ -141,6 +141,40 @@ mapper   tier(n: Integer) -> String where n >= 100 => "high"
 mapper   tier(n: Integer) -> String                => "low"
 ```
 
+## First-class functions (closures)
+
+A **lambda** `(p: T) => expr` is a *value* of function type `(T) -> U`. Bind it,
+call it, and pass it to higher-order functions:
+
+```x
+let inc = (n: Integer) => n + 1          // value of type (Integer) -> Integer
+inc(41)                                   // 42
+
+producer apply(f: (Integer) -> Integer, x: Integer) -> Integer { return f(x) }
+apply((n: Integer) => n * 3, 5)           // 15
+
+// a predicate value passed in and applied
+producer keep(xs: Integer[], p: (Integer) -> Bool) -> Integer {
+    let n = 0
+    for x in xs { if p(x) { n = n + 1 } }
+    return n
+}
+keep([1, 5, 2, 9], (n: Integer) => n > 3) // 2
+```
+
+A lambda lowers to a top-level function plus a captured-environment pointer (no
+boxing, no GC). Current scope:
+
+- **One parameter**, written with its **type** (`(n: Integer) => …`).
+- **Capture-free**: the body sees only its own parameter, not the enclosing
+  scope's locals (referencing them is a compile error). Pass what it needs as an
+  argument.
+- The body's result type must **match** the declared `-> U` of the function-typed
+  parameter it's passed to.
+
+Multi-parameter lambdas, captures, and generics are the next steps (see the
+feature matrix in `FEATURES.md`). See `examples/closures_demo.xi`.
+
 ## `where`-guarded overloading
 
 A function may be declared several times under the same name, each with a

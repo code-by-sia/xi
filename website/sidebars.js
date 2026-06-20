@@ -26,11 +26,6 @@ const sidebars = {
     'ffi',
     'wasm',
     'internals',
-    {
-      type: 'category',
-      label: 'Proposals (draft)',
-      items: ['proposals/closures'],
-    },
   ],
 };
 
