@@ -489,8 +489,13 @@ extern const char* xc_src_file;                       /* defined in generated C 
 xc_Json_t xstd_config_parse(xc_string_t path);        /* read + parse by extension (json/yaml/xml) */
 void      xstd_config_watch(xc_string_t path, xc_string_t topic);  /* poll mtime -> ConfigChanged event */
 void xc_assert(xc_bool_t cond, const char* text, const char* file, long long line);
+void xc_assert_msg(xc_bool_t cond, const char* text, const char* msg, const char* file, long long line);
+void xc_assert_eq(xc_bool_t eq, xc_string_t a, xc_string_t b, xc_bool_t negate, const char* file, long long line);
+void xc_assert_close(xc_bool_t ok, xc_string_t a, xc_string_t b, xc_string_t eps, const char* file, long long line);
+void xc_assert_ok(xc_bool_t is_ok, xc_string_t err, xc_bool_t want_ok, const char* file, long long line);
 void xc_test_run(const char* name, void (*fn)(void)); /* run one test, isolated */
 int  xc_test_summary(void);                           /* print totals; nonzero if any failed */
+xc_bool_t xc_test_filter(const char* name);           /* honor XC_TEST_FILTER (substring) */
 
 /* ─── System I/O ─────────────────────────────────────────────────────────── */
 

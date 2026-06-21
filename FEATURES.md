@@ -128,7 +128,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Install via **Homebrew** (`brew install code-by-sia/xi/xi`) or prebuilt tarball | ✓ |
 | `xi skill` — print the AI-agent language guide (`docs/skill.md`) | ✓ |
 | `xi install` — fetch a module's `dependencies` (source archives) into `./modules` | ✓ |
-| Built-in testing — `test "…" { assert … }`, `xi test` / `xi test --all`, `module Test` doubles | ✓ |
+| Built-in testing — `test "…" { assert … }`, `xi test` / `xi test --all` / `--filter`, `module Test` doubles; value-showing `assertEq`/`assertNe`/`assertClose`/`assertOk`/`assertErr`, `assert … : "msg"` | ✓ |
 | Editor support: Tree-sitter grammar, Zed, Vim | ✓ |
 | Full ownership / borrow checking | ✗ (relies on C; planned) |
 | LLVM backend | ✗ (uses C as the intermediate) |

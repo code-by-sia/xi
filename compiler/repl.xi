@@ -215,7 +215,7 @@ mapper builtPath(log: String) -> String {
 
 // `xi test file.xi` — compile in test mode (XC_TEST=1) and run the test runner,
 // forwarding its output and exit code (nonzero if any test failed).
-producer runTests(xc: String, rt: String, path: String) -> Integer {
+producer runTests(xc: String, rt: String, path: String, filter: String) -> Integer {
     let cmd = "XC_TEST=1 XC_OUT=/tmp XC_RUNTIME='" + rt + "' '" + xc + "' '" + path + "' >/tmp/xtest.log 2>&1"
     let rc = run_command(cmd)
     let log = file_read_all("/tmp/xtest.log")
@@ -226,7 +226,9 @@ producer runTests(xc: String, rt: String, path: String) -> Integer {
     }
     let bin = builtPath(log)
     if string_len(bin) == 0 { bin = "/tmp/" + baseName(path) }
-    return run_command("'" + bin + "'")
+    let pre = ""
+    if string_len(filter) > 0 { pre = "XC_TEST_FILTER='" + filter + "' " }   // run only matching tests
+    return run_command(pre + "'" + bin + "'")
 }
 
 // `xi test --all` — discover every *_test.xi under the current directory, run
@@ -362,11 +364,13 @@ async entry main(args: String[]) -> Integer {
         }
         if sub == "test" {
             if args.len < 3 {
-                system.stdout.writeln("usage: xi test <file.xi>   (or: xi test --all)")
+                system.stdout.writeln("usage: xi test <file.xi> [--filter <substr>]   (or: xi test --all)")
                 return 1
             }
             if args.data[2] == "--all" { return runTestsAll(xc, rt) }
-            return runTests(xc, rt, args.data[2])
+            let filter = ""
+            if args.len >= 5 and args.data[3] == "--filter" { filter = args.data[4] }
+            return runTests(xc, rt, args.data[2], filter)
         }
         runFile(xc, rt, sub)
         return 0

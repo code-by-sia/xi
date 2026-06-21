@@ -48,6 +48,49 @@ tests:
 assert balance >= 0          // invariant in normal code: aborts if violated
 ```
 
+A failure message can be attached with `: "…"`:
+
+```x
+assert balance >= 0 : "balance must never go negative"
+```
+
+## Value-showing assertions
+
+`assert a == b` only reports the *expression text*. The `assert*` helpers report
+the **actual values**, which is what you usually want from a failing test:
+
+```x
+assertEq(actual, expected)   // fail: "expected <expected>, got <actual>"
+assertNe(a, b)               // fail: "both values were <a>"
+assertClose(a, b, 0.0001)    // numeric equality within a tolerance (floats)
+assertOk(result)             // a Result `T!` is ok  (fail prints the Err message)
+assertErr(result)            // a Result `T!` is err
+```
+
+```x
+test "math" {
+    assertEq(add(2, 2), 5)              // not ok: assertEq: expected 5, got 4
+    assertClose(0.1 + 0.2, 0.3, 1e-9)  // ok — no spurious float failure
+}
+test "parsing" {
+    assertErr(parseAge(""))            // assert the failure path
+    assertOk(parseAge("30"))
+}
+```
+
+`assertEq`/`assertNe` compare primitives and `String`s (Strings by content).
+`assertOk`/`assertErr` take a `T!` [result](error-handling.md) and report its
+`Err` message on failure — so you can finally test error paths directly.
+
+## Running a subset — `--filter`
+
+```console
+$ xi test users_test.xi --filter "login"     # only tests whose name contains "login"
+```
+
+`--filter <substr>` runs only the tests whose name contains the substring (it
+sets `XC_TEST_FILTER` for the test binary; the summary counts only what ran).
+
 ## Injecting test doubles — `module Test`
 
 Tests get dependencies injected with the same `(dep: I)` form as `entry` and
@@ -79,6 +122,7 @@ module App  { bind Clock -> RealClock }
 
 ## What's planned
 
-`assert <expr> : "message"`, `assertEq` with value diffs, `before`/`after`
-fixtures, table/parameterized tests, `tests/` directory discovery, and parallel
-runs are future additions; the core above is stable.
+`before`/`after` fixtures, table/parameterized tests, per-test timeouts (relevant
+for `async`/threaded code), and parallel runs are future additions; the core
+above — value-showing assertions, messages, error-path assertions, `module Test`
+doubles, and `--filter` — is stable.

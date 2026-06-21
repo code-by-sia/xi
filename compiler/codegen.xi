@@ -3649,6 +3649,56 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     return StmtRes { code: code, ctx: ctx, pos: np }
 }
 
+// Value-showing assertion helpers usable in `test` bodies (and anywhere).
+predicate isAssertHelper(name: String) {
+    if name == "assertEq"    { return true }
+    if name == "assertNe"    { return true }
+    if name == "assertClose" { return true }
+    if name == "assertOk"    { return true }
+    if name == "assertErr"   { return true }
+    return false
+}
+mapper genAssertHelper(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
+    let name = gtext(toks, pos)
+    let line = int_to_string(tokenArrGet(toks, pos).line)
+    let loc = ", xc_src_file, " + line + "LL);\n"
+    let a = genExpr(toks, pos + 2, ctx)        // pos+1 is '(', pos+2 first arg
+    if name == "assertOk" or name == "assertErr" {
+        let endp = a.pos
+        if gkind(toks, endp) == 101 { endp = endp + 1 }
+        let want = "1"
+        if name == "assertErr" { want = "0" }
+        let code = "    xc_assert_ok((" + a.code + ").ok, (" + a.code + ").err, " + want + loc
+        return StmtRes { code: code, ctx: ctx, pos: endp }
+    }
+    // two-or-three operand forms: parse the rest
+    let q = a.pos
+    if gkind(toks, q) == 106 { q = q + 1 }     // ','
+    let b = genExpr(toks, q, ctx)
+    if name == "assertClose" {
+        let r = b.pos
+        if gkind(toks, r) == 106 { r = r + 1 }
+        let eps = genExpr(toks, r, ctx)
+        let endp = eps.pos
+        if gkind(toks, endp) == 101 { endp = endp + 1 }
+        let ok = "((((" + a.code + ") - (" + b.code + ")) <= (" + eps.code + ")) && (((" + b.code
+               + ") - (" + a.code + ")) <= (" + eps.code + ")))"
+        let code = "    xc_assert_close(" + ok + ", " + toStrC(a.code, "Number") + ", "
+                 + toStrC(b.code, "Number") + ", " + toStrC(eps.code, "Number") + loc
+        return StmtRes { code: code, ctx: ctx, pos: endp }
+    }
+    // assertEq / assertNe
+    let endp = b.pos
+    if gkind(toks, endp) == 101 { endp = endp + 1 }
+    let eq = "((" + a.code + ") == (" + b.code + "))"
+    if a.xtyp == "String" { eq = "(xc_str_cmp((" + a.code + "), (" + b.code + ")) == 0)" }
+    let neg = "0"
+    if name == "assertNe" { neg = "1" }
+    let code = "    xc_assert_eq(" + eq + ", " + toStrC(a.code, a.xtyp) + ", " + toStrC(b.code, b.xtyp)
+             + ", " + neg + loc
+    return StmtRes { code: code, ctx: ctx, pos: endp }
+}
+
 mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     let k = gkind(toks, pos)
     if k == 220 {
@@ -3779,7 +3829,11 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     if k == 283 { return genTry(toks, pos, ctx) }      // try {..} catch e: T {..}
     if k == 286 { return StmtRes { code: "    return 0;\n", ctx: ctx, pos: pos + 1 } }  // skip
     if k == 285 { return StmtRes { code: "    return 1;\n", ctx: ctx, pos: pos + 1 } }  // recover (resolution)
-    if k == 300 {   // assert <bool-expr>
+    // assert-family helpers (value-showing): assertEq/assertNe/assertClose/assertOk/assertErr
+    if k == 1 and gkind(toks, pos + 1) == 100 and isAssertHelper(gtext(toks, pos)) {
+        return genAssertHelper(toks, pos, ctx)
+    }
+    if k == 300 {   // assert <bool-expr> [ : "message" ]
         let e = genExpr(toks, pos + 1, ctx)
         let txt = ""
         let j = pos + 1
@@ -3788,9 +3842,16 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             txt = txt + gtext(toks, j)
             j = j + 1
         }
-        let line = tokenArrGet(toks, pos).line
+        let line = int_to_string(tokenArrGet(toks, pos).line)
+        let p = e.pos
+        if gkind(toks, p) == 108 {                       // `:` — custom message
+            let msg = gtext(toks, p + 1)
+            let code = "    xc_assert_msg((" + e.code + "), \"" + cEscape(txt) + "\", \"" + cEscape(msg)
+                     + "\", xc_src_file, " + line + "LL);\n"
+            return StmtRes { code: code, ctx: ctx, pos: p + 2 }
+        }
         let code = "    xc_assert((" + e.code + "), \"" + cEscape(txt) + "\", xc_src_file, "
-                 + int_to_string(line) + "LL);\n"
+                 + line + "LL);\n"
         return StmtRes { code: code, ctx: ctx, pos: e.pos }
     }
     let e = genExpr(toks, pos, ctx)

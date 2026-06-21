@@ -2681,19 +2681,63 @@ static const char* xc_test_name = "";
 static long        xc_test_total = 0;
 static long        xc_test_passed = 0;
 
-void xc_assert(xc_bool_t cond, const char* text, const char* file, long long line) {
-    if (cond) return;
+/* Common failure path: under the test runner record + abort just this test;
+ * otherwise print to stderr and abort the program. */
+static void xc_assert_fail(const char* detail, const char* file, long long line) {
     if (xc_test_active) {
-        fprintf(stdout, "not ok - %s\n    assert %s  (%s:%lld)\n",
-                xc_test_name, text, file, (long long)line);
+        fprintf(stdout, "not ok - %s\n    %s  (%s:%lld)\n", xc_test_name, detail, file, (long long)line);
         fflush(stdout);
         longjmp(xc_test_buf, 1);     /* abandon this test, run the next */
     }
-    fprintf(stderr, "xc: assertion failed: %s  (%s:%lld)\n", text, file, (long long)line);
+    fprintf(stderr, "xc: assertion failed: %s  (%s:%lld)\n", detail, file, (long long)line);
     abort();
 }
+void xc_assert(xc_bool_t cond, const char* text, const char* file, long long line) {
+    if (cond) return;
+    char buf[640]; snprintf(buf, sizeof buf, "assert %s", text);
+    xc_assert_fail(buf, file, line);
+}
+void xc_assert_msg(xc_bool_t cond, const char* text, const char* msg, const char* file, long long line) {
+    if (cond) return;
+    char buf[768]; snprintf(buf, sizeof buf, "assert %s  —  %s", text, msg);
+    xc_assert_fail(buf, file, line);
+}
+/* assertEq(actual, expected) / assertNe(a, b): values already stringified. */
+void xc_assert_eq(xc_bool_t eq, xc_string_t a, xc_string_t b, xc_bool_t negate,
+                  const char* file, long long line) {
+    int pass = negate ? !eq : eq;
+    if (pass) return;
+    char buf[768];
+    if (negate) snprintf(buf, sizeof buf, "assertNe: both values were %.*s", (int)a.len, a.data);
+    else        snprintf(buf, sizeof buf, "assertEq: expected %.*s, got %.*s",
+                         (int)b.len, b.data, (int)a.len, a.data);
+    xc_assert_fail(buf, file, line);
+}
+void xc_assert_close(xc_bool_t ok, xc_string_t a, xc_string_t b, xc_string_t eps,
+                     const char* file, long long line) {
+    if (ok) return;
+    char buf[768];
+    snprintf(buf, sizeof buf, "assertClose: %.*s and %.*s differ by more than %.*s",
+             (int)a.len, a.data, (int)b.len, b.data, (int)eps.len, eps.data);
+    xc_assert_fail(buf, file, line);
+}
+/* assertOk: want_ok=1 (fail with the Err message); assertErr: want_ok=0. */
+void xc_assert_ok(xc_bool_t is_ok, xc_string_t err, xc_bool_t want_ok,
+                  const char* file, long long line) {
+    if (want_ok ? is_ok : !is_ok) return;
+    char buf[768];
+    if (want_ok) snprintf(buf, sizeof buf, "assertOk: got Err(%.*s)", (int)err.len, err.data);
+    else         snprintf(buf, sizeof buf, "assertErr: expected Err, got Ok");
+    xc_assert_fail(buf, file, line);
+}
 
+xc_bool_t xc_test_filter(const char* name) {
+    const char* f = getenv("XC_TEST_FILTER");
+    if (!f || !*f) return true;
+    return strstr(name, f) != NULL;
+}
 void xc_test_run(const char* name, void (*fn)(void)) {
+    if (!xc_test_filter(name)) return;   /* XC_TEST_FILTER selects by substring */
     xc_test_total += 1;
     xc_test_name = name;
     if (setjmp(xc_test_buf) == 0) {
