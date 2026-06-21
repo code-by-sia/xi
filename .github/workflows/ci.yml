@@ -52,8 +52,9 @@ jobs:
             ./compiler/xc "$f" >/dev/null
             bin="build/$(basename "${f%.xi}")"
             case "$(basename "$f")" in
-              # Long-running server demos block forever on web.serve — compile only.
-              web_demo.xi) echo "  (server example — compile-only)" ;;
+              # Long-running demos block forever (web.serve / the cron scheduler) —
+              # compile only.
+              web_demo.xi|scheduled_demo.xi) echo "  (long-running example — compile-only)" ;;
               *) if [ -x "$bin" ]; then "$bin" | head -3 || true; fi ;;
             esac
           done
