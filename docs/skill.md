@@ -229,10 +229,16 @@ let r = 2..4                   // ranges are values too
 Create with `empty` or a builder; no import needed.
 
 ```x
-// List<T> — growable ordered list
+// List<T> / Vec<T> — growable ordered array (same type, two names)
 let xs = empty List<Integer>
-xs.push(10)  xs.get(0)  xs.set(0, 9)  xs.len()  xs.isEmpty()  xs.removeAt(0)  xs.clear()
+xs.push(10)  xs.get(0)  xs.set(0, 9)  xs.insert(1, 7)  xs.swap(0, 2)
+xs.len()  xs.isEmpty()  xs.removeAt(0)  xs.clear()
 for x in xs { ... }
+
+// Stack<T> LIFO / Queue<T> FIFO / SortedQueue<T> priority (min-heap)
+let st = empty Stack<Integer>   st.push(1)  st.peek()  st.pop()   // pop/peek abort if empty
+let q  = empty Queue<String>    q.enqueue("a")  q.peek()  q.dequeue()
+let pq = sortedQueueOf(5, 1, 3) pq.push(2)  pq.peek()  pq.pop()   // pop returns the smallest
 
 // Set<T> — unique elements (String compared by content)
 let s = empty Set<String>
@@ -246,7 +252,7 @@ m.len()  m.keys()  m.values()                 // keys()/values() -> List
 for k in m.keys() { let v = m.get(k) ... }    // iterate via keys()
 
 // Builders (types inferred from the first element)
-let a = listOf(2, 3, 5)
+let a = listOf(2, 3, 5)         // also vecOf / stackOf / queueOf / sortedQueueOf
 let b = setOf("x", "y", "x")
 let c = mapOf("fr" to "Paris", "jp" to "Tokyo")
 ```

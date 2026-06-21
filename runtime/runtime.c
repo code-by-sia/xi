@@ -2279,7 +2279,143 @@ void xstd_list_removeat(xc_List_t l, xc_integer_t i) {
     memmove(slot, slot + l->elem, (l->len - (xc_size_t)i - 1) * l->elem);
     l->len -= 1;
 }
+void xstd_list_insert(xc_List_t l, xc_integer_t i, const void* e) {
+    if (i < 0 || (xc_size_t)i > l->len) xc_list_oob(i, l->len);
+    xc_list_grow(l, l->len + 1);
+    char* at = l->data + (xc_size_t)i * l->elem;
+    memmove(at + l->elem, at, (l->len - (xc_size_t)i) * l->elem);
+    memcpy(at, e, l->elem);
+    l->len += 1;
+}
+void xstd_list_swap(xc_List_t l, xc_integer_t i, xc_integer_t j) {
+    if (i < 0 || (xc_size_t)i >= l->len) xc_list_oob(i, l->len);
+    if (j < 0 || (xc_size_t)j >= l->len) xc_list_oob(j, l->len);
+    if (i == j) return;
+    char* a = l->data + (xc_size_t)i * l->elem;
+    char* b = l->data + (xc_size_t)j * l->elem;
+    for (xc_size_t k = 0; k < l->elem; k++) { char t = a[k]; a[k] = b[k]; b[k] = t; }
+}
 void xstd_list_clear(xc_List_t l) { l->len = 0; }
+
+/* ─── Stack<T>: LIFO over a growable array ──────────────────────────────────── */
+struct xc_stack { char* data; xc_size_t len, cap, elem; };
+xc_Stack_t xstd_stack_new(xc_size_t elem) {
+    struct xc_stack* s = (struct xc_stack*)malloc(sizeof(*s)); if (!s) abort();
+    s->data = NULL; s->len = 0; s->cap = 0; s->elem = elem ? elem : 1;
+    return s;
+}
+void xstd_stack_push(xc_Stack_t s, const void* e) {
+    if (s->len + 1 > s->cap) {
+        xc_size_t cap = s->cap ? s->cap * 2 : 8;
+        s->data = (char*)realloc(s->data, cap * s->elem); if (!s->data) abort();
+        s->cap = cap;
+    }
+    memcpy(s->data + s->len * s->elem, e, s->elem);
+    s->len += 1;
+}
+void xstd_stack_pop(xc_Stack_t s, void* out) {
+    if (s->len == 0) { fprintf(stderr, "xc: pop() on an empty stack\n"); abort(); }
+    s->len -= 1;
+    memcpy(out, s->data + s->len * s->elem, s->elem);
+}
+void* xstd_stack_peek(xc_Stack_t s) {
+    if (s->len == 0) { fprintf(stderr, "xc: peek() on an empty stack\n"); abort(); }
+    return s->data + (s->len - 1) * s->elem;
+}
+xc_integer_t xstd_stack_len(xc_Stack_t s) { return (xc_integer_t)s->len; }
+void xstd_stack_clear(xc_Stack_t s) { s->len = 0; }
+
+/* ─── Queue<T>: FIFO with a head index (amortised O(1) dequeue) ─────────────── */
+struct xc_queue { char* data; xc_size_t head, len, cap, elem; };
+xc_Queue_t xstd_queue_new(xc_size_t elem) {
+    struct xc_queue* q = (struct xc_queue*)malloc(sizeof(*q)); if (!q) abort();
+    q->data = NULL; q->head = 0; q->len = 0; q->cap = 0; q->elem = elem ? elem : 1;
+    return q;
+}
+void xstd_queue_enqueue(xc_Queue_t q, const void* e) {
+    if (q->head + q->len + 1 > q->cap) {
+        if (q->head > 0) {                                /* compact: slide live region to front */
+            memmove(q->data, q->data + q->head * q->elem, q->len * q->elem);
+            q->head = 0;
+        }
+        if (q->len + 1 > q->cap) {
+            xc_size_t cap = q->cap ? q->cap * 2 : 8;
+            q->data = (char*)realloc(q->data, cap * q->elem); if (!q->data) abort();
+            q->cap = cap;
+        }
+    }
+    memcpy(q->data + (q->head + q->len) * q->elem, e, q->elem);
+    q->len += 1;
+}
+void xstd_queue_dequeue(xc_Queue_t q, void* out) {
+    if (q->len == 0) { fprintf(stderr, "xc: dequeue() on an empty queue\n"); abort(); }
+    memcpy(out, q->data + q->head * q->elem, q->elem);
+    q->head += 1; q->len -= 1;
+    if (q->len == 0) q->head = 0;
+}
+void* xstd_queue_peek(xc_Queue_t q) {
+    if (q->len == 0) { fprintf(stderr, "xc: peek() on an empty queue\n"); abort(); }
+    return q->data + q->head * q->elem;
+}
+xc_integer_t xstd_queue_len(xc_Queue_t q) { return (xc_integer_t)q->len; }
+void xstd_queue_clear(xc_Queue_t q) { q->len = 0; q->head = 0; }
+
+/* ─── SortedQueue<T>: priority queue (binary min-heap) ──────────────────────── */
+struct xc_pqueue { char* data; xc_size_t len, cap, elem; int cmp; };
+/* a < b under the queue's ordering? cmp: 0 int/char/bool, 1 number, 2 String. */
+static int xc_pq_less(struct xc_pqueue* h, const void* a, const void* b) {
+    if (h->cmp == 1) { double x, y; memcpy(&x, a, sizeof(x)); memcpy(&y, b, sizeof(y)); return x < y; }
+    if (h->cmp == 2) { xc_string_t x, y; memcpy(&x, a, sizeof(x)); memcpy(&y, b, sizeof(y)); return xc_str_cmp(x, y) < 0; }
+    long long x, y; memcpy(&x, a, sizeof(x)); memcpy(&y, b, sizeof(y)); return x < y;
+}
+xc_SortedQueue_t xstd_pqueue_new(xc_size_t elem, int cmp) {
+    struct xc_pqueue* h = (struct xc_pqueue*)malloc(sizeof(*h)); if (!h) abort();
+    h->data = NULL; h->len = 0; h->cap = 0; h->elem = elem ? elem : 1; h->cmp = cmp;
+    return h;
+}
+static void xc_pq_swap(struct xc_pqueue* h, xc_size_t i, xc_size_t j, char* tmp) {
+    char* a = h->data + i * h->elem; char* b = h->data + j * h->elem;
+    memcpy(tmp, a, h->elem); memcpy(a, b, h->elem); memcpy(b, tmp, h->elem);
+}
+void xstd_pqueue_push(xc_SortedQueue_t h, const void* e) {
+    if (h->len + 1 > h->cap) {
+        xc_size_t cap = h->cap ? h->cap * 2 : 8;
+        h->data = (char*)realloc(h->data, cap * h->elem); if (!h->data) abort();
+        h->cap = cap;
+    }
+    memcpy(h->data + h->len * h->elem, e, h->elem);
+    xc_size_t i = h->len; h->len += 1;
+    char* tmp = (char*)malloc(h->elem); if (!tmp) abort();
+    while (i > 0) {                                       /* sift up */
+        xc_size_t p = (i - 1) / 2;
+        if (!xc_pq_less(h, h->data + i * h->elem, h->data + p * h->elem)) break;
+        xc_pq_swap(h, i, p, tmp); i = p;
+    }
+    free(tmp);
+}
+void xstd_pqueue_pop(xc_SortedQueue_t h, void* out) {
+    if (h->len == 0) { fprintf(stderr, "xc: pop() on an empty sorted queue\n"); abort(); }
+    memcpy(out, h->data, h->elem);                        /* root is the minimum */
+    h->len -= 1;
+    if (h->len == 0) return;
+    memcpy(h->data, h->data + h->len * h->elem, h->elem); /* move last to root */
+    char* tmp = (char*)malloc(h->elem); if (!tmp) abort();
+    xc_size_t i = 0;
+    for (;;) {                                            /* sift down */
+        xc_size_t l = 2 * i + 1, r = 2 * i + 2, m = i;
+        if (l < h->len && xc_pq_less(h, h->data + l * h->elem, h->data + m * h->elem)) m = l;
+        if (r < h->len && xc_pq_less(h, h->data + r * h->elem, h->data + m * h->elem)) m = r;
+        if (m == i) break;
+        xc_pq_swap(h, i, m, tmp); i = m;
+    }
+    free(tmp);
+}
+void* xstd_pqueue_peek(xc_SortedQueue_t h) {
+    if (h->len == 0) { fprintf(stderr, "xc: peek() on an empty sorted queue\n"); abort(); }
+    return h->data;
+}
+xc_integer_t xstd_pqueue_len(xc_SortedQueue_t h) { return (xc_integer_t)h->len; }
+void xstd_pqueue_clear(xc_SortedQueue_t h) { h->len = 0; }
 
 /* ─── hashing shared by Set and Map ─────────────────────────────────────────
  * Keys are hashed/compared by raw bytes, except String keys (is_str) which are

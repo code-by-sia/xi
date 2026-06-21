@@ -325,6 +325,8 @@ void*        xstd_list_at(xc_List_t, xc_integer_t i);     /* ptr to element (abo
 void         xstd_list_set(xc_List_t, xc_integer_t i, const void* e);
 xc_integer_t xstd_list_len(xc_List_t);
 void         xstd_list_removeat(xc_List_t, xc_integer_t i);
+void         xstd_list_insert(xc_List_t, xc_integer_t i, const void* e);  /* shift right; i==len appends */
+void         xstd_list_swap(xc_List_t, xc_integer_t i, xc_integer_t j);
 void         xstd_list_clear(xc_List_t);
 
 /* ─── Set<T> (std/collections) ───────────────────────────────────────────────
@@ -374,6 +376,55 @@ xc_integer_t xstd_map_len(xc_Map_t);
 void         xstd_map_clear(xc_Map_t);
 xc_List_t    xstd_map_keys(xc_Map_t);                                /* keys, as a List<K> */
 xc_List_t    xstd_map_values(xc_Map_t);                              /* values, as a List<V> */
+
+/* ─── Stack<T> (std/collections) ─────────────────────────────────────────────
+ * A LIFO stack over a growable array. Element-type-erased like List; pop/peek
+ * abort on an empty stack (guard with isEmpty()/len()).                         */
+typedef struct xc_stack* xc_Stack_t;
+typedef xc_Stack_t xc_Stack_integer_t;
+typedef xc_Stack_t xc_Stack_number_t;
+typedef xc_Stack_t xc_Stack_bool_t;
+typedef xc_Stack_t xc_Stack_string_t;
+typedef xc_Stack_t xc_Stack_char_t;
+xc_Stack_t   xstd_stack_new(xc_size_t elem);
+void         xstd_stack_push(xc_Stack_t, const void* e);
+void         xstd_stack_pop(xc_Stack_t, void* out);      /* copy top to out, remove (abort if empty) */
+void*        xstd_stack_peek(xc_Stack_t);                /* ptr to top (abort if empty) */
+xc_integer_t xstd_stack_len(xc_Stack_t);
+void         xstd_stack_clear(xc_Stack_t);
+
+/* ─── Queue<T> (std/collections) ─────────────────────────────────────────────
+ * A FIFO queue with an internal head index (amortised O(1) dequeue). dequeue/
+ * peek abort on an empty queue.                                                 */
+typedef struct xc_queue* xc_Queue_t;
+typedef xc_Queue_t xc_Queue_integer_t;
+typedef xc_Queue_t xc_Queue_number_t;
+typedef xc_Queue_t xc_Queue_bool_t;
+typedef xc_Queue_t xc_Queue_string_t;
+typedef xc_Queue_t xc_Queue_char_t;
+xc_Queue_t   xstd_queue_new(xc_size_t elem);
+void         xstd_queue_enqueue(xc_Queue_t, const void* e);
+void         xstd_queue_dequeue(xc_Queue_t, void* out);  /* copy front to out, remove (abort if empty) */
+void*        xstd_queue_peek(xc_Queue_t);                /* ptr to front (abort if empty) */
+xc_integer_t xstd_queue_len(xc_Queue_t);
+void         xstd_queue_clear(xc_Queue_t);
+
+/* ─── SortedQueue<T> (std/collections) ───────────────────────────────────────
+ * A priority queue (binary min-heap) over comparable elements; pop/peek return
+ * the smallest. `cmp` picks the ordering: 0 = integer/char/bool, 1 = number,
+ * 2 = String (by content). pop/peek abort when empty.                           */
+typedef struct xc_pqueue* xc_SortedQueue_t;
+typedef xc_SortedQueue_t xc_SortedQueue_integer_t;
+typedef xc_SortedQueue_t xc_SortedQueue_number_t;
+typedef xc_SortedQueue_t xc_SortedQueue_bool_t;
+typedef xc_SortedQueue_t xc_SortedQueue_string_t;
+typedef xc_SortedQueue_t xc_SortedQueue_char_t;
+xc_SortedQueue_t xstd_pqueue_new(xc_size_t elem, int cmp);
+void             xstd_pqueue_push(xc_SortedQueue_t, const void* e);
+void             xstd_pqueue_pop(xc_SortedQueue_t, void* out);   /* copy min to out, remove (abort if empty) */
+void*            xstd_pqueue_peek(xc_SortedQueue_t);             /* ptr to min (abort if empty) */
+xc_integer_t     xstd_pqueue_len(xc_SortedQueue_t);
+void             xstd_pqueue_clear(xc_SortedQueue_t);
 
 /* ─── Integer ranges (1..10 / until / downTo / step) ─────────────────────────
  * `end` is exclusive; `step` is signed and non-zero. Iterated by `for x in`.    */

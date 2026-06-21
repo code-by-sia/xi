@@ -101,6 +101,23 @@ nums.distinct()                          // unique elements, order preserved
 nums.flatMap { listOf(it, it) }          // map then flatten the result lists
 nums.first() / nums.last()               // ends (bounds-checked)
 nums.toSet()                             // Set<T> of the elements
+nums.toList()                            // a shallow copy
+nums.onEach { print(it) }                // side effect per element, returns the list
+nums.withIndex()                         // List<Pair<Integer, T>> — index/value pairs
+nested.flatten()                         // List<List<T>> -> List<T>
+nums.scan(0) { acc, x => acc + x }       // running accumulations, incl. the seed
+nums.runningFold(0) { acc, x => acc + x } // alias for scan
+```
+
+Whole-list reductions over the elements (numeric or `String`):
+
+```x
+nums.sum()                               // numeric total (0 if empty)
+nums.min() / nums.max()                  // natural extreme (aborts if empty)
+nums.maxOf { it.score } / nums.minOf { it.score }   // extreme of a projection
+nums.contains(3)                         // Bool — membership
+nums.indexOf(3)                          // Integer — first index, or -1
+nums.single { it > 4 }                   // the one match (aborts if 0 or many)
 ```
 
 Lookups that can miss return an **optional** (`T?`), unwrapped with `if let`
@@ -109,6 +126,8 @@ Lookups that can miss return an **optional** (`T?`), unwrapped with `if let`
 ```x
 if let hit = nums.find { it > 4 } { use(hit) }   // first match, or none
 nums.firstOrNone()  / nums.lastOrNone()          // ends as optionals
+nums.minOrNone()    / nums.maxOrNone()           // natural extreme as an optional
+nums.singleOrNone { it > 4 }                     // the one match, or none if 0/many
 nums.maxByOrNone { it.score }                    // element with the max key
 nums.minByOrNone { it.score }                    // element with the min key
 nums.average { it.score }                        // Number mean (0.0 if empty)
@@ -277,6 +296,64 @@ for k in ages.keys() {
 - A `Map<K, V>` is a mutable handle (reference semantics). Iteration order is
   unspecified.
 
+## `Vec<T>` — dynamic array
+
+`Vec<T>` is a growable, index-addressable array. It is the **same type as
+`List<T>`** under a familiar name, so it has the entire `List` surface — indexing
+(`get`/`set`), `push`/`removeAt`, the whole [functional API](#functional-operations-on-listt),
+and lazy sequences — plus two array conveniences:
+
+```x
+let v = vecOf(1, 2, 4)       // or: empty Vec<Integer>
+v.insert(2, 3)               // 1 2 3 4   (shift right; index == len appends)
+v.swap(0, 3)                 // 4 2 3 1
+v.get(0)  v.set(1, 9)  v.len()  v.push(5)
+v.map { it * 2 }.filter { it > 4 }     // the functional pipeline, as on List
+```
+
+Because `Vec<T>` and `List<T>` are interchangeable, a value built with `vecOf`
+can be passed wherever a `List<T>` is expected, and vice versa.
+
+## `Stack<T>` — LIFO
+
+```x
+let s = empty Stack<Integer>     // or: stackOf(1, 2, 3)
+s.push(10)                       // add to the top
+s.peek()                         // look at the top (aborts if empty)
+s.pop()                          // remove & return the top (aborts if empty)
+s.len()   s.isEmpty()   s.clear()
+```
+
+## `Queue<T>` — FIFO
+
+```x
+let q = empty Queue<String>      // or: queueOf("a", "b")
+q.enqueue("job")                 // add to the back  (alias: push)
+q.peek()                         // look at the front (aborts if empty)
+q.dequeue()                      // remove & return the front (aborts if empty)
+q.len()   q.isEmpty()   q.clear()
+```
+
+Dequeue is amortised O(1) (an internal head index, no per-element shifting).
+
+## `SortedQueue<T>` — priority queue
+
+A binary **min-heap**: `pop`/`peek` always return the **smallest** element by
+natural order. Element types are the comparable primitives (`Integer`, `Number`,
+`String` by content, `Char`).
+
+```x
+let pq = sortedQueueOf(5, 1, 9, 3)   // or: empty SortedQueue<Integer>
+pq.push(2)
+pq.peek()                            // 1 — the minimum (aborts if empty)
+pq.pop()                             // 1, then 2, then 3, ... (ascending)
+pq.len()   pq.isEmpty()   pq.clear()
+```
+
+> `pop`/`peek`/`dequeue` **abort** on an empty container (like `list.first()`);
+> guard with `isEmpty()`/`len()`. These containers are mutable handles (reference
+> semantics), like `List`. See `examples/containers_demo.xi`.
+
 ## Lazy infinite sources — `generateSequence`
 
 `generateSequence(seed) { next }` is a lazy source whose value starts at `seed`
@@ -294,8 +371,11 @@ See `examples/generate_sequence_demo.xi`.
 
 ## What's next
 
-The collection layer is complete: containers (`List`/`Set`/`Map`), the eager
-functional API, lazy sequences (incl. `generateSequence`), `Pair<A, B>`, and
-`zip`/`partition`/`unzip`. [First-class closures](language-guide.md#first-class-functions-closures)
+The collection layer is complete: containers (`List`/`Vec`/`Set`/`Map`,
+`Stack`/`Queue`/`SortedQueue`), the eager functional API, lazy sequences (incl.
+`generateSequence`), `Pair<A, B>`, and `zip`/`partition`/`unzip`. For fixed-size
+**math vectors** (Vec2/Vec3/Vec4 with dot/cross/normalize/…) see the `std/vec`
+module and `examples/vec_math_demo.xi`.
+[First-class closures](language-guide.md#first-class-functions-closures)
 now ship (single typed param, capture-free); multi-parameter lambdas, captures,
 and generics are the remaining language-level work (see `FEATURES.md`).

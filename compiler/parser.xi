@@ -143,6 +143,34 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
                 if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
                 base = "xc_Set_" + ctypeSuffix(elem.ctype) + "_t"
             } else {
+            if t.text == "Vec" and peekAt(ps, 1).kind == 114 {   // Vec<T> — alias of List<T>
+                let ep = advance(advance(ps))
+                let elem = parseTypeExpr(ep)
+                ps2 = elem.ps
+                if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
+                base = "xc_List_" + ctypeSuffix(elem.ctype) + "_t"
+            } else {
+            if t.text == "Stack" and peekAt(ps, 1).kind == 114 {  // Stack<T>
+                let ep = advance(advance(ps))
+                let elem = parseTypeExpr(ep)
+                ps2 = elem.ps
+                if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
+                base = "xc_Stack_" + ctypeSuffix(elem.ctype) + "_t"
+            } else {
+            if t.text == "Queue" and peekAt(ps, 1).kind == 114 {  // Queue<T>
+                let ep = advance(advance(ps))
+                let elem = parseTypeExpr(ep)
+                ps2 = elem.ps
+                if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
+                base = "xc_Queue_" + ctypeSuffix(elem.ctype) + "_t"
+            } else {
+            if t.text == "SortedQueue" and peekAt(ps, 1).kind == 114 {  // SortedQueue<T>
+                let ep = advance(advance(ps))
+                let elem = parseTypeExpr(ep)
+                ps2 = elem.ps
+                if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
+                base = "xc_SortedQueue_" + ctypeSuffix(elem.ctype) + "_t"
+            } else {
             if t.text == "Map" and peekAt(ps, 1).kind == 114 {   // Map<K, V>
                 let kp = advance(advance(ps))                    // past `Map` and `<`
                 let kt = parseTypeExpr(kp)
@@ -155,7 +183,7 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
             } else {
                 base = identToCtype(t.text)
                 ps2 = advance(ps)
-            } } }
+            } } } } } } }
         } else {
             return TypeResult { ctype: "void", ps: ps }
         }

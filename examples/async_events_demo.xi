@@ -11,8 +11,8 @@ import "std/log.xi"
 
 event Job { id: Integer }
 
-interface Queue { producer fire(n: Integer) }
-class Producer implements Queue {
+interface Emitter { producer fire(n: Integer) }
+class Producer implements Emitter {
     deps { events: PublisherService }
     producer fire(n: Integer) { events.publish("jobs", Job { id: n }) }
 }
@@ -28,7 +28,7 @@ module App {}
 
 async entry (logger: Logger) main(args: String[]) -> Integer {
     let pump = Events.runAsync()        // deliver on a background thread
-    let q = App.resolve(Queue)
+    let q = App.resolve(Emitter)
     let i = 0
     while i < 5 { q.fire(i) i = i + 1 }  // publish from the main thread
 

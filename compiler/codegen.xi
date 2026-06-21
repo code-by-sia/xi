@@ -1063,6 +1063,31 @@ mapper strFlagFor(ctype: String) -> String {
     return "0"
 }
 
+// ── Stack<T> / Queue<T> / SortedQueue<T> element helpers ──────────────────────
+// xtypes "Stack_<suf>" (6), "Queue_<suf>" (6), "SortedQueue_<suf>" (12).
+predicate isStackXType(typ: String) { return startsWith2(typ, "Stack_") }
+mapper stackElemSuffix(typ: String) -> String { return string_slice(typ, 6, string_len(typ)) }
+mapper stackElemCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuffix(stackElemSuffix(typ))) }
+mapper stackElemXName(typ: String) -> String { return xnameFromArrSuffix(stackElemSuffix(typ)) }
+
+predicate isQueueXType(typ: String) { return startsWith2(typ, "Queue_") }
+mapper queueElemSuffix(typ: String) -> String { return string_slice(typ, 6, string_len(typ)) }
+mapper queueElemCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuffix(queueElemSuffix(typ))) }
+mapper queueElemXName(typ: String) -> String { return xnameFromArrSuffix(queueElemSuffix(typ)) }
+
+predicate isSortedQueueXType(typ: String) { return startsWith2(typ, "SortedQueue_") }
+mapper sqElemSuffix(typ: String) -> String { return string_slice(typ, 12, string_len(typ)) }
+mapper sqElemCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuffix(sqElemSuffix(typ))) }
+mapper sqElemXName(typ: String) -> String { return xnameFromArrSuffix(sqElemSuffix(typ)) }
+
+// Min-heap comparison kind for SortedQueue from the element ctype:
+// 1 = number (double), 2 = String (by content), 0 = integer/char/bool.
+mapper pqCmpKind(ec: String) -> String {
+    if ec == "xc_number_t" { return "1" }
+    if ec == "xc_string_t" { return "2" }
+    return "0"
+}
+
 // ── Map<K,V> key/value helpers (xtype "Map_<ksuf>_<vsuf>") ──────────
 // The key is always a primitive/String suffix, so its boundary is unambiguous.
 predicate isMapXType(typ: String) { return startsWith2(typ, "Map_") }
@@ -1413,6 +1438,51 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             pos: endp, xtyp: "Map_" + ctypeSuffix(kc) + "_" + ctypeSuffix(vc)
         , owned: false }
     }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "Vec" and gkind(toks, pos + 2) == 114 {
+        // `empty Vec<T>` — a fresh, empty vector (a List under the hood)
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }   // `>`
+        return ExprRes {
+            code: "xstd_list_new(sizeof(" + elemCtype + "))",
+            pos: endp, xtyp: "List_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "Stack" and gkind(toks, pos + 2) == 114 {
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }
+        return ExprRes {
+            code: "xstd_stack_new(sizeof(" + elemCtype + "))",
+            pos: endp, xtyp: "Stack_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "Queue" and gkind(toks, pos + 2) == 114 {
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }
+        return ExprRes {
+            code: "xstd_queue_new(sizeof(" + elemCtype + "))",
+            pos: endp, xtyp: "Queue_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "SortedQueue" and gkind(toks, pos + 2) == 114 {
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }
+        return ExprRes {
+            code: "xstd_pqueue_new(sizeof(" + elemCtype + "), " + pqCmpKind(elemCtype) + ")",
+            pos: endp, xtyp: "SortedQueue_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
     // ── builders: listOf(a, b, ...) / setOf(a, b, ...) / mapOf(k to v, ...) ──
     // Element/key types are inferred from the first argument (homogeneous).
     // readConfig<T>("file.{json,yaml,xml}") — read + decode a config file into T
@@ -1461,6 +1531,62 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         }
         if gkind(toks, p) == 101 { p = p + 1 }
         return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "List_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "vecOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_List_t _t = xstd_list_new(sizeof(" + ec + ")); "
+                 + "xstd_list_push(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_list_push(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "List_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "stackOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_Stack_t _t = xstd_stack_new(sizeof(" + ec + ")); "
+                 + "xstd_stack_push(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_stack_push(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "Stack_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "queueOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_Queue_t _t = xstd_queue_new(sizeof(" + ec + ")); "
+                 + "xstd_queue_enqueue(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_queue_enqueue(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "Queue_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "sortedQueueOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_SortedQueue_t _t = xstd_pqueue_new(sizeof(" + ec + "), " + pqCmpKind(ec) + "); "
+                 + "xstd_pqueue_push(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_pqueue_push(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "SortedQueue_" + arrSuffixOf(first.xtyp) , owned: false }
     }
     if k == 1 and txt == "setOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
         let first = genExpr(toks, pos + 2, ctx)
@@ -1650,6 +1776,23 @@ predicate isListFunc(fld: String) {
     if fld == "associateWith" { return true }
     if fld == "chunked"  { return true }
     if fld == "windowed" { return true }
+    if fld == "sum"      { return true }
+    if fld == "min"      { return true }
+    if fld == "max"      { return true }
+    if fld == "minOrNone" { return true }
+    if fld == "maxOrNone" { return true }
+    if fld == "contains" { return true }
+    if fld == "indexOf"  { return true }
+    if fld == "toList"   { return true }
+    if fld == "withIndex" { return true }
+    if fld == "flatten"  { return true }
+    if fld == "single"   { return true }
+    if fld == "singleOrNone" { return true }
+    if fld == "onEach"   { return true }
+    if fld == "maxOf"    { return true }
+    if fld == "minOf"    { return true }
+    if fld == "scan"     { return true }
+    if fld == "runningFold" { return true }
     return false
 }
 // index of the top-level `=>` (kind 110) within (start, close), or -1.
@@ -1972,6 +2115,87 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         return ExprRes { code: code, pos: q, xtyp: pairXtype("List_" + arrSuffixOf(aX), "List_" + arrSuffixOf(bX)) , owned: true }
     }
 
+    if fld == "sum" {
+        // numeric total of the elements (0 for an empty list)
+        let code = "({ " + declSv + elem + " " + rv + " = 0;\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1)\n"
+                 + "        " + rv + " = " + rv + " + *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + "); " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: elemX , owned: false }
+    }
+    if fld == "min" or fld == "max" {
+        // natural min/max of primitive/String elements (aborts if empty)
+        let bk = "_best" + u
+        let cv = "_c" + u
+        let cmp = cv + " < " + bk
+        if fld == "max" { cmp = cv + " > " + bk }
+        if elemX == "String" {
+            cmp = "xc_str_cmp(" + cv + ", " + bk + ") < 0"
+            if fld == "max" { cmp = "xc_str_cmp(" + cv + ", " + bk + ") > 0" }
+        }
+        let code = "({ " + declSv + "xc_integer_t _n" + u + " = xstd_list_len(" + sv + ");\n"
+                 + "      if (_n" + u + " == 0) { fprintf(stderr, \"xc: " + fld + "() on an empty list\\n\"); abort(); }\n"
+                 + "      " + elem + " " + bk + " = *(" + elem + "*)xstd_list_at(" + sv + ", 0);\n"
+                 + "      for (xc_integer_t " + iv + " = 1; " + iv + " < _n" + u + "; " + iv + " = " + iv + " + 1) { " + elem + " " + cv + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + "); if (" + cmp + ") " + bk + " = " + cv + "; } " + bk + "; })"
+        return ExprRes { code: code, pos: q, xtyp: elemX , owned: false }
+    }
+    if fld == "minOrNone" or fld == "maxOrNone" {
+        // natural min/max as an optional (none if empty)
+        let bk = "_best" + u
+        let cv = "_c" + u
+        let cmp = cv + " < " + bk
+        if fld == "maxOrNone" { cmp = cv + " > " + bk }
+        if elemX == "String" {
+            cmp = "xc_str_cmp(" + cv + ", " + bk + ") < 0"
+            if fld == "maxOrNone" { cmp = "xc_str_cmp(" + cv + ", " + bk + ") > 0" }
+        }
+        let code = "({ " + declSv + "xc_opt_" + suf + "_t " + rv + "; " + rv + ".has_value = 0; xc_integer_t _n" + u + " = xstd_list_len(" + sv + ");\n"
+                 + "      if (_n" + u + " > 0) { " + elem + " " + bk + " = *(" + elem + "*)xstd_list_at(" + sv + ", 0);\n"
+                 + "        for (xc_integer_t " + iv + " = 1; " + iv + " < _n" + u + "; " + iv + " = " + iv + " + 1) { " + elem + " " + cv + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + "); if (" + cmp + ") " + bk + " = " + cv + "; }\n"
+                 + "        " + rv + ".has_value = 1; " + rv + ".value = " + bk + "; } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "opt_" + suf , owned: false }
+    }
+    if fld == "contains" or fld == "indexOf" {
+        // membership / first index of a value (indexOf returns -1 if absent)
+        let cv = "_c" + u
+        let eq = cv + " == (" + argCode + ")"
+        if elemX == "String" { eq = "xc_str_cmp(" + cv + ", (" + argCode + ")) == 0" }
+        if fld == "contains" {
+            let code = "({ " + declSv + "xc_bool_t " + rv + " = 0;\n"
+                     + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) { " + elem + " " + cv + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + "); if (" + eq + ") { " + rv + " = 1; break; } } " + rv + "; })"
+            return ExprRes { code: code, pos: q, xtyp: "Bool" , owned: false }
+        }
+        let code = "({ " + declSv + "xc_integer_t " + rv + " = -1;\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) { " + elem + " " + cv + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + "); if (" + eq + ") { " + rv + " = " + iv + "; break; } } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "Integer" , owned: false }
+    }
+    if fld == "toList" {
+        // a shallow copy of the list
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1)\n"
+                 + "        xstd_list_push(" + rv + ", xstd_list_at(" + sv + ", " + iv + ")); " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: typ , owned: false }
+    }
+    if fld == "withIndex" {
+        // List<T> -> List<Pair<Integer, T>>
+        let pX = pairXtype("Integer", elemX)
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(xc_pair_t));\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                 + "        xc_integer_t _ix" + u + " = " + iv + ";\n"
+                 + "        xc_pair_t _pp" + u + " = xc_pair_make(&_ix" + u + ", sizeof(xc_integer_t), xstd_list_at(" + sv + ", " + iv + "), sizeof(" + elem + "));\n"
+                 + "        xstd_list_push(" + rv + ", &_pp" + u + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "List_" + arrSuffixOf(pX) , owned: false }
+    }
+    if fld == "flatten" {
+        // List<List<T>> -> List<T>
+        let innerC = listElemCtype(elemX)
+        let jv = "_j" + u
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + innerC + "));\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                 + "        xc_List_t _sub" + u + " = *(xc_List_t*)xstd_list_at(" + sv + ", " + iv + ");\n"
+                 + "        for (xc_integer_t " + jv + " = 0; " + jv + " < xstd_list_len(_sub" + u + "); " + jv + " = " + jv + " + 1) xstd_list_push(" + rv + ", xstd_list_at(_sub" + u + ", " + jv + ")); } " + rv + "; })"
+        return ExprRes { code: code, pos: q, xtyp: elemX , owned: false }
+    }
+
     // ── lambda methods:  { [params =>] body } ──
     let close = matchBrace(toks, q)
     let arrow = lambdaArrow(toks, q + 1, close)
@@ -2010,6 +2234,19 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
                  + elDecl + "        " + p0 + " = (" + body.code + "); } " + p0 + "; })"
         return ExprRes { code: loop, pos: close + 1, xtyp: elemX , owned: false }
     }
+    if fld == "scan" or fld == "runningFold" {
+        // (init) { acc, x => body } — successive accumulations, including init.
+        // Result is List<Acc> of length len+1.
+        let accX = argX
+        let accC = xnameToCtype(accX)
+        let bctx = addSym(addSym(ctx, p0, accX), p1, elemX)
+        let body = genExpr(toks, bstart, bctx)
+        let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + accC + ")); " + accC + " " + p0 + " = " + argCode + ";\n"
+                 + "      xstd_list_push(" + rv + ", &" + p0 + ");\n"
+                 + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
+                 + "        " + elem + " " + p1 + " = " + elAt + "; " + p0 + " = (" + body.code + "); xstd_list_push(" + rv + ", &" + p0 + "); } " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "List_" + arrSuffixOf(accX) , owned: false }
+    }
     if fld == "mapIndexed" {
         // { i, x => body } — p0 = index (Integer), p1 = element
         let bctx = addSym(addSym(ctx, p0, "Integer"), p1, elemX)
@@ -2028,6 +2265,41 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     let loopOpen = "for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
                  + "        " + elem + " " + p0 + " = " + elAt + ";\n"
 
+    if fld == "single" {
+        // the one element matching the predicate (aborts if zero or many)
+        let code = "({ " + declSv + "xc_opt_" + suf + "_t " + rv + "; " + rv + ".has_value = 0;\n      " + loopOpen
+                 + "        if ((" + body.code + ")) { if (" + rv + ".has_value) { fprintf(stderr, \"xc: single() found more than one match\\n\"); abort(); } " + rv + ".has_value = 1; " + rv + ".value = " + p0 + "; } }\n"
+                 + "      if (!" + rv + ".has_value) { fprintf(stderr, \"xc: single() found no match\\n\"); abort(); } " + rv + ".value; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: elemX , owned: false }
+    }
+    if fld == "singleOrNone" {
+        // the one matching element as an optional (none if zero or many)
+        let code = "({ " + declSv + "xc_opt_" + suf + "_t " + rv + "; " + rv + ".has_value = 0; xc_integer_t _cnt" + u + " = 0;\n      " + loopOpen
+                 + "        if ((" + body.code + ")) { _cnt" + u + " = _cnt" + u + " + 1; " + rv + ".value = " + p0 + "; } }\n"
+                 + "      " + rv + ".has_value = (_cnt" + u + " == 1); " + rv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: "opt_" + suf , owned: false }
+    }
+    if fld == "onEach" {
+        // run a side effect per element, then return the list itself
+        let code = "({ " + declSv + loopOpen + "        (void)(" + body.code + "); } " + sv + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: typ , owned: false }
+    }
+    if fld == "maxOf" or fld == "minOf" {
+        // the max/min projected value (aborts if empty)
+        let keyC = xnameToCtype(body.xtyp)
+        let bk = "_best" + u
+        let kk = "_k" + u
+        let cmp = kk + " < " + bk
+        if fld == "maxOf" { cmp = kk + " > " + bk }
+        if body.xtyp == "String" {
+            cmp = "xc_str_cmp(" + kk + ", " + bk + ") < 0"
+            if fld == "maxOf" { cmp = "xc_str_cmp(" + kk + ", " + bk + ") > 0" }
+        }
+        let code = "({ " + declSv + keyC + " " + bk + "; int _f" + u + " = 0;\n      " + loopOpen
+                 + "        " + keyC + " " + kk + " = (" + body.code + "); if (!_f" + u + " || (" + cmp + ")) { " + bk + " = " + kk + "; _f" + u + " = 1; } }\n"
+                 + "      if (!_f" + u + ") { fprintf(stderr, \"xc: " + fld + "() on an empty list\\n\"); abort(); } " + bk + "; })"
+        return ExprRes { code: code, pos: close + 1, xtyp: body.xtyp , owned: false }
+    }
     if fld == "map" {
         let uc = xnameToCtype(body.xtyp)
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + uc + "));\n      " + loopOpen
@@ -2273,12 +2545,14 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         typ = listElemXName(typ)
                         p = al.pos
                     } else {
-                    if fld == "set" {
+                    if fld == "set" or fld == "insert" {
                         let ie = genExpr(toks, p + 3, ctx)
                         let q = ie.pos
                         if gkind(toks, q) == 106 { q = q + 1 }   // ,
                         let ve = genExpr(toks, q, ctx)
-                        code = "xstd_list_set(" + recv + ", " + ie.code + ", (" + elem + "[]){ " + ve.code + " })"
+                        let op = "xstd_list_set"
+                        if fld == "insert" { op = "xstd_list_insert" }
+                        code = op + "(" + recv + ", " + ie.code + ", (" + elem + "[]){ " + ve.code + " })"
                         typ = ""
                         p = ve.pos
                         if gkind(toks, p) == 101 { p = p + 1 }
@@ -2287,6 +2561,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         if fld == "len"      { code = "xstd_list_len(" + recv + ")"  typ = "Integer" }
                         if fld == "isEmpty"  { code = "(xstd_list_len(" + recv + ") == 0)"  typ = "Bool" }
                         if fld == "removeAt" { code = "xstd_list_removeat(" + recv + ", " + al.code + ")"  typ = "" }
+                        if fld == "swap"     { code = "xstd_list_swap(" + recv + ", " + al.code + ")"  typ = "" }
                         if fld == "clear"    { code = "xstd_list_clear(" + recv + ")"  typ = "" }
                         p = al.pos
                     } } }
@@ -2376,6 +2651,64 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         if fld == "values"  { code = "xstd_map_values(" + recv + ")"  typ = "List_" + mapValSuffix(typ) }
                         p = al.pos
                     } } } } }
+                } else {
+                if isStackXType(typ) {
+                    let recv = code
+                    let elem = stackElemCtype(typ)
+                    let elemX = stackElemXName(typ)
+                    if fld == "push" {
+                        let ae = genExpr(toks, p + 3, ctx)
+                        code = "xstd_stack_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
+                        typ = ""  p = ae.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                        let al = genArgs(toks, p + 2, ctx)
+                        if fld == "pop"     { code = "({ " + elem + " _pv" + int_to_string(p) + "; xstd_stack_pop(" + recv + ", &_pv" + int_to_string(p) + "); _pv" + int_to_string(p) + "; })"  typ = elemX }
+                        if fld == "peek"    { code = "(*(" + elem + "*)xstd_stack_peek(" + recv + "))"  typ = elemX }
+                        if fld == "len"     { code = "xstd_stack_len(" + recv + ")"  typ = "Integer" }
+                        if fld == "isEmpty" { code = "(xstd_stack_len(" + recv + ") == 0)"  typ = "Bool" }
+                        if fld == "clear"   { code = "xstd_stack_clear(" + recv + ")"  typ = "" }
+                        p = al.pos
+                    }
+                } else {
+                if isQueueXType(typ) {
+                    let recv = code
+                    let elem = queueElemCtype(typ)
+                    let elemX = queueElemXName(typ)
+                    if fld == "enqueue" or fld == "push" {
+                        let ae = genExpr(toks, p + 3, ctx)
+                        code = "xstd_queue_enqueue(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
+                        typ = ""  p = ae.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                        let al = genArgs(toks, p + 2, ctx)
+                        if fld == "dequeue" { code = "({ " + elem + " _qv" + int_to_string(p) + "; xstd_queue_dequeue(" + recv + ", &_qv" + int_to_string(p) + "); _qv" + int_to_string(p) + "; })"  typ = elemX }
+                        if fld == "pop"     { code = "({ " + elem + " _qv" + int_to_string(p) + "; xstd_queue_dequeue(" + recv + ", &_qv" + int_to_string(p) + "); _qv" + int_to_string(p) + "; })"  typ = elemX }
+                        if fld == "peek"    { code = "(*(" + elem + "*)xstd_queue_peek(" + recv + "))"  typ = elemX }
+                        if fld == "len"     { code = "xstd_queue_len(" + recv + ")"  typ = "Integer" }
+                        if fld == "isEmpty" { code = "(xstd_queue_len(" + recv + ") == 0)"  typ = "Bool" }
+                        if fld == "clear"   { code = "xstd_queue_clear(" + recv + ")"  typ = "" }
+                        p = al.pos
+                    }
+                } else {
+                if isSortedQueueXType(typ) {
+                    let recv = code
+                    let elem = sqElemCtype(typ)
+                    let elemX = sqElemXName(typ)
+                    if fld == "push" {
+                        let ae = genExpr(toks, p + 3, ctx)
+                        code = "xstd_pqueue_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
+                        typ = ""  p = ae.pos
+                        if gkind(toks, p) == 101 { p = p + 1 }
+                    } else {
+                        let al = genArgs(toks, p + 2, ctx)
+                        if fld == "pop"     { code = "({ " + elem + " _hv" + int_to_string(p) + "; xstd_pqueue_pop(" + recv + ", &_hv" + int_to_string(p) + "); _hv" + int_to_string(p) + "; })"  typ = elemX }
+                        if fld == "peek"    { code = "(*(" + elem + "*)xstd_pqueue_peek(" + recv + "))"  typ = elemX }
+                        if fld == "len"     { code = "xstd_pqueue_len(" + recv + ")"  typ = "Integer" }
+                        if fld == "isEmpty" { code = "(xstd_pqueue_len(" + recv + ") == 0)"  typ = "Bool" }
+                        if fld == "clear"   { code = "xstd_pqueue_clear(" + recv + ")"  typ = "" }
+                        p = al.pos
+                    }
                 } else {
                 if typ == "HttpResponse" {
                     // res.send(dto): serialize via the DI-resolved WebTransport.
@@ -2511,6 +2844,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 }
                 }
                 p = al.pos
+                }
+                }
+                }
                 }
                 }
                 }
@@ -5177,8 +5513,11 @@ mapper genArrTypedefs(prog: Program) -> String {
         let ts = typeSpecGet(prog.types, i)
         if not isCompositeAlias(ts) {
             out = out + "typedef struct { xc_" + ts.name + "_t* data; xc_size_t len; xc_size_t cap; } xc_arr_" + ts.name + "_t;\n"
-            out = out + "typedef xc_List_t xc_List_" + ts.name + "_t;\n"   // List<ts>
+            out = out + "typedef xc_List_t xc_List_" + ts.name + "_t;\n"   // List<ts> / Vec<ts>
             out = out + "typedef xc_Set_t xc_Set_" + ts.name + "_t;\n"     // Set<ts>
+            out = out + "typedef xc_Stack_t xc_Stack_" + ts.name + "_t;\n" // Stack<ts>
+            out = out + "typedef xc_Queue_t xc_Queue_" + ts.name + "_t;\n" // Queue<ts>
+            out = out + "typedef xc_SortedQueue_t xc_SortedQueue_" + ts.name + "_t;\n"  // SortedQueue<ts>
             // Map<primitive-key, ts> — one alias per primitive/String key type
             out = out + "typedef xc_Map_t xc_Map_integer_" + ts.name + "_t;\n"
             out = out + "typedef xc_Map_t xc_Map_number_"  + ts.name + "_t;\n"
