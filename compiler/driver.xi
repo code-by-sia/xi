@@ -568,6 +568,88 @@ producer installAll() -> Integer {
     return 0
 }
 
+// ── `xc --pack` : build a shareable library archive ─────────────────────────
+// Find the first .xi declaring a `library { }` block (for `xi pack` with no arg).
+producer findLibraryFile() -> String {
+    run_command("find . -name '*.xi' -not -path '*/modules/*' -not -path '*/build/*' -not -path '*/dist/*' -not -path '*/.git/*' | sort > /tmp/xi-pack-find.txt 2>/dev/null")
+    let files = splitLines(file_read_all("/tmp/xi-pack-find.txt"))
+    let i = 0
+    let n = stringArrLen(files)
+    while i < n {
+        let f = stringArrGet(files, i)
+        if containsSub(file_read_all(f), "library") {
+            let lr = loadModule(f, emptyStrings())
+            let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
+            let toks = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
+            let prog = parseProgram(toks)
+            if moduleSpecLen(prog.libraries) > 0 { return f }
+        }
+        i = i + 1
+    }
+    return ""
+}
+// name.xi -> name  (drop a trailing .xi for the default library id)
+mapper stripXiExt(s: String) -> String {
+    if endsWith2(s, ".xi") { return string_slice(s, 0, string_len(s) - 3) }
+    return s
+}
+// Gather the library's source per its includes/excludes and tar it into
+// dist/<id>-<version>.tar.gz — a source archive ready to host and depend on.
+producer packLibrary(srcPath: String) -> Integer {
+    let path = srcPath
+    if string_len(path) == 0 { path = findLibraryFile() }
+    if string_len(path) == 0 {
+        system.stdout.writeln("xi pack: no `library { }` manifest found (pass a file, or add a library block)")
+        return 1
+    }
+    let lr = loadModule(path, emptyStrings())
+    let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
+    let tokens = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
+    let prog = parseProgram(tokens)
+    if moduleSpecLen(prog.libraries) == 0 {
+        system.stdout.writeln("xi pack: no `library { }` block in " + path)
+        return 1
+    }
+    let lib = moduleSpecGet(prog.libraries, 0)
+    let id = lib.id
+    if string_len(id) == 0 { id = stripXiExt(baseNameOf(path)) }
+    let ver = lib.version
+    if string_len(ver) == 0 { ver = "0.0.0" }
+    let inc = lib.includes
+    if stringArrLen(inc) == 0 { inc = ["./**"] }
+    let exc = lib.excludes
+    let base = dirOf(path)
+    if string_len(base) == 0 { base = "." }
+    run_command("find '" + base + "' -name '*.xi' | sort > /tmp/xi-pack.txt 2>/dev/null")
+    let files = splitLines(file_read_all("/tmp/xi-pack.txt"))
+    let list = ""
+    let count = 0
+    let i = 0
+    let n = stringArrLen(files)
+    while i < n {
+        let f = stringArrGet(files, i)
+        let rel = relPath(base, f)
+        if string_len(rel) > 0 and not startsWith2(rel, "modules/") and not startsWith2(rel, "dist/") and not startsWith2(rel, "build/") and matchesAny(inc, rel) and not matchesAny(exc, rel) {
+            list = list + rel + "\n"
+            count = count + 1
+        }
+        i = i + 1
+    }
+    if count == 0 {
+        system.stdout.writeln("xi pack: no source files matched includes/excludes")
+        return 1
+    }
+    file_write("/tmp/xi-pack-list.txt", list)
+    let out = "dist/" + id + "-" + ver + ".tar.gz"
+    let sh = "mkdir -p dist && tar -czf '" + out + "' -C '" + base + "' -T /tmp/xi-pack-list.txt"
+    if run_command(sh) != 0 {
+        system.stdout.writeln("xi pack: tar failed")
+        return 1
+    }
+    system.stdout.writeln("xi pack: wrote " + out + "  (" + int_to_string(count) + " files, library " + id + " " + ver + ")")
+    return 0
+}
+
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
 mapper xcVersion() -> String { return "0.0.80" }
 
@@ -729,6 +811,10 @@ async entry main(args: String[]) -> Integer {
     if srcPath == "--install" {
         if args.len >= 3 { return installDeps(args.data[2]) }
         return installAll()
+    }
+    if srcPath == "--pack" {
+        if args.len >= 3 { return packLibrary(args.data[2]) }
+        return packLibrary("")
     }
     return buildOne(srcPath)
 }

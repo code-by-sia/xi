@@ -54,6 +54,9 @@ Follow these by default — they make Xi code idiomatic and testable:
   ```
   `xi install` fetches it into `./modules` (auto-compiled in); call its functions
   by `namespace`. Write your own `extern "C"` binding only when no library exists.
+- **Publishing a library:** give it a `namespace`, add a `library { id version includes }`
+  block (no `entry`/`module` — that block is inert when consumed), and run `xi pack`
+  to build `dist/<id>-<version>.tar.gz`. Host it; others depend on the URL.
 
 ## Hello, world
 

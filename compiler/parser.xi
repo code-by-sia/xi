@@ -394,6 +394,7 @@ type Program = {
     tables:     DecisionTable[], // table-form `decision`s (emitted by codegen)
     tests:      FuncSpec[],    // `test "name" (deps) { ... }` cases (kind="test")
     scheduled:  FuncSpec[],    // `scheduled name() cron "..." { }` jobs (cron in .topic)
+    libraries:  ModuleSpec[],  // `library { id/version/includes/... }` manifest(s); inert in codegen
     cIncludes:  String[],      // C headers from `extern "C" { include "..." }`
     cFlags:     String[]       // build-flag tokens: -lX / -I.. / pkg:NAME (extern "C")
 }
@@ -1945,6 +1946,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     let tables: DecisionTable[] = []
     let tests: FuncSpec[] = []
     let scheduled: FuncSpec[] = []
+    let libraries: ModuleSpec[] = []
     let cIncludes: String[] = []
     let cFlags: String[] = []
     let entrySpec = FuncSpec {
@@ -2089,6 +2091,13 @@ creator parseProgram(tokens: Token[]) -> Program {
                             if r.hasEntry { entrySpec = r.entry }   // entry declared inside the module
                             ps = r.ps
                         } else {
+                        if t.kind == 1 and t.text == "library" {
+                            // library { id = "..." version = "..." includes = [...] }
+                            // metadata only; inert in codegen, read by `xi pack`.
+                            let r = parseModule(ps)
+                            libraries = appendModuleSpec(libraries, r.spec)
+                            ps = r.ps
+                        } else {
                         if t.kind == 1 and t.text == "scheduled" {
                             // scheduled (deps) name() cron "<expr>" { body }
                             ps = advance(ps)                       // 'scheduled'
@@ -2177,6 +2186,7 @@ creator parseProgram(tokens: Token[]) -> Program {
                             }
                         }
                         }
+                        }
                     }
                 }
             }
@@ -2190,7 +2200,8 @@ creator parseProgram(tokens: Token[]) -> Program {
         modules: modules, functions: functions, externs: externs,
         entrySpec: entrySpec, interrupts: interrupts, atoms: atoms,
         machines: machines, eventTypes: eventTypes, tables: tables,
-        tests: tests, scheduled: scheduled, cIncludes: cIncludes, cFlags: cFlags
+        tests: tests, scheduled: scheduled, libraries: libraries,
+        cIncludes: cIncludes, cFlags: cFlags
     }
 }
 

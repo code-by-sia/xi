@@ -211,3 +211,59 @@ $ xc server.xi && ./build/server
 
 > Dependencies are fetched over the network and compiled into your program —
 > only depend on archives you trust.
+
+## Publishing a library (`library` + `xi pack`)
+
+To share code, give the project a **`library` manifest** and package it with
+`xi pack`. A `library { … }` block carries the library's identity (id, version,
+metadata) and its source globs. Unlike `module`, it produces **no binary and is
+inert when consumed** — so it can sit right next to the library's own code
+without leaking an `entry`/`module` into the programs that depend on it:
+
+```x title="greet.xi"
+namespace greet
+
+mapper hello(name: String) -> String { return "Hello, " + name + "!" }
+mapper shout(s: String) -> String    { return s + "!!!" }
+
+library {
+    id       = "greet"
+    name     = "Greet"
+    version  = "1.2.0"
+    license  = "MIT"
+    includes = ["./**"]               // which files belong to the library
+    excludes = ["**/*_test.xi"]
+}
+```
+
+```console
+$ xi pack                              # or: xi pack greet.xi
+xi pack: wrote dist/greet-1.2.0.tar.gz  (1 files, library greet 1.2.0)
+```
+
+`xi pack` gathers the files matching `includes`/`excludes` and writes a source
+archive `dist/<id>-<version>.tar.gz`. With no argument it finds the project's
+`library` block automatically. (`build/`, `dist/`, and `modules/` are never
+packed.)
+
+Publish that tarball anywhere downloadable — a GitHub release is the natural
+home — and consumers add its URL to their `dependencies` and run `xi install`:
+
+```x title="app.xi (the consumer)"
+module App {
+    id           = "app"
+    dependencies = ["https://github.com/you/greet/releases/download/v1.2.0/greet-1.2.0.tar.gz"]
+}
+```
+
+```console
+$ xi install        # extracts greet into ./modules
+$ xc app.xi         # greet.hello(...) is now available, no extra import
+```
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `id` | string | source filename | archive/library name |
+| `name` / `version` / `license` / `description` | string | — | metadata |
+| `includes` | string[] | `["./**"]` | globs of files to pack |
+| `excludes` | string[] | `[]` | globs to drop |

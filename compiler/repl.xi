@@ -362,6 +362,12 @@ async entry main(args: String[]) -> Integer {
             if args.len >= 3 { target = " " + args.data[2] }
             return run_command(xc + " --install" + target)
         }
+        if sub == "pack" {
+            // Build a shareable library archive (dist/<id>-<version>.tar.gz).
+            let target = ""
+            if args.len >= 3 { target = " " + args.data[2] }
+            return run_command(xc + " --pack" + target)
+        }
         if sub == "test" {
             if args.len < 3 {
                 system.stdout.writeln("usage: xi test <file.xi> [--filter <substr>]   (or: xi test --all)")
