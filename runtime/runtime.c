@@ -2232,6 +2232,106 @@ xc_Thread_t xstd_thread_spawn(void* (*fn)(void*), void* arg) {
 }
 void xstd_thread_stop(xc_Thread_t t) { if (t) t->stop = 1; }
 void xstd_thread_wait(xc_Thread_t t) { if (t) pthread_join(t->tid, NULL); }
+
+/* ─── Future<T>: async result handle ────────────────────────────────────────
+ * The worker runs without a per-thread arena, so everything it allocates leaks
+ * onto the shared heap and outlives the await (the result must escape).         */
+struct xc_future { pthread_t tid; void* (*fn)(void*); void* arg; void* result; volatile int done; };
+static void* xc_future_trampoline(void* p) {
+    struct xc_future* f = (struct xc_future*)p;
+    f->result = f->fn(f->arg);   /* allocate-and-leak: no arena to destroy */
+    f->done = 1;
+    return NULL;
+}
+xc_Future_t xstd_future_spawn(void* (*fn)(void*), void* arg) {
+    struct xc_future* f = (struct xc_future*)calloc(1, sizeof(*f)); if (!f) abort();
+    f->fn = fn; f->arg = arg;
+    if (pthread_create(&f->tid, NULL, xc_future_trampoline, f) != 0) { free(f); abort(); }
+    return f;
+}
+void* xstd_future_await(xc_Future_t f) {
+    if (!f) return NULL;
+    pthread_join(f->tid, NULL);
+    return f->result;
+}
+xc_bool_t xstd_future_done(xc_Future_t f) { return f ? (f->done != 0) : true; }
+
+/* ─── Scheduled jobs: a minimal cron scheduler ──────────────────────────────
+ * Each of the 5 cron fields is parsed into a bitmask of matching values; the
+ * scheduler wakes ~once a second and fires any job whose mask matches the
+ * current local minute (deduped so a job fires at most once per minute).        */
+typedef struct { uint64_t min, hour, dom, mon, dow; void (*fn)(void); long last; } xc_sched_job;
+static xc_sched_job xc_sched_jobs[128];
+static int xc_sched_n = 0;
+
+/* Parse one cron field (comma list of star, n, a-b, step forms) into a
+ * bitmask of values in [lo,hi], indexed from lo. */
+static uint64_t xc_cron_field(const char* s, int lo, int hi) {
+    uint64_t mask = 0;
+    const char* p = s;
+    while (*p) {
+        char term[64]; int ti = 0;
+        while (*p && *p != ',') { if (ti < 63) term[ti++] = *p; p++; }
+        term[ti] = 0;
+        if (*p == ',') p++;
+        int step = 1;
+        char* slash = strchr(term, '/');
+        if (slash) { step = atoi(slash + 1); *slash = 0; }
+        int a, b;
+        if (term[0] == '*' || term[0] == '?' || term[0] == 0) { a = lo; b = hi; }
+        else {
+            char* dash = strchr(term, '-');
+            if (dash) { *dash = 0; a = atoi(term); b = atoi(dash + 1); }
+            else { a = atoi(term); b = a; }
+        }
+        if (step < 1) step = 1;
+        for (int v = a; v <= b; v += step) {
+            int w = v;
+            if (lo == 0 && hi == 6 && w == 7) w = 0;     /* dow: 7 == Sunday == 0 */
+            if (w >= lo && w <= hi) mask |= (1ULL << (w - lo));
+        }
+    }
+    return mask;
+}
+void xstd_sched_register(void (*fn)(void), const char* cron) {
+    if (xc_sched_n >= 128) return;
+    char fields[5][64]; int fi = 0, ci = 0;
+    for (int k = 0; k < 5; k++) fields[k][0] = 0;
+    const char* p = cron;
+    while (*p && fi < 5) {
+        if (*p == ' ' || *p == '\t') { if (ci > 0) { fields[fi][ci] = 0; fi++; ci = 0; } p++; continue; }
+        if (ci < 63) fields[fi][ci++] = *p;
+        p++;
+    }
+    if (ci > 0 && fi < 5) { fields[fi][ci] = 0; fi++; }
+    xc_sched_job* j = &xc_sched_jobs[xc_sched_n++];
+    j->min  = xc_cron_field(fields[0], 0, 59);
+    j->hour = xc_cron_field(fields[1], 0, 23);
+    j->dom  = xc_cron_field(fields[2], 1, 31);
+    j->mon  = xc_cron_field(fields[3], 1, 12);
+    j->dow  = xc_cron_field(fields[4], 0, 6);
+    j->fn = fn; j->last = -1;
+}
+static int xc_cron_match(xc_sched_job* j, struct tm* t) {
+    return (j->min  & (1ULL << (t->tm_min)))        &&
+           (j->hour & (1ULL << (t->tm_hour)))       &&
+           (j->dom  & (1ULL << (t->tm_mday - 1)))   &&
+           (j->mon  & (1ULL << (t->tm_mon)))        &&   /* tm_mon is 0-based; mask indexed from lo=1 -> bit tm_mon */
+           (j->dow  & (1ULL << (t->tm_wday)));
+}
+void xstd_scheduler_run(void) {
+    if (xc_sched_n == 0) return;
+    for (;;) {
+        time_t now = time(NULL);
+        struct tm lt; localtime_r(&now, &lt);
+        long minute = (long)(now / 60);
+        for (int i = 0; i < xc_sched_n; i++) {
+            xc_sched_job* j = &xc_sched_jobs[i];
+            if (j->last != minute && xc_cron_match(j, &lt)) { j->last = minute; j->fn(); }
+        }
+        struct timespec ts; ts.tv_sec = 1; ts.tv_nsec = 0; nanosleep(&ts, NULL);
+    }
+}
 xc_bool_t xstd_thread_running(xc_Thread_t t) { return t ? !t->done : false; }
 xc_bool_t xstd_thread_stopped(void) {
     struct xc_thread* t = (struct xc_thread*)pthread_getspecific(xc_thread_key);

@@ -149,6 +149,54 @@ class Pipeline {
 }
 ```
 
+### Conditional dependency — `dep: I where <cond>`
+
+A real-world case: a checkout needs a **payment gateway**, but which one is usable
+depends on the deployment — credentials, region, feature flags. Each gateway
+reports whether it is `available()`, and the dependency picks the first one that
+is:
+
+```x title="examples/conditional_dep_demo.xi"
+interface PaymentGateway {
+    predicate available() -> Bool                 // usable in this deployment?
+    producer  charge(cents: Integer) -> String
+}
+
+class StripeGateway implements PaymentGateway {
+    deps {}
+    predicate available() -> Bool => false        // not configured in this region
+    producer  charge(cents: Integer) -> String => "stripe: charged " + cents
+}
+class PayPalGateway implements PaymentGateway {
+    deps {}
+    predicate available() -> Bool => true         // ready
+    producer  charge(cents: Integer) -> String => "paypal: charged " + cents
+}
+
+interface CheckoutService { producer pay(cents: Integer) -> String }
+
+class Checkout implements CheckoutService {
+    // inject the first PaymentGateway whose guard holds
+    deps { gateway: PaymentGateway where gateway.available() }
+    producer pay(cents: Integer) -> String { return gateway.charge(cents) }
+}
+```
+
+```console
+$ xc examples/conditional_dep_demo.xi && ./build/conditional_dep_demo
+paypal: charged 1999      # Stripe is skipped (available() == false)
+```
+
+How it resolves: the compiler instantiates each implementor **in declaration
+order**, binds it to the dependency name (`gateway`), and evaluates the guard —
+any expression over that candidate, here a method call `gateway.available()`. The
+**first** candidate whose guard is `true` is injected; if none qualify it falls
+back to the first implementor. The guard is plain code, so it can test a
+capability (`gateway.supportsCurrency("EUR")`), a config flag, a health check —
+whatever distinguishes the implementations. The same `where` form works on
+[function/method/entry dependencies](language-guide.md#function--method--and-entry-level-dependencies)
+via the `{ … }` syntax.
+
 ## Scopes
 
 A binding is `transient` by default (constructed per dependent); mark it

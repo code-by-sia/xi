@@ -175,6 +175,94 @@ boxing, no GC). Current scope:
 Multi-parameter lambdas, captures, and generics are the next steps (see the
 feature matrix in `FEATURES.md`). See `examples/closures_demo.xi`.
 
+## Concurrency: `async` / `await`
+
+An **`async` function** runs on its own worker thread when called and returns a
+`Future<T>` **immediately** — the caller keeps going while the work proceeds in
+the background. `await` blocks until the result is ready and yields the `T`. The
+`async` keyword is what makes a call spawn; the body returns the plain `T`:
+
+```x
+async producer work(n: Integer) -> Integer {   // call yields Future<Integer>
+    return n * n
+}
+
+let f = work(6)        // starts the worker, returns a Future<Integer> now
+let r = await f        // 36 — blocks here until the worker finishes
+```
+
+A `-> Future<T>` **return type** (without `async`) means the function *returns a
+future value it built* — it is **not** auto-spawned. Use it for helpers that
+forward or combine futures:
+
+```x
+producer (logger: Logger) ping(name: String, ms: Integer) -> Future<Integer> {
+    return runWithDelay(ms) { logger.info("ping " + name) }   // returns the future
+}
+```
+
+**`await all`** joins a `List<Future<T>>` and returns a `List<T>`, in order.
+Spawn the calls first so they run concurrently, then await them together:
+
+```x
+let jobs = listOf(work(2), work(3), work(4))   // three workers start here
+let done = await all jobs                       // List<Integer> = [4, 9, 16]
+```
+
+Three 100ms jobs finish in ~100ms, not 300ms — they run in parallel.
+
+### `runWithDelay` — run a block after a delay
+
+`runWithDelay(ms) { … }` runs a block on a worker thread after `ms`
+milliseconds and returns a `Future` immediately, so it is `await`-able like any
+other:
+
+```x
+let f = runWithDelay(1000) { logger.info("yo") }   // fires in 1s; returns now
+// ... do other work ...
+await f                                              // wait for it to finish
+```
+
+The block **captures** the enclosing function's parameters and dependencies by
+value (here `logger`), so it can use them on the worker. It cannot reference
+locals declared earlier in the same body — pass those in via a wrapping
+function. See `examples/delay_demo.xi`.
+
+### Notes
+
+- **Memory:** a future's worker allocates-and-leaks (it does **not** use a
+  per-thread arena), so the result — and everything it points to (a `String`,
+  a struct, a `List`) — safely outlives the `await`. See
+  [Memory management](memory.md).
+- **Purity still applies:** an `async mapper`/`predicate` may not do I/O; use
+  `async producer`/`consumer`/`action` for effectful background work.
+- `async` on an **entry** (`async entry main`) and on interface/class **methods**
+  is the established synchronous form and is unchanged — only free `async`
+  functions spawn. See `examples/async_demo.xi`.
+
+## Scheduled jobs — `scheduled … cron`
+
+A `scheduled` job runs a block on a **cron schedule**. It declares its own
+dependencies (auto-wired, exactly like a function or `entry`) and a 5-field cron
+expression — `minute hour day-of-month month day-of-week`:
+
+```x
+scheduled (logger: Logger) greeter() cron "5 4 * * *" {   // 04:05 every day
+    logger.info("test!")
+}
+
+scheduled (logger: Logger) heartbeat() cron "* * * * *" { logger.info("tick") }  // every minute
+```
+
+Cron fields accept `*`, a number (`5`), a range (`1-5`), a step (`*/15`,
+`0-30/10`), and comma lists (`0,15,30,45`). Day-of-week is `0`–`6` (Sunday = 0).
+
+Declaring any scheduled job makes the program **run a scheduler** that keeps the
+process alive and fires each job (at minute resolution) when local time matches.
+A program can be *only* scheduled jobs (no `entry` needed); if you also have an
+`entry`, its body runs first for setup — don't `return` early or the process
+exits before the scheduler starts. See `examples/scheduled_demo.xi`.
+
 ## `where`-guarded overloading
 
 A function may be declared several times under the same name, each with a

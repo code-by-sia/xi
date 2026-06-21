@@ -39,6 +39,12 @@ is unaffected. This is safe because threads are **share-nothing**: data sent ove
 a channel is *copied*, so nothing a thread frees is still referenced elsewhere.
 See [Threading](threading.md).
 
+A **`Future<T>`** worker (an `async` call — see
+[async/await](language-guide.md#concurrency-async--await)) is the one exception
+to the per-thread arena: it does *not* create one, so its allocations leak onto
+the shared heap and the result safely outlives the `await`. The result must
+escape the worker, so leaking (the default) is exactly right here.
+
 ### Per-request (automatic)
 
 `web.serve` runs each request under its own arena, freed once the response is

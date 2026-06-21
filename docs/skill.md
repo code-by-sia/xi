@@ -260,6 +260,35 @@ let c = mapOf("fr" to "Paris", "jp" to "Tokyo")
 Note: plain arrays `T[]` use `.len` and `.data[i]` (e.g. `args.len`,
 `args.data[0]`); `List<T>` uses `.len()` and `.get(i)`.
 
+## async / await
+
+A free function marked `async` runs on a worker thread per call and returns a
+`Future<T>` immediately; `await` blocks for the result. `await all` joins a
+`List<Future<T>>` into a `List<T>`. A `-> Future<T>` return type (no `async`)
+means the function *returns a future value it built* (not auto-spawned).
+
+```x
+async producer work(n: Integer) -> Integer { return n * n }   // call -> Future<Integer>
+
+let f = work(6)                 // worker starts; Future<Integer> now
+let r = await f                 // 36 (blocks)
+let all = await all listOf(work(2), work(3))   // List<Integer> = [4, 9]
+
+// runWithDelay(ms){ } runs a block after a delay, returns an awaitable Future;
+// it captures the enclosing params/deps (here `logger`) by value.
+let d = runWithDelay(1000) { logger.info("yo") }
+await d
+```
+
+- `async mapper`/`predicate` still can't do I/O (purity) — use `async producer`/`consumer`.
+- `async entry main` and async **methods** stay synchronous (only free async fns spawn).
+
+```x
+// scheduled job: deps auto-wired, 5-field cron "min hour dom month dow".
+// Declaring one runs a scheduler that keeps the process alive.
+scheduled (logger: Logger) greeter() cron "5 4 * * *" { logger.info("test!") }
+```
+
 ## Dependency injection
 
 Depend on an **interface**; the compiler injects the implementor automatically

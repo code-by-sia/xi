@@ -55,7 +55,10 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Integer ranges (`a..b`, `until`, `downTo`, `step`) in `for` and as values | ✓ |
 | `if` / `if let` | ✓ |
 | `scope` blocks | ✓ (compiled as C blocks) |
-| `async` functions | ✓ (compiled synchronously in the C backend) |
+| `async` functions + `Future<T>` — an `async` free function runs on a worker thread per call, yielding a `Future<T>`; a `-> Future<T>` return type returns a future value it built (not auto-spawned) | ✓ |
+| `await` / `await all` — block for a future's result / a `List<Future<T>>` → `List<T>` | ✓ |
+| `runWithDelay(ms) { … }` — run a block on a worker after a delay; returns an awaitable `Future`; captures enclosing params/deps by value | ✓ |
+| `scheduled (deps) name() cron "<expr>" { … }` — run a block on a cron schedule (5-field cron); deps auto-wired; keeps the process alive | ✓ |
 | `unsafe` blocks | ✓ |
 | `entry` return type optional (always `Integer`; no `return` exits `0`) | ✓ |
 

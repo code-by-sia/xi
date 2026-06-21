@@ -20,7 +20,9 @@ type GCtx = {
     depTypes: String[],
     retCtype: String,
     fnTag:    String,       // mangled name of the enclosing fn (for catch helpers)
-    selfClass: String       // enclosing class name in a method body ("" otherwise)
+    selfClass: String,      // enclosing class name in a method body ("" otherwise)
+    capNames: String[],     // params+deps capturable by `runWithDelay { }` blocks
+    capTypes: String[]      // their C types (index-matched with capNames)
 }
 
 type StmtRes = { code: String, ctx: GCtx, pos: Integer }
@@ -76,13 +78,13 @@ mapper matchBrace(toks: Token[], openIdx: Integer) -> Integer {
 }
 
 // ── context helpers ───────────────────────────────────────────────
-creator mkGCtx(prog: Program) -> GCtx => GCtx { prog: prog, symNames: [], symTypes: [], depNames: [], depTypes: [], retCtype: "", fnTag: "", selfClass: "" }
+creator mkGCtx(prog: Program) -> GCtx => GCtx { prog: prog, symNames: [], symTypes: [], depNames: [], depTypes: [], retCtype: "", fnTag: "", selfClass: "", capNames: [], capTypes: [] }
 
 mapper withRet(ctx: GCtx, ret: String) -> GCtx {
     return GCtx {
         prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
         depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ret, fnTag: ctx.fnTag,
-        selfClass: ctx.selfClass
+        selfClass: ctx.selfClass, capNames: ctx.capNames, capTypes: ctx.capTypes
     }
 }
 
@@ -90,7 +92,7 @@ mapper withTag(ctx: GCtx, tag: String) -> GCtx {
     return GCtx {
         prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
         depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ctx.retCtype, fnTag: tag,
-        selfClass: ctx.selfClass
+        selfClass: ctx.selfClass, capNames: ctx.capNames, capTypes: ctx.capTypes
     }
 }
 
@@ -100,7 +102,17 @@ mapper withSelfClass(ctx: GCtx, cls: String) -> GCtx {
     return GCtx {
         prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
         depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ctx.retCtype, fnTag: ctx.fnTag,
-        selfClass: cls
+        selfClass: cls, capNames: ctx.capNames, capTypes: ctx.capTypes
+    }
+}
+
+// Record the enclosing function's params+deps as the set capturable by a
+// `runWithDelay { }` block (so its worker thread can see them by value).
+mapper withCaps(ctx: GCtx, names: String[], types: String[]) -> GCtx {
+    return GCtx {
+        prog: ctx.prog, symNames: ctx.symNames, symTypes: ctx.symTypes,
+        depNames: ctx.depNames, depTypes: ctx.depTypes, retCtype: ctx.retCtype, fnTag: ctx.fnTag,
+        selfClass: ctx.selfClass, capNames: names, capTypes: types
     }
 }
 
@@ -113,7 +125,9 @@ mapper addSym(ctx: GCtx, name: String, typ: String) -> GCtx {
         depTypes: ctx.depTypes,
         retCtype: ctx.retCtype,
         fnTag: ctx.fnTag,
-        selfClass: ctx.selfClass
+        selfClass: ctx.selfClass,
+        capNames: ctx.capNames,
+        capTypes: ctx.capTypes
     }
 }
 
@@ -126,7 +140,9 @@ mapper addDep(ctx: GCtx, name: String, typ: String) -> GCtx {
         depTypes: appendString(ctx.depTypes, typ),
         retCtype: ctx.retCtype,
         fnTag: ctx.fnTag,
-        selfClass: ctx.selfClass
+        selfClass: ctx.selfClass,
+        capNames: ctx.capNames,
+        capTypes: ctx.capTypes
     }
 }
 
@@ -788,7 +804,14 @@ mapper funcRetXType(prog: Program, name: String) -> String {
     let n = funcSpecLen(prog.functions)
     while i < n {
         let fs = funcSpecGet(prog.functions, i)
-        if fs.name == name { return resolveX(prog, ctypeToXName(fs.retCtype)) }
+        if fs.name == name {
+            // `async` free function: callers receive a Future<T> over the inner T.
+            // (A plain `-> Future<T>` already resolves to a Future xtype below.)
+            if fs.isAsync {
+                return futureXtypeFor(asyncInnerCtype(fs))
+            }
+            return resolveX(prog, ctypeToXName(fs.retCtype))
+        }
         i = i + 1
     }
     return ""
@@ -1086,6 +1109,310 @@ mapper pqCmpKind(ec: String) -> String {
     if ec == "xc_number_t" { return "1" }
     if ec == "xc_string_t" { return "2" }
     return "0"
+}
+
+// ── Future<T> helpers (async / await) ────────────────────────────────────────
+// xtype "Future_<suf>"; C type xc_Future_<suf>_t (== xc_Future_t).
+predicate isFutureXType(typ: String) { return startsWith2(typ, "Future_") }
+mapper futureInnerSuffix(typ: String) -> String { return string_slice(typ, 7, string_len(typ)) }
+mapper futureInnerXName(typ: String) -> String { return xnameFromArrSuffix(futureInnerSuffix(typ)) }
+mapper futureInnerCtype(typ: String) -> String { return xnameToCtype(futureInnerXName(typ)) }
+// Is a C return type a Future (`xc_Future_<suf>_t`)?
+predicate isFutureCtype(ct: String) { return startsWith2(ct, "xc_Future_") }
+// Inner C type of a Future C type: xc_Future_integer_t -> xc_integer_t.
+mapper futureCtypeInner(ct: String) -> String {
+    let mid = string_slice(ct, 10, string_len(ct) - 2)   // strip "xc_Future_" .. "_t"
+    return "xc_" + mid + "_t"
+}
+// Future xtype for an inner C type: xc_integer_t -> "Future_integer".
+mapper futureXtypeFor(innerCtype: String) -> String { return "Future_" + ctypeSuffix(innerCtype) }
+
+// A free function auto-spawns (its calls run on a worker and yield a Future)
+// when marked `async`. A `-> Future<T>` return type is NOT auto-spawn: such a
+// function returns a future value it built itself (e.g. from an async call or
+// `runWithDelay`), which the caller can `await` directly.
+predicate isAsyncFuncC(prog: Program, name: String) {
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n {
+        let fs = funcSpecGet(prog.functions, i)
+        if fs.name == name { return fs.isAsync }
+        i = i + 1
+    }
+    return false
+}
+// The value an async function's body actually returns (the inner T), as a C type.
+mapper asyncInnerCtype(fs: FuncSpec) -> String {
+    if isFutureCtype(fs.retCtype) { return futureCtypeInner(fs.retCtype) }
+    return fs.retCtype
+}
+// "T a, U b" -> "T a; U b;" (struct fields for the captured-args env).
+mapper cFields(params: String) -> String {
+    let out = ""
+    let n = string_len(params)
+    let start = 0
+    let i = 0
+    while i <= n {
+        let atEnd = i == n
+        let isComma = false
+        if not atEnd { if string_char_at(params, i) == 44 { isComma = true } }
+        if atEnd or isComma {
+            let seg = string_slice(params, start, i)
+            if string_len(seg) > 0 { out = out + cSigSeg(seg) + "; " }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    return out
+}
+// "T a, U b" -> "__e->a = a; __e->b = b; " (copy args into the env struct).
+mapper envAssigns(params: String) -> String {
+    let out = ""
+    let n = string_len(params)
+    let start = 0
+    let i = 0
+    while i <= n {
+        let atEnd = i == n
+        let isComma = false
+        if not atEnd { if string_char_at(params, i) == 44 { isComma = true } }
+        if atEnd or isComma {
+            let seg = string_slice(params, start, i)
+            if string_len(seg) > 0 { let nm = lastWord(seg)  out = out + "__e->" + nm + " = " + nm + "; " }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    return out
+}
+
+// For an async free function `fs`, emit the captured-args env struct, the worker
+// thunk (runs the body, mallocs the T result), and `xc_spawn_<name>(params)`
+// which packs the args and returns a Future. The call site calls xc_spawn_<name>.
+mapper emitAsyncWrapper(prog: Program, fs: FuncSpec) -> String {
+    let inner = cTy(asyncInnerCtype(fs))
+    let nm = fs.name
+    let args = paramArgList(fs.params)
+    let hasArgs = string_len(fs.params) > 0
+    let out = ""
+    if hasArgs { out = out + "typedef struct { " + cFields(fs.params) + "} xc_aenv_" + nm + "_t;\n" }
+    out = out + "static void* xc_athunk_" + nm + "(void* __p) {\n"
+    if hasArgs {
+        out = out + "    xc_aenv_" + nm + "_t* __e = (xc_aenv_" + nm + "_t*)__p;\n"
+    } else {
+        out = out + "    (void)__p;\n"
+    }
+    out = out + "    " + inner + "* __r = (" + inner + "*)malloc(sizeof(" + inner + ")); if (!__r) abort();\n"
+    if hasArgs {
+        let callArgs = paramArgListPrefixed(fs.params, "__e->")
+        out = out + "    *__r = xc_" + nm + "(" + callArgs + ");\n"
+        out = out + "    free(__e);\n"
+    } else {
+        out = out + "    *__r = xc_" + nm + "();\n"
+    }
+    out = out + "    return (void*)__r;\n}\n"
+    out = out + "static xc_Future_t xc_spawn_" + nm + "(" + cSig(fs.params) + ") {\n"
+    if hasArgs {
+        out = out + "    xc_aenv_" + nm + "_t* __e = (xc_aenv_" + nm + "_t*)malloc(sizeof(*__e)); if (!__e) abort();\n"
+        out = out + "    " + envAssigns(fs.params) + "\n"
+        out = out + "    return xstd_future_spawn(xc_athunk_" + nm + ", (void*)__e);\n}\n"
+    } else {
+        out = out + "    return xstd_future_spawn(xc_athunk_" + nm + ", (void*)0);\n}\n"
+    }
+    return out
+}
+// Like paramArgList but each name is prefixed (e.g. "__e->a, __e->b").
+mapper paramArgListPrefixed(cparams: String, pfx: String) -> String {
+    let n = string_len(cparams)
+    if n == 0 { return "" }
+    let out = ""
+    let start = 0
+    let i = 0
+    let first = true
+    while i <= n {
+        let atEnd = i == n
+        let isComma = false
+        if not atEnd { if string_char_at(cparams, i) == 44 { isComma = true } }
+        if atEnd or isComma {
+            let seg = string_slice(cparams, start, i)
+            if string_len(seg) > 0 {
+                if not first { out = out + ", " }
+                out = out + pfx + lastWord(seg)
+                first = false
+            }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    return out
+}
+
+// ── runWithDelay { } capture machinery ───────────────────────────────────────
+// The capturable set is the enclosing function's params + deps, recorded on the
+// GCtx (capNames + capTypes-as-xtypes). A `runWithDelay` block captures, by
+// value, the subset its body actually references; the worker thread runs the
+// body after sleeping. The block lowers to a Future<Integer> (unit; await joins).
+type Caps = { names: String[], xtypes: String[] }
+
+// C type (without name) of a C-param segment, with a trailing space.
+mapper segCtypeSpace(seg: String) -> String {
+    let cs = cSigSeg(seg)
+    let lw = lastWord(cs)
+    return string_slice(cs, 0, string_len(cs) - string_len(lw))
+}
+
+// Build the capturable (name, xtype) lists from a C-param string + deps.
+mapper buildCapNames(params: String, dlist: DepSpec[]) -> String[] {
+    let out: String[] = []
+    let n = string_len(params)
+    let start = 0
+    let i = 0
+    while i <= n {
+        let atEnd = i == n
+        let isComma = false
+        if not atEnd { if string_char_at(params, i) == 44 { isComma = true } }
+        if atEnd or isComma {
+            let seg = string_slice(params, start, i)
+            if string_len(seg) > 0 { out = appendString(out, lastWord(seg)) }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    let j = 0
+    let dn = depSpecLen(dlist)
+    while j < dn { out = appendString(out, depSpecGet(dlist, j).name)  j = j + 1 }
+    return out
+}
+mapper buildCapXTypes(params: String, dlist: DepSpec[]) -> String[] {
+    let out: String[] = []
+    let n = string_len(params)
+    let start = 0
+    let i = 0
+    while i <= n {
+        let atEnd = i == n
+        let isComma = false
+        if not atEnd { if string_char_at(params, i) == 44 { isComma = true } }
+        if atEnd or isComma {
+            let seg = string_slice(params, start, i)
+            if string_len(seg) > 0 {
+                let ct = segCtypeSpace(seg)
+                out = appendString(out, ctypeToXName(string_slice(ct, 0, string_len(ct) - 1)))
+            }
+            start = i + 1
+        }
+        i = i + 1
+    }
+    let j = 0
+    let dn = depSpecLen(dlist)
+    while j < dn { out = appendString(out, depSpecGet(dlist, j).ifaceName)  j = j + 1 }
+    return out
+}
+
+// Does identifier `name` appear (as a value, not a `.field`) in toks[a, b)?
+predicate identUsedIn(toks: Token[], a: Integer, b: Integer, name: String) {
+    let i = a
+    while i < b {
+        if gkind(toks, i) == 1 and gtext(toks, i) == name {
+            if i == a or gkind(toks, i - 1) != 107 { return true }   // 107 = '.'
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// The subset of (capNames, capXTypes) referenced in the block toks[a, b).
+mapper capturesIn(toks: Token[], a: Integer, b: Integer, capNames: String[], capXTypes: String[]) -> Caps {
+    let ns: String[] = []
+    let xs: String[] = []
+    let i = 0
+    let n = stringArrLen(capNames)
+    while i < n {
+        let nm = stringArrGet(capNames, i)
+        if identUsedIn(toks, a, b, nm) {
+            ns = appendString(ns, nm)
+            xs = appendString(xs, stringArrGet(capXTypes, i))
+        }
+        i = i + 1
+    }
+    return Caps { names: ns, xtypes: xs }
+}
+
+// Parse `runWithDelay ( <ms> ) { body }` starting at the `runWithDelay` token.
+type DelayParse = { msStart: Integer, msEnd: Integer, bodyStart: Integer, bodyEnd: Integer, endPos: Integer }
+predicate isRunWithDelayAt(toks: Token[], pos: Integer) {
+    if gkind(toks, pos) != 1 { return false }
+    if gtext(toks, pos) != "runWithDelay" { return false }
+    return gkind(toks, pos + 1) == 100
+}
+mapper parseDelayAt(toks: Token[], pos: Integer) -> DelayParse {
+    let msStart = pos + 2                       // past `runWithDelay` `(`
+    // find the matching `)` of the ms argument
+    let depth = 1
+    let p = msStart
+    while p < tokenArrLen(toks) and depth > 0 {
+        let kk = gkind(toks, p)
+        if kk == 100 { depth = depth + 1 }
+        if kk == 101 { depth = depth - 1 }
+        if depth > 0 { p = p + 1 }
+    }
+    let msEnd = p                                // the `)`
+    let bo = p + 1                               // the body `{`
+    let close = matchBrace(toks, bo)
+    return DelayParse { msStart: msStart, msEnd: msEnd, bodyStart: bo + 1, bodyEnd: close, endPos: close + 1 }
+}
+
+// Lift every runWithDelay block in a body to a top-level worker + spawn helper.
+mapper hoistDelays(prog: Program, toks: Token[], tag: String, capNames: String[], capXTypes: String[]) -> String {
+    let out = ""
+    let n = tokenArrLen(toks)
+    let i = 0
+    while i < n {
+        if isRunWithDelayAt(toks, i) {
+            let dp = parseDelayAt(toks, i)
+            let id = tag + "_" + int_to_string(i)
+            let caps = capturesIn(toks, dp.bodyStart, dp.bodyEnd, capNames, capXTypes)
+            let nc = stringArrLen(caps.names)
+            // env struct: __ms plus each captured value
+            out = out + "typedef struct { xc_integer_t __ms;"
+            let c = 0
+            while c < nc {
+                out = out + " " + xnameToCtype(stringArrGet(caps.xtypes, c)) + " " + stringArrGet(caps.names, c) + ";"
+                c = c + 1
+            }
+            out = out + " } xc_delayenv_" + id + "_t;\n"
+            // worker thunk: sleep, unpack captures, run body, return a unit result
+            out = out + "static void* xc_delaythunk_" + id + "(void* __a) {\n"
+            out = out + "    xc_delayenv_" + id + "_t* __e = (xc_delayenv_" + id + "_t*)__a;\n"
+            out = out + "    xstd_sleep_ms(__e->__ms);\n"
+            let bctx = withTag(withRet(mkGCtx(prog), "void"), id)
+            c = 0
+            while c < nc {
+                let nm = stringArrGet(caps.names, c)
+                let xt = stringArrGet(caps.xtypes, c)
+                out = out + "    " + xnameToCtype(xt) + " " + nm + " = __e->" + nm + ";\n"
+                bctx = addSym(bctx, nm, xt)
+                c = c + 1
+            }
+            out = out + genStmts(toks, dp.bodyStart, dp.bodyEnd, bctx)
+            out = out + "    free(__e);\n"
+            out = out + "    xc_integer_t* __r = (xc_integer_t*)malloc(sizeof(xc_integer_t)); if (!__r) abort(); *__r = 0;\n"
+            out = out + "    return (void*)__r;\n}\n"
+            // spawn helper: pack captures + ms, start the worker, return a Future
+            out = out + "static xc_Future_t xc_delayspawn_" + id + "(xc_integer_t __ms"
+            c = 0
+            while c < nc {
+                out = out + ", " + xnameToCtype(stringArrGet(caps.xtypes, c)) + " " + stringArrGet(caps.names, c)
+                c = c + 1
+            }
+            out = out + ") {\n"
+            out = out + "    xc_delayenv_" + id + "_t* __e = (xc_delayenv_" + id + "_t*)malloc(sizeof(*__e)); if (!__e) abort();\n"
+            out = out + "    __e->__ms = __ms;"
+            c = 0
+            while c < nc { let nm = stringArrGet(caps.names, c)  out = out + " __e->" + nm + " = " + nm + ";"  c = c + 1 }
+            out = out + "\n    return xstd_future_spawn(xc_delaythunk_" + id + ", (void*)__e);\n}\n"
+        }
+        i = i + 1
+    }
+    return out
 }
 
 // ── Map<K,V> key/value helpers (xtype "Map_<ksuf>_<vsuf>") ──────────
@@ -1696,6 +2023,18 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 c = c + 1
             }
             return ExprRes { code: "xc_parspawn_" + id + "(" + args + ")", pos: pp.endPos, xtyp: "Thread" , owned: false }
+        }
+        if isRunWithDelayAt(toks, pos) {
+            // runWithDelay(ms) { body } -> run body after `ms`, yield Future<Integer>
+            let dp = parseDelayAt(toks, pos)
+            let id = ctx.fnTag + "_" + int_to_string(pos)
+            let ms = genExpr(toks, dp.msStart, ctx)
+            let caps = capturesIn(toks, dp.bodyStart, dp.bodyEnd, ctx.capNames, ctx.capTypes)
+            let args = ms.code
+            let nc = stringArrLen(caps.names)
+            let c = 0
+            while c < nc { args = args + ", " + stringArrGet(caps.names, c)  c = c + 1 }
+            return ExprRes { code: "xc_delayspawn_" + id + "(" + args + ")", pos: dp.endPos, xtyp: "Future_integer" , owned: false }
         }
         if txt == "thread" {
             // built-in thread facility: thread.channel() / thread.stopped()
@@ -2951,7 +3290,12 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     typ = selfMethodRetXType(ctx.prog, ctx.selfClass, bname)
                 } else {
                 if isFuncNameC(ctx.prog, bname) {
-                    code = "xc_" + bname + "(" + al.code + ")"
+                    if isAsyncFuncC(ctx.prog, bname) {
+                        // async call: spawn a worker, yield a Future immediately
+                        code = "xc_spawn_" + bname + "(" + al.code + ")"
+                    } else {
+                        code = "xc_" + bname + "(" + al.code + ")"
+                    }
                     typ = funcRetXType(ctx.prog, bname)
                 } else {
                     if isExternNameC(ctx.prog, bname) {
@@ -3022,7 +3366,32 @@ mapper genUnary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         let r = genUnary(toks, pos + 1, ctx)
         return ExprRes { code: "(!" + r.code + ")", pos: r.pos, xtyp: "Bool" , owned: false }
     }
-    if k == 231 { return genUnary(toks, pos + 1, ctx) }
+    if k == 231 {
+        // `await all <list>` — join every Future in a List<Future<T>>, return List<T>.
+        if gkind(toks, pos + 1) == 1 and gtext(toks, pos + 1) == "all" {
+            let r = genUnary(toks, pos + 2, ctx)
+            let elemX = listElemXName(r.xtyp)
+            if isFutureXType(elemX) {
+                let inC = futureInnerCtype(elemX)
+                let u = int_to_string(pos)
+                let code = "({ xc_List_t _af" + u + " = " + r.code + ";"
+                         + " xc_List_t _ar" + u + " = xstd_list_new(sizeof(" + inC + "));"
+                         + " for (xc_integer_t _ai" + u + " = 0; _ai" + u + " < xstd_list_len(_af" + u + "); _ai" + u + " = _ai" + u + " + 1) {"
+                         + " xc_Future_t _fu" + u + " = *(xc_Future_t*)xstd_list_at(_af" + u + ", _ai" + u + ");"
+                         + " " + inC + " _av" + u + " = *(" + inC + "*)xstd_future_await(_fu" + u + ");"
+                         + " xstd_list_push(_ar" + u + ", &_av" + u + "); } _ar" + u + "; })"
+                return ExprRes { code: code, pos: r.pos, xtyp: "List_" + futureInnerSuffix(elemX) , owned: false }
+            }
+            return r
+        }
+        // `await <future>` — block for the worker's result and yield the inner T.
+        let r = genUnary(toks, pos + 1, ctx)
+        if isFutureXType(r.xtyp) {
+            let inC = futureInnerCtype(r.xtyp)
+            return ExprRes { code: "(*(" + inC + "*)xstd_future_await(" + r.code + "))", pos: r.pos, xtyp: futureInnerXName(r.xtyp) , owned: false }
+        }
+        return r   // await on a non-future is a no-op (back-compat)
+    }
     if k == 233 { return genUnary(toks, pos + 1, ctx) }
     if k == 251 { return genUnary(toks, pos + 1, ctx) }
     if k == 123 or k == 124 {
@@ -4370,14 +4739,24 @@ mapper seedFuncDeps(ctx: GCtx, dlist: DepSpec[]) -> GCtx {
 
 mapper emitOneFunc(prog: Program, fs: FuncSpec) -> String {
     let tag = fs.name
+    let capN = buildCapNames(fs.params, fs.fnDeps)
+    let capX = buildCapXTypes(fs.params, fs.fnDeps)
     let out = hoistCatches(prog, fs.bodyTokens, tag)
     out = out + hoistParallel(prog, fs.bodyTokens, tag)
     out = out + hoistLambdas(prog, fs.bodyTokens, tag)
-    out = out + "static " + cTy(fs.retCtype) + " xc_" + fs.name + "(" + cSig(fs.params) + ") {\n"
+    out = out + hoistDelays(prog, fs.bodyTokens, tag, capN, capX)
+    // `async` free functions: the body returns the inner T (the Future wrapper is
+    // applied at the call site via xc_spawn_<name>).
+    let isAsync = fs.isAsync
+    let retC = fs.retCtype
+    if isAsync { retC = asyncInnerCtype(fs) }
+    out = out + "static " + cTy(retC) + " xc_" + fs.name + "(" + cSig(fs.params) + ") {\n"
     out = out + funcDepPrologue(prog, fs.fnDeps)
-    let ctx = withTag(seedFuncDeps(withRet(seedParams(mkGCtx(prog), fs.params), fs.retCtype), fs.fnDeps), tag)
+    let ctx = withCaps(withTag(seedFuncDeps(withRet(seedParams(mkGCtx(prog), fs.params), retC), fs.fnDeps), tag), capN, capX)
     out = out + genBody2(fs.bodyTokens, ctx)
-    return out + "}\n\n"
+    out = out + "}\n\n"
+    if isAsync { out = out + emitAsyncWrapper(prog, fs) }
+    return out
 }
 
 // Emit a `where`-guarded overload set: each overload as xc_<name>__ovlK plus a
@@ -4475,6 +4854,13 @@ mapper genFreeFunctions(prog: Program) -> String {
             }
         }
         i = i + 1
+    }
+    // scheduled jobs: each is a zero-arg, deps-wired function `xc_<name>()`
+    let s = 0
+    let sn = funcSpecLen(prog.scheduled)
+    while s < sn {
+        out = out + emitOneFunc(prog, funcSpecGet(prog.scheduled, s))
+        s = s + 1
     }
     return out + "\n"
 }
@@ -5476,10 +5862,13 @@ mapper genTestRunner(prog: Program, srcPath: String) -> String {
 
 mapper genEntry(prog: Program, srcPath: String) -> String {
     let es = prog.entrySpec
+    let capN = buildCapNames(es.params, es.fnDeps)
+    let capX = buildCapXTypes(es.params, es.fnDeps)
     let out = genSrcFileDef(srcPath)
     out = out + hoistCatches(prog, es.bodyTokens, "entry")
     out = out + hoistParallel(prog, es.bodyTokens, "entry")
     out = out + hoistLambdas(prog, es.bodyTokens, "entry")
+    out = out + hoistDelays(prog, es.bodyTokens, "entry", capN, capX)
     out = out + "/* === Entry point === */\n"
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
@@ -5491,13 +5880,24 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
     out = out + "    xc_args.data = (xc_string_t*)malloc(argc * sizeof(xc_string_t));\n"
     out = out + "    for (int i = 0; i < argc; i++) xc_args.data[i] = xc_string_from_cstr(argv[i]);\n"
     out = out + funcDepPrologue(prog, es.fnDeps)
-    let ctx = withTag(seedFuncDeps(mkGCtx(prog), es.fnDeps), "entry")
+    let ctx = withCaps(withTag(seedFuncDeps(mkGCtx(prog), es.fnDeps), "entry"), capN, capX)
     if string_len(es.params) > 0 {
         let pname = lastWord(es.params)
         out = out + "    xc_arr_string_t " + pname + " = xc_args;\n"
         ctx = addSym(ctx, pname, "arr_string")
     }
     out = out + genBody2(es.bodyTokens, ctx)
+    // scheduled jobs: register each, then run the cron scheduler (blocks forever)
+    let sn = funcSpecLen(prog.scheduled)
+    if sn > 0 {
+        let s = 0
+        while s < sn {
+            let job = funcSpecGet(prog.scheduled, s)
+            out = out + "    xstd_sched_register((void(*)(void))xc_" + job.name + ", \"" + cEscape(job.topic) + "\");\n"
+            s = s + 1
+        }
+        out = out + "    xstd_scheduler_run();\n"
+    }
     out = out + "    return 0;\n"
     out = out + "}\n"
     return out
@@ -5518,6 +5918,7 @@ mapper genArrTypedefs(prog: Program) -> String {
             out = out + "typedef xc_Stack_t xc_Stack_" + ts.name + "_t;\n" // Stack<ts>
             out = out + "typedef xc_Queue_t xc_Queue_" + ts.name + "_t;\n" // Queue<ts>
             out = out + "typedef xc_SortedQueue_t xc_SortedQueue_" + ts.name + "_t;\n"  // SortedQueue<ts>
+            out = out + "typedef xc_Future_t xc_Future_" + ts.name + "_t;\n"  // Future<ts>
             // Map<primitive-key, ts> — one alias per primitive/String key type
             out = out + "typedef xc_Map_t xc_Map_integer_" + ts.name + "_t;\n"
             out = out + "typedef xc_Map_t xc_Map_number_"  + ts.name + "_t;\n"
@@ -5595,8 +5996,18 @@ mapper genFuncForwardDecls(prog: Program) -> String {
     let n = funcSpecLen(prog.functions)
     while i < n {
         let fs = funcSpecGet(prog.functions, i)
-        out = out + "static " + cTy(fs.retCtype) + " xc_" + fs.name + "(" + cSig(fs.params) + ");\n"
+        let isAsync = fs.isAsync
+        let retC = fs.retCtype
+        if isAsync { retC = asyncInnerCtype(fs) }
+        out = out + "static " + cTy(retC) + " xc_" + fs.name + "(" + cSig(fs.params) + ");\n"
+        if isAsync { out = out + "static xc_Future_t xc_spawn_" + fs.name + "(" + cSig(fs.params) + ");\n" }
         i = i + 1
+    }
+    let s = 0
+    let sn = funcSpecLen(prog.scheduled)
+    while s < sn {
+        out = out + "static void xc_" + funcSpecGet(prog.scheduled, s).name + "(void);\n"
+        s = s + 1
     }
     return out + "\n"
 }

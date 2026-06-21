@@ -255,6 +255,28 @@ void          xstd_thread_wait(xc_Thread_t);
 xc_bool_t     xstd_thread_running(xc_Thread_t);
 xc_bool_t     xstd_thread_stopped(void);
 
+/* ─── Future<T> (async / await) ──────────────────────────────────────────────
+ * An async function call runs its body on a worker thread and returns a Future
+ * immediately; `await` joins and reads the result. Unlike `parallel` threads,
+ * a future's thread does NOT use a per-thread arena — its allocations leak (live
+ * on the shared heap) so the result and everything it points to survive the
+ * await. `fn` returns a malloc'd pointer to the T-sized result.               */
+typedef struct xc_future* xc_Future_t;
+typedef xc_Future_t xc_Future_integer_t;
+typedef xc_Future_t xc_Future_number_t;
+typedef xc_Future_t xc_Future_bool_t;
+typedef xc_Future_t xc_Future_string_t;
+typedef xc_Future_t xc_Future_char_t;
+xc_Future_t   xstd_future_spawn(void* (*fn)(void*), void* arg);
+void*         xstd_future_await(xc_Future_t);   /* join the worker, return result ptr */
+xc_bool_t     xstd_future_done(xc_Future_t);    /* has it finished (non-blocking)? */
+
+/* ─── Scheduled jobs (cron) ──────────────────────────────────────────────────
+ * `scheduled name() cron "<expr>" { … }` registers a job; the scheduler fires
+ * each job when local time matches its 5-field cron (min hour dom month dow).   */
+void xstd_sched_register(void (*fn)(void), const char* cron);
+void xstd_scheduler_run(void);   /* blocks forever, firing due jobs (minute resolution) */
+
 xc_Event_t   xstd_event_make(xc_string_t topic, xc_string_t type, void* payload);
 xc_string_t  xstd_event_topic(xc_Event_t);
 xc_string_t  xstd_event_type(xc_Event_t);

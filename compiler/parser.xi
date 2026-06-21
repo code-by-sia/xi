@@ -171,6 +171,13 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
                 if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
                 base = "xc_SortedQueue_" + ctypeSuffix(elem.ctype) + "_t"
             } else {
+            if t.text == "Future" and peekAt(ps, 1).kind == 114 {  // Future<T>
+                let ep = advance(advance(ps))
+                let elem = parseTypeExpr(ep)
+                ps2 = elem.ps
+                if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
+                base = "xc_Future_" + ctypeSuffix(elem.ctype) + "_t"
+            } else {
             if t.text == "Map" and peekAt(ps, 1).kind == 114 {   // Map<K, V>
                 let kp = advance(advance(ps))                    // past `Map` and `<`
                 let kt = parseTypeExpr(kp)
@@ -183,7 +190,7 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
             } else {
                 base = identToCtype(t.text)
                 ps2 = advance(ps)
-            } } } } } } }
+            } } } } } } } }
         } else {
             return TypeResult { ctype: "void", ps: ps }
         }
@@ -386,6 +393,7 @@ type Program = {
     eventTypes: String[],     // names of declared `event` types (typed payloads)
     tables:     DecisionTable[], // table-form `decision`s (emitted by codegen)
     tests:      FuncSpec[],    // `test "name" (deps) { ... }` cases (kind="test")
+    scheduled:  FuncSpec[],    // `scheduled name() cron "..." { }` jobs (cron in .topic)
     cIncludes:  String[],      // C headers from `extern "C" { include "..." }`
     cFlags:     String[]       // build-flag tokens: -lX / -I.. / pkg:NAME (extern "C")
 }
@@ -1936,6 +1944,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     let eventTypes: String[] = []
     let tables: DecisionTable[] = []
     let tests: FuncSpec[] = []
+    let scheduled: FuncSpec[] = []
     let cIncludes: String[] = []
     let cFlags: String[] = []
     let entrySpec = FuncSpec {
@@ -2080,6 +2089,36 @@ creator parseProgram(tokens: Token[]) -> Program {
                             if r.hasEntry { entrySpec = r.entry }   // entry declared inside the module
                             ps = r.ps
                         } else {
+                        if t.kind == 1 and t.text == "scheduled" {
+                            // scheduled (deps) name() cron "<expr>" { body }
+                            ps = advance(ps)                       // 'scheduled'
+                            let sdeps: DepSpec[] = []
+                            if peek(ps).kind == 100 {              // (deps)
+                                ps = advance(ps)
+                                while peek(ps).kind != 101 and peek(ps).kind != 0 {
+                                    let dr = parseDep(ps)
+                                    sdeps = appendDepSpec(sdeps, dr.spec)
+                                    ps = dr.ps
+                                }
+                                if peek(ps).kind == 101 { ps = advance(ps) }
+                            }
+                            let sname = peek(ps).text              // job name
+                            ps = advance(ps)
+                            if peek(ps).kind == 100 { ps = advance(ps) }   // (
+                            if peek(ps).kind == 101 { ps = advance(ps) }   // )
+                            if peek(ps).text == "cron" { ps = advance(ps) } // 'cron'
+                            let scron = peek(ps).text              // cron string literal
+                            ps = advance(ps)
+                            let sb = parseBody(ps)
+                            ps = sb.ps
+                            scheduled = appendFuncSpec(scheduled, FuncSpec {
+                                isCreator: false, isAsync: false,
+                                kind: "action", name: sname,
+                                params: "", retCtype: "void",
+                                bodyTokens: sb.bodyTokens,
+                                hasWhere: false, whereTokens: [], fnDeps: sdeps, topic: scron
+                            })
+                        } else {
                             // async prefix
                             let isAsync = false
                             if t.kind == 230 {
@@ -2137,6 +2176,7 @@ creator parseProgram(tokens: Token[]) -> Program {
                             }
                             }
                         }
+                        }
                     }
                 }
             }
@@ -2150,7 +2190,7 @@ creator parseProgram(tokens: Token[]) -> Program {
         modules: modules, functions: functions, externs: externs,
         entrySpec: entrySpec, interrupts: interrupts, atoms: atoms,
         machines: machines, eventTypes: eventTypes, tables: tables,
-        tests: tests, cIncludes: cIncludes, cFlags: cFlags
+        tests: tests, scheduled: scheduled, cIncludes: cIncludes, cFlags: cFlags
     }
 }
 
