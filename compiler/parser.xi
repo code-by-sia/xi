@@ -395,6 +395,7 @@ type Program = {
     tests:      FuncSpec[],    // `test "name" (deps) { ... }` cases (kind="test")
     scheduled:  FuncSpec[],    // `scheduled name() cron "..." { }` jobs (cron in .topic)
     libraries:  ModuleSpec[],  // `library { id/version/includes/... }` manifest(s); inert in codegen
+    infixFns:   String[],      // names of `infix`-declared functions (callable as `a f b`)
     cIncludes:  String[],      // C headers from `extern "C" { include "..." }`
     cFlags:     String[]       // build-flag tokens: -lX / -I.. / pkg:NAME (extern "C")
 }
@@ -1947,6 +1948,7 @@ creator parseProgram(tokens: Token[]) -> Program {
     let tests: FuncSpec[] = []
     let scheduled: FuncSpec[] = []
     let libraries: ModuleSpec[] = []
+    let infixFns: String[] = []
     let cIncludes: String[] = []
     let cFlags: String[] = []
     let entrySpec = FuncSpec {
@@ -2128,9 +2130,15 @@ creator parseProgram(tokens: Token[]) -> Program {
                                 hasWhere: false, whereTokens: [], fnDeps: sdeps, topic: scron
                             })
                         } else {
+                            // `infix` modifier (a 2-arg function callable as `a f b`)
+                            let isInfix = false
+                            if t.kind == 1 and t.text == "infix" {
+                                isInfix = true
+                                ps = advance(ps)
+                            }
                             // async prefix
                             let isAsync = false
-                            if t.kind == 230 {
+                            if peek(ps).kind == 230 {
                                 isAsync = true
                                 ps = advance(ps)
                             }
@@ -2170,11 +2178,13 @@ creator parseProgram(tokens: Token[]) -> Program {
                                 if peek(ps).kind == 212 {
                                     let fr = parseFunc(ps, isAsync, true)
                                     functions = appendFuncSpec(functions, fr.spec)
+                                    if isInfix { infixFns = appendString(infixFns, fr.spec.name) }
                                     ps = fr.ps
                                 } else {
                                     if parseFuncKindCheck(ps) {
                                         let fr = parseFunc(ps, isAsync, false)
                                         functions = appendFuncSpec(functions, fr.spec)
+                                        if isInfix { infixFns = appendString(infixFns, fr.spec.name) }
                                         if fr.hasTable { tables = appendDecisionTable(tables, fr.table) }
                                         if fr.hasOutType { types = appendTypeSpec(types, fr.outType) }
                                         ps = fr.ps
@@ -2200,7 +2210,7 @@ creator parseProgram(tokens: Token[]) -> Program {
         modules: modules, functions: functions, externs: externs,
         entrySpec: entrySpec, interrupts: interrupts, atoms: atoms,
         machines: machines, eventTypes: eventTypes, tables: tables,
-        tests: tests, scheduled: scheduled, libraries: libraries,
+        tests: tests, scheduled: scheduled, libraries: libraries, infixFns: infixFns,
         cIncludes: cIncludes, cFlags: cFlags
     }
 }

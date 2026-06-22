@@ -222,6 +222,9 @@ xc_string_t   xstd_req_query(xc_Request_t, xc_string_t name);
 xc_string_t   xstd_req_header(xc_Request_t, xc_string_t name);
 xc_string_t   xstd_req_param(xc_Request_t, xc_string_t name);
 xc_string_t   xstd_req_body(xc_Request_t);
+xc_Json_t     xstd_req_params_json(xc_Request_t);   /* captured path params as a Json object */
+xc_Json_t     xstd_req_query_json(xc_Request_t);    /* query string as a Json object */
+xc_Json_t     xstd_req_headers_json(xc_Request_t);  /* headers as a Json object (names normalized) */
 xc_Response_t xstd_resp(xc_integer_t status, xc_string_t body, xc_string_t ctype);
 xc_bool_t     xstd_web_match(xc_Request_t, xc_string_t method, xc_string_t pattern);
 void          xstd_web_set_dispatch(xc_Response_t (*fn)(xc_Request_t));

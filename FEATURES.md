@@ -30,6 +30,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Machine **static checks** (unknown-state errors; unreachable / dead-end warnings) | ✓ |
 | `Bytes` — raw binary buffer primitive (distinct from `String`) | ✓ |
 | Result type `T!` with `ok`/`err` and `?` propagation | ✓ |
+| `json as T` — decode a `Json` value into any compound type (lenient scalar coercion; reuses the derived codec) | ✓ |
 | Interfaces with vtable dispatch | ✓ |
 | `entry` / function / method dependency injection (`(dep: I)` simple or `{ dep: I where … }` form) | ✓ |
 | Leveled `Logger` interface (`print`/`debug`/`info`/`warn`/`error`/`fatal`/`audit`) + `ConsoleLogger` default (`std/log`) | ✓ |
@@ -44,6 +45,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Decision tables — `decision` kind (`when <cond> => <result>`, `hit first`) | ✓ (MVP) |
 | Purity enforcement (pure kinds cannot mutate or be `async`) | ✓ (reference checks) |
 | Inline function bodies (`mapper f(x) => expr`, sugar for `{ return expr }`; any kind, methods, overloads) | ✓ |
+| Infix functions (`infix mapper plus(a, b)` callable as `a plus b`; left-assoc, low precedence; still callable as `plus(a, b)`) | ✓ |
 | First-class closures — lambda `(p: T) => expr` as a value of type `(T) -> U`; bind, call, pass to higher-order functions | ✓ (single typed param, capture-free) |
 | Closures: multiple parameters & environment capture | ✗ (planned) |
 | Generics / monomorphized user types & functions (`T[]` is built-in) | ✗ (planned) |
@@ -105,7 +107,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | `json` / `yaml` / `xml` | **serialization** — build/parse/stringify; derived codecs for events & compounds |
 | `crypto` | **SHA-256/SHA-1/MD5, HMAC-SHA256, hex/base64, CSPRNG** (`randomBytes`/`randomHex`) |
 | `events` | **typed publish/subscribe** — `publish(topic, dto)` + `listener … on "topic"`, in-memory default bus, sync or async (`runAsync`) delivery |
-| `web` | **REST framework** — `WebRequestHandler` + `where`-overloaded `handle`, `res.send`/`req.parse` via `WebTransport`, blocking HTTP/1.1 server, optional HTTPS (`serveTLS`) + HTTP/2 (`serveHttp2`) via `XC_TLS=1`/`XC_HTTP2=1` |
+| `web` | **REST framework** — `WebRequestHandler` + `where`-overloaded `handle`, `res.send`/`req.parse` via `WebTransport`; **path patterns + typed extraction** (`web.route(req, m, "/users/:id")` + `web.params`/`query`/`headers`/`body` decoded with `as T`); blocking HTTP/1.1 server, optional HTTPS (`serveTLS`) + HTTP/2 (`serveHttp2`) via `XC_TLS=1`/`XC_HTTP2=1` |
 | `thread` | **share-nothing threads** — `parallel { }` blocks + thread-safe channels carrying strings **or structured data** (`send(dto)`/`recv(T)`/`close`), `Thread` handle (`stop`/`wait`/`running`); per-thread arena freed on exit |
 | `io` | console `println`/`print`/`eprintln`, `readLine`/`eof` |
 | `fs` | read/write text & **bytes**, exists/isDir/isFile, size/mtime, remove/rename/copy, mkdir/mkdirAll, cwd, listDir |

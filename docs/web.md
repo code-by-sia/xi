@@ -78,6 +78,41 @@ implementors inherit unless they override it.
 | `req.header("X")` | a request header (case-insensitive; `""` if absent) |
 | `req.parse(T)` | the body **deserialized** into a `T` via the `WebTransport` |
 
+## Path patterns + typed extraction
+
+For routes with path parameters, route on **method + a `/users/:id` pattern** and
+pull each source out as its own typed value. `web.route` captures the `:params`;
+the four source getters each return a flat `Json` you decode with `as T`:
+
+| Call | Returns |
+|------|---------|
+| `web.route(req, "POST", "/users/:id")` | `Bool` — method+pattern match (use as a `where` guard; captures `:params`) |
+| `web.params(req)` | path params as `Json` |
+| `web.query(req)` | query string as `Json` |
+| `web.headers(req)` | headers as `Json` (names normalized: `Content-Type` → `content_type`) |
+| `web.body(req)` | the parsed body as `Json` |
+
+`json as T` decodes a `Json` into any compound `type`, coercing string scalars —
+so a `"42"` path segment becomes an `Integer` and `"true"` a `Bool`:
+
+```x
+type IdRef   = { id: Integer }
+type NewUser = { name: String, email: String }
+type Auth    = { authorization: String }
+
+action handle(req, res) where web.route(req, "POST", "/users/:id") {
+    let ref  = web.params(req)  as IdRef       // path   -> typed
+    let body = web.body(req)    as NewUser     // body   -> typed
+    let auth = web.headers(req) as Auth        // header -> typed
+    res.send(create(ref.id, body.name, auth.authorization))
+}
+```
+
+Each source is decoded independently into the shape you want — no envelope, no
+merge order. `as T` is a general decode (it also works on any `Json`, e.g. from
+`json.parse`), so nothing about HTTP leaks into the language. See
+`examples/web_params_demo.xi`.
+
 ## The `HttpResponse`
 
 The response is *mutable* — fill it in, don't return it.

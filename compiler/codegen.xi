@@ -494,9 +494,40 @@ predicate progUsesReadConfig(prog: Program) {
     return false
 }
 
+// Does any body use a `<json> as T` decode? (an `as` token, kind 209, inside an
+// expression body — module `bind … as` is parsed separately, never in a body).
+predicate tokensHaveKind(toks: Token[], k: Integer) {
+    let i = 0
+    let n = tokenArrLen(toks)
+    while i < n { if tokenArrGet(toks, i).kind == k { return true }  i = i + 1 }
+    return false
+}
+predicate progUsesAsDecode(prog: Program) {
+    if tokensHaveKind(prog.entrySpec.bodyTokens, 209) { return true }
+    let i = 0
+    let n = funcSpecLen(prog.functions)
+    while i < n { if tokensHaveKind(funcSpecGet(prog.functions, i).bodyTokens, 209) { return true }  i = i + 1 }
+    let ti = 0
+    let tn = funcSpecLen(prog.tests)
+    while ti < tn { if tokensHaveKind(funcSpecGet(prog.tests, ti).bodyTokens, 209) { return true }  ti = ti + 1 }
+    let ci = 0
+    let cn = classSpecLen(prog.classes)
+    while ci < cn {
+        let cs = classSpecGet(prog.classes, ci)
+        let mi = 0
+        let mn = methodSpecLen(cs.methList)
+        while mi < mn { if tokensHaveKind(methodSpecGet(cs.methList, mi).bodyTokens, 209) { return true }  mi = mi + 1 }
+        ci = ci + 1
+    }
+    return false
+}
+predicate codecsEnabled(prog: Program) {
+    return webEnabled(prog) or usesThreads(prog) or usesConfig(prog) or progUsesReadConfig(prog) or progUsesAsDecode(prog)
+}
+
 predicate hasCodec(prog: Program, xn: String) {
     if isEventTypeC(prog, xn) { return true }
-    if isCompoundTypeC(prog, xn) and (webEnabled(prog) or usesThreads(prog) or usesConfig(prog) or progUsesReadConfig(prog)) { return true }
+    if isCompoundTypeC(prog, xn) and codecsEnabled(prog) { return true }
     return false
 }
 
@@ -3344,9 +3375,18 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = "(" + code + ".has_value ? " + code + ".value : " + r.code + ")"
                         p = r.pos
                     } else {
+                    if k == 209 and gkind(toks, p + 1) == 1 and isTypeNameC(ctx.prog, gtext(toks, p + 1)) {
+                        // `<json> as T` — decode a Json value into a typed T (lenient
+                        // coercion of string scalars). Reuses the derived JSON codec.
+                        let tn = gtext(toks, p + 1)
+                        code = "xc_fromjson_" + tn + "(" + code + ")"
+                        typ = tn
+                        p = p + 2
+                    } else {
                         // NOTE: a lone '?' (kind 127) is left unconsumed here so the
                         // statement layer can lower it as Result error-propagation.
                         cont = false
+                    }
                     }
                 }
             }
@@ -3577,6 +3617,20 @@ mapper genExpr(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             cont = false
         }
     }
+    // user `infix` functions: `a f b` -> f(a, b), left-associative (low precedence,
+    // right operand at genAnd level so arithmetic binds tighter). Chains: a f b g c.
+    let icont = true
+    while icont {
+        if gkind(toks, p) == 1 and isInfixFnC(ctx.prog, gtext(toks, p)) {
+            let fname = gtext(toks, p)
+            let right = genAnd(toks, p + 1, ctx)
+            code = "xc_" + fname + "(" + code + ", " + right.code + ")"
+            typ = funcRetXType(ctx.prog, fname)
+            p = right.pos
+        } else {
+            icont = false
+        }
+    }
     // `a to b` — build a Pair<A,B> (low precedence, right of `||`). Bind both
     // sides to addressable temporaries (works for struct and scalar types alike).
     if gkind(toks, p) == 1 and gtext(toks, p) == "to" {
@@ -3589,6 +3643,10 @@ mapper genExpr(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         return ExprRes { code: pcode, pos: right.pos, xtyp: pairXtype(typ, right.xtyp), owned: true }
     }
     return ExprRes { code: code, pos: p, xtyp: typ , owned: false }
+}
+
+predicate isInfixFnC(prog: Program, name: String) {
+    return strArrContains(prog.infixFns, name)
 }
 
 // ── statements ────────────────────────────────────────────────────
@@ -5705,7 +5763,7 @@ mapper genEventCodecs(prog: Program) -> String {
         types = appendString(types, stringArrGet(prog.eventTypes, ei))
         ei = ei + 1
     }
-    if webEnabled(prog) or usesThreads(prog) or usesConfig(prog) or progUsesReadConfig(prog) {
+    if codecsEnabled(prog) {
         let ti = 0
         let tn = typeSpecLen(prog.types)
         while ti < tn {

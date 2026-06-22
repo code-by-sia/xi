@@ -33,7 +33,33 @@ extern "C" {
     producer xstd_web_serve(port: Integer)
     producer xstd_web_serve_tls(port: Integer, cert: String, key: String)
     producer xstd_web_serve_http2(port: Integer, cert: String, key: String)
+    mapper   xstd_web_match(req: HttpRequest, method: String, pattern: String) -> Bool
+    mapper   xstd_req_params_json(req: HttpRequest) -> Json
+    mapper   xstd_req_query_json(req: HttpRequest) -> Json
+    mapper   xstd_req_headers_json(req: HttpRequest) -> Json
+    mapper   xstd_req_body(req: HttpRequest) -> String
+    producer xstd_json_parse(s: String) -> Json
 }
+
+// ── Routing + per-source extraction ──────────────────────────────────
+// Route on method + a `/users/:id` pattern; captures the path params for
+// `web.params`. Use as a `where` guard, then decode each source with `as T`:
+//
+//   action handle(req, res) where web.route(req, "POST", "/users/:id") {
+//       let id   = web.params(req)  as IdRef
+//       let body = web.body(req)    as NewUser
+//       res.send(create(id.id, body.name))
+//   }
+predicate route(req: HttpRequest, method: String, pattern: String) {
+    return xstd_web_match(req, method, pattern)
+}
+// Each source as a flat Json (decode with `as T`). path/query/header values are
+// strings; `as T` coerces them ("42" -> Integer, "true" -> Bool). Header names
+// are normalized (Content-Type -> content_type).
+producer params(req: HttpRequest) -> Json  { return xstd_req_params_json(req) }
+producer query(req: HttpRequest) -> Json   { return xstd_req_query_json(req) }
+producer headers(req: HttpRequest) -> Json { return xstd_req_headers_json(req) }
+producer body(req: HttpRequest) -> Json    { return xstd_json_parse(xstd_req_body(req)) }
 
 // ── Server ──────────────────────────────────────────────────────────
 producer serve(port: Integer) { xstd_web_serve(port) }

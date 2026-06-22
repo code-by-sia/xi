@@ -935,12 +935,35 @@ xc_string_t xstd_json_key_at(xc_Json_t obj, xc_integer_t i) {
     if (!obj || obj->kind != XJ_OBJECT || i < 0 || i >= obj->len) return xc_str_copy("", 0);
     return xc_str_copy(obj->keys[i], strlen(obj->keys[i]));
 }
+/* The as_* readers are lenient: when a value arrives as a different JSON kind
+ * (e.g. path/query/header params are always strings), coerce it. This is what
+ * lets `json as T` decode "42" into an Integer field, "true" into a Bool, etc. */
 xc_string_t xstd_json_as_string(xc_Json_t v) {
-    if (v && v->kind == XJ_STRING && v->str) return xc_str_copy(v->str, strlen(v->str));
+    if (!v) return xc_str_copy("", 0);
+    if (v->kind == XJ_STRING && v->str) return xc_str_copy(v->str, strlen(v->str));
+    if (v->kind == XJ_NUMBER) {
+        char b[32]; double n = v->num;
+        if (n == (double)(long long)n) snprintf(b, sizeof b, "%lld", (long long)n);
+        else snprintf(b, sizeof b, "%g", n);
+        return xc_str_copy(b, strlen(b));
+    }
+    if (v->kind == XJ_BOOL) return v->b ? xc_str_copy("true", 4) : xc_str_copy("false", 5);
     return xc_str_copy("", 0);
 }
-xc_number_t xstd_json_as_number(xc_Json_t v) { return (v && v->kind == XJ_NUMBER) ? v->num : 0.0; }
-xc_bool_t   xstd_json_as_bool(xc_Json_t v)   { return (v && v->kind == XJ_BOOL) ? v->b : false; }
+xc_number_t xstd_json_as_number(xc_Json_t v) {
+    if (!v) return 0.0;
+    if (v->kind == XJ_NUMBER) return v->num;
+    if (v->kind == XJ_STRING && v->str) return atof(v->str);
+    if (v->kind == XJ_BOOL) return v->b ? 1.0 : 0.0;
+    return 0.0;
+}
+xc_bool_t xstd_json_as_bool(xc_Json_t v) {
+    if (!v) return false;
+    if (v->kind == XJ_BOOL) return v->b;
+    if (v->kind == XJ_NUMBER) return v->num != 0.0;
+    if (v->kind == XJ_STRING && v->str) return (strcmp(v->str, "true") == 0 || strcmp(v->str, "1") == 0);
+    return false;
+}
 
 /* ── stringify ── */
 typedef struct { char* buf; size_t len, cap; } xj_sb;
@@ -1715,6 +1738,58 @@ xc_string_t xstd_req_header(xc_Request_t r, xc_string_t name) {
         p = eol + 2;
     }
     return xw_str("");
+}
+/* Each request source as a flat Json object (values are strings; `json as T`
+ * coerces them). Keeps path/query/header parsing in the library, decoded generally. */
+xc_Json_t xstd_req_params_json(xc_Request_t r) {
+    xc_Json_t o = xstd_json_object();
+    for (int i = 0; i < r->pn; i++)
+        o = xstd_json_set(o, xw_str(r->pk[i]), xstd_json_string(xw_str(r->pv[i])));
+    return o;
+}
+xc_Json_t xstd_req_query_json(xc_Request_t r) {
+    xc_Json_t o = xstd_json_object();
+    if (!r->query) return o;
+    const char* p = r->query;
+    while (*p) {
+        const char* amp = strchr(p, '&');
+        const char* end = amp ? amp : p + strlen(p);
+        const char* eq = memchr(p, '=', (size_t)(end - p));
+        if (eq) {
+            xc_string_t k = xc_str_copy(p, (size_t)(eq - p));
+            xc_string_t v = xc_str_copy(eq + 1, (size_t)(end - eq - 1));
+            o = xstd_json_set(o, k, xstd_json_string(v));
+        }
+        if (!amp) break;
+        p = amp + 1;
+    }
+    return o;
+}
+xc_Json_t xstd_req_headers_json(xc_Request_t r) {
+    xc_Json_t o = xstd_json_object();
+    if (!r->headers) return o;
+    const char* p = r->headers;
+    while (*p) {
+        const char* eol = strstr(p, "\r\n");
+        const char* end = eol ? eol : p + strlen(p);
+        const char* colon = memchr(p, ':', (size_t)(end - p));
+        if (colon) {
+            size_t klen = (size_t)(colon - p);
+            char* kbuf = (char*)malloc(klen + 1); if (!kbuf) abort();
+            for (size_t i = 0; i < klen; i++) {
+                char c = p[i];
+                if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');   /* lowercase */
+                if (c == '-') c = '_';                                  /* dash -> underscore */
+                kbuf[i] = c;
+            }
+            const char* v = colon + 1; while (v < end && *v == ' ') v++;
+            o = xstd_json_set(o, xc_str_copy(kbuf, klen), xstd_json_string(xc_str_copy(v, (size_t)(end - v))));
+            free(kbuf);
+        }
+        if (!eol) break;
+        p = eol + 2;
+    }
+    return o;
 }
 xc_Response_t xstd_resp(xc_integer_t status, xc_string_t body, xc_string_t ctype) {
     struct xc_web_response* r = (struct xc_web_response*)malloc(sizeof(*r)); if (!r) abort();

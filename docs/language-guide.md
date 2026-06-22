@@ -263,6 +263,27 @@ A program can be *only* scheduled jobs (no `entry` needed); if you also have an
 `entry`, its body runs first for setup — don't `return` early or the process
 exits before the scheduler starts. See `examples/scheduled_demo.xi`.
 
+## Infix functions
+
+Mark a two-argument function `infix` and it can be called in **infix position** —
+`a f b` is sugar for `f(a, b)`. It's still an ordinary function, so the normal
+`f(a, b)` call keeps working:
+
+```x
+infix mapper    plus(a: Integer, b: Integer) -> Integer { return a + b }
+infix predicate divides(a: Integer, b: Integer)         { return b % a == 0 }
+
+5 plus 3              // 8         — same as plus(5, 3)
+2 plus 3 plus 4       // 9         — left-associative
+plus(10, 20)          // 30        — the function form still works
+if 3 divides 12 { … } // an infix predicate reads well in a guard
+```
+
+Infix functions bind at low precedence (looser than arithmetic, like `to`), so
+`a plus b * c` is `plus(a, b * c)`. Any function kind works (`mapper`,
+`predicate`, `creator`, …); the `infix` modifier goes first, before `async` and
+the kind. See `examples/infix_demo.xi`.
+
 ## `where`-guarded overloading
 
 A function may be declared several times under the same name, each with a
