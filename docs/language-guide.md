@@ -284,6 +284,27 @@ Infix functions bind at low precedence (looser than arithmetic, like `to`), so
 `predicate`, `creator`, …); the `infix` modifier goes first, before `async` and
 the kind. See `examples/infix_demo.xi`.
 
+## `capture` — name a sub-expression's value
+
+`EXPR capture name: Type` evaluates `EXPR`, binds its value to `name` (of the
+given type), and the expression still **yields that value**. The binding lives
+for the rest of the enclosing function, so you can use a call's result later even
+when the call is buried inside a larger expression:
+
+```x
+let bigger = foo(10) capture a: Integer > bar(10) capture b: Integer
+// bigger = foo(10) > bar(10);  a = 20, b = 11 are now in scope
+
+if positive(make(7) capture box: Box) {
+    use(box.v)              // the struct captured mid-call is reusable here
+}
+```
+
+The type annotation is required (it's how the binding is declared). A captured
+name is **zero-initialized**, so if its `capture` sits on a short-circuited
+branch (the unevaluated side of `and`/`or`) it simply holds the zero value rather
+than crashing. See `examples/capture_demo.xi`.
+
 ## `where`-guarded overloading
 
 A function may be declared several times under the same name, each with a

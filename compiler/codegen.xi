@@ -2809,6 +2809,46 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
 }
 
 // ── postfix:  .field  .method(args)  (call)  [index] ──────────────
+// Declarations for `capture name: Type` bindings in a body: each captured name
+// is declared (zero-initialized) at the function top, so the `(name = expr)`
+// lowering can assign it and later statements can read it. Inert (empty) when a
+// body uses no `capture`, so it never perturbs the self-host output.
+mapper captureDecls(toks: Token[]) -> String {
+    let out = ""
+    let seen: String[] = []
+    let n = tokenArrLen(toks)
+    let i = 0
+    while i < n {
+        if gkind(toks, i) == 1 and gtext(toks, i) == "capture"
+           and gkind(toks, i + 1) == 1 and gkind(toks, i + 2) == 108 {
+            let nm = gtext(toks, i + 1)
+            let ty = gtext(toks, i + 3)               // type name (ident or primitive keyword)
+            if not strArrContains(seen, nm) {
+                seen = appendString(seen, nm)
+                out = out + "    " + cTy(xnameToCtype(ty)) + " " + nm + " = {0};\n"
+            }
+        }
+        i = i + 1
+    }
+    return out
+}
+
+// Seed `capture name: Type` bindings into the context so later references to the
+// captured name resolve to its declared type.
+mapper seedCaptures(ctx: GCtx, toks: Token[]) -> GCtx {
+    let result = ctx
+    let n = tokenArrLen(toks)
+    let i = 0
+    while i < n {
+        if gkind(toks, i) == 1 and gtext(toks, i) == "capture"
+           and gkind(toks, i + 1) == 1 and gkind(toks, i + 2) == 108 {
+            result = addSym(result, gtext(toks, i + 1), gtext(toks, i + 3))
+        }
+        i = i + 1
+    }
+    return result
+}
+
 mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let base = genPrimary(toks, pos, ctx)
     let code = base.code
@@ -3383,9 +3423,17 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         typ = tn
                         p = p + 2
                     } else {
+                    if k == 1 and gtext(toks, p) == "capture" and gkind(toks, p + 1) == 1 and gkind(toks, p + 2) == 108 {
+                        // `<expr> capture name: Type` — bind the value to `name` (declared
+                        // at the function top by the capture pre-scan) and yield it.
+                        let nm = gtext(toks, p + 1)
+                        code = "(" + nm + " = (" + code + "))"
+                        p = p + 4                         // capture name : Type
+                    } else {
                         // NOTE: a lone '?' (kind 127) is left unconsumed here so the
                         // statement layer can lower it as Result error-propagation.
                         cont = false
+                    }
                     }
                     }
                 }
@@ -4871,7 +4919,8 @@ mapper emitOneFunc(prog: Program, fs: FuncSpec) -> String {
     if isAsync { retC = asyncInnerCtype(fs) }
     out = out + "static " + cTy(retC) + " xc_" + fs.name + "(" + cSig(fs.params) + ") {\n"
     out = out + funcDepPrologue(prog, fs.fnDeps)
-    let ctx = withCaps(withTag(seedFuncDeps(withRet(seedParams(mkGCtx(prog), fs.params), retC), fs.fnDeps), tag), capN, capX)
+    out = out + captureDecls(fs.bodyTokens)
+    let ctx = seedCaptures(withCaps(withTag(seedFuncDeps(withRet(seedParams(mkGCtx(prog), fs.params), retC), fs.fnDeps), tag), capN, capX), fs.bodyTokens)
     out = out + genBody2(fs.bodyTokens, ctx)
     out = out + "}\n\n"
     if isAsync { out = out + emitAsyncWrapper(prog, fs) }
@@ -6005,6 +6054,8 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
         out = out + "    xc_arr_string_t " + pname + " = xc_args;\n"
         ctx = addSym(ctx, pname, "arr_string")
     }
+    out = out + captureDecls(es.bodyTokens)
+    ctx = seedCaptures(ctx, es.bodyTokens)
     out = out + genBody2(es.bodyTokens, ctx)
     // scheduled jobs: register each, then run the cron scheduler (blocks forever)
     let sn = funcSpecLen(prog.scheduled)

@@ -46,6 +46,7 @@ guide and [`README.md`](README.md) for a tour with examples.
 | Purity enforcement (pure kinds cannot mutate or be `async`) | ✓ (reference checks) |
 | Inline function bodies (`mapper f(x) => expr`, sugar for `{ return expr }`; any kind, methods, overloads) | ✓ |
 | Infix functions (`infix mapper plus(a, b)` callable as `a plus b`; left-assoc, low precedence; still callable as `plus(a, b)`) | ✓ |
+| `capture` — `expr capture name: Type` binds a sub-expression's value (block/function-scoped, zero-init) while yielding it; usable later | ✓ |
 | First-class closures — lambda `(p: T) => expr` as a value of type `(T) -> U`; bind, call, pass to higher-order functions | ✓ (single typed param, capture-free) |
 | Closures: multiple parameters & environment capture | ✗ (planned) |
 | Generics / monomorphized user types & functions (`T[]` is built-in) | ✗ (planned) |
