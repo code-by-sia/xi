@@ -113,6 +113,12 @@ merge order. `as T` is a general decode (it also works on any `Json`, e.g. from
 `json.parse`), so nothing about HTTP leaks into the language. See
 `examples/web_params_demo.xi`.
 
+`capture` pairs nicely here: name a value computed inside the guard (e.g. an
+order total) and reuse it in the body and the response —
+`if lineTotal(order) capture total: Integer > 0 { … res.send(Receipt { total: total }) }`.
+See [`capture`](language-guide.md#capture--name-a-sub-expressions-value) and
+`examples/web_capture_demo.xi`.
+
 ## The `HttpResponse`
 
 The response is *mutable* — fill it in, don't return it.

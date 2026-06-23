@@ -4491,7 +4491,8 @@ mapper genIfaceDefaults(prog: Program) -> String {
                 out = out + hoistLambdas(prog, ms.bodyTokens, tag)
                 out = out + "static " + ms.retCtype + " xc_" + is2.name + "_" + ms.name + "_default_impl(void* self_ptr" + pstr + ") {\n"
                 out = out + "    (void)self_ptr;\n"
-                let ctx = withTag(withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype), tag)
+                out = out + captureDecls(ms.bodyTokens)
+                let ctx = seedCaptures(withTag(withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype), tag), ms.bodyTokens)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
             }
@@ -5301,7 +5302,8 @@ mapper genClassMethods(prog: Program) -> String {
                 out = out + hoistLambdas(prog, ms.bodyTokens, tag)
                 out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "(" + ms.params + ") {\n"
                 out = out + funcDepPrologue(prog, ms.fnDeps)
-                let ctx = withTag(withRet(seedFuncDeps(seedParams(mkGCtx(prog), ms.params), ms.fnDeps), ms.retCtype), tag)
+                out = out + captureDecls(ms.bodyTokens)
+                let ctx = seedCaptures(withTag(withRet(seedFuncDeps(seedParams(mkGCtx(prog), ms.params), ms.fnDeps), ms.retCtype), tag), ms.bodyTokens)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
             } else {
@@ -5320,7 +5322,8 @@ mapper genClassMethods(prog: Program) -> String {
                 out = out + "static " + ms.retCtype + " " + implName + "(void* self_ptr" + pstr + ") {\n"
                 out = out + "    xc_" + cs.name + "_t* self = (xc_" + cs.name + "_t*)self_ptr;\n"
                 out = out + funcDepPrologue(prog, ms.fnDeps)
-                let ctx = withSelfClass(withTag(withRet(seedFuncDeps(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.fnDeps), ms.retCtype), tag), cs.name)
+                out = out + captureDecls(ms.bodyTokens)
+                let ctx = seedCaptures(withSelfClass(withTag(withRet(seedFuncDeps(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.fnDeps), ms.retCtype), tag), cs.name), ms.bodyTokens)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
                 if overloaded and isLastOfName(cs, mi) {
