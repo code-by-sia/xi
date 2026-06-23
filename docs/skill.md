@@ -190,6 +190,23 @@ mapper fee(amount: Number) -> Number where amount > 100 => amount * 0.9
 mapper fee(amount: Number) -> Number => amount
 ```
 
+**Infix functions** — a 2-arg function marked `infix` is callable as `a f b`
+(and still as `f(a, b)`); left-associative, low precedence:
+
+```x
+infix mapper plus(a: Integer, b: Integer) -> Integer { return a + b }
+5 plus 3            // 8
+```
+
+**`capture`** — `EXPR capture name: Type` binds a sub-expression's value (the
+type annotation is required) and still yields it; the name is usable for the rest
+of the function (works in functions, methods, entry — not inside a `where` guard):
+
+```x
+let bigger = foo(10) capture a: Integer > bar(10) capture b: Integer  // a,b reusable
+if isActive(findUser(id) capture u: User) { use(u) }                   // u captured mid-call
+```
+
 ## Control flow
 
 ```x
@@ -475,6 +492,31 @@ module Test { bind Clock -> FakeClock } // layered over App; ignored in normal b
   the run continues; in normal code it prints `file:line` and aborts the process.
 - `xi test` exits nonzero if any test fails. `test` cases are excluded from normal
   `xc` builds. Put tests in `*_test.xi` files.
+- **Value-showing helpers** (prefer over bare `assert a == b`): `assertEq(actual,
+  expected)`, `assertNe(a, b)`, `assertClose(a, b, eps)` (floats), `assertOk(r)` /
+  `assertErr(r)` (a `T!` result). Add a message with `assert cond : "why"`.
+- Run a subset: `xi test file.xi --filter <substr>` (matches the test name).
+
+## Web (REST) — typed extraction
+
+Implement `WebRequestHandler` with `where`-overloaded `handle`. Route on method +
+a `/users/:id` pattern, then decode each request source into its own type:
+
+```x
+type IdRef = { id: Integer }   type NewUser = { name: String, email: String }
+
+action handle(req: HttpRequest, res: HttpResponse) where web.route(req, "POST", "/users/:id") {
+    let ref  = web.params(req)  as IdRef     // path params  (web.query / web.headers too)
+    let body = web.body(req)    as NewUser   // JSON body
+    res.send(create(ref.id, body.name))      // res.send(dto) / res.sendStatus(code, msg)
+}
+```
+
+- `web.route(req, method, pattern) -> Bool` (guard; captures `:params`); `web.params`
+  / `web.query` / `web.headers` / `web.body` each return a `Json`.
+- `<json> as T` is a **general** decode (any `Json` -> compound type, lenient string
+  coercion) — not web-specific; also `json.parse(s) as T`.
+- `async entry main(...) { web.serve(8080) }`. Capture works in the handler body.
 
 ## Typed configuration (std/config)
 
