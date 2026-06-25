@@ -123,7 +123,7 @@ jobs:
           clang -arch x86_64 -mmacosx-version-min=11.0 -std=c99 -O2 -w \
             -Wno-implicit-int -Wno-implicit-function-declaration \
             -Wno-int-conversion -Wno-incompatible-pointer-types -I runtime \
-            build/repl.gen.c runtime/runtime.c -o "$DIST/libexec/xi" -lm
+            build/xi.gen.c runtime/runtime.c -o "$DIST/libexec/xi" -lm
           file "$DIST/libexec/xc" "$DIST/libexec/xi"
           file "$DIST/libexec/xc" | grep -q "x86_64" \
             || { echo "::error::cross build did not produce an x86_64 binary"; exit 1; }
