@@ -42,6 +42,11 @@ echo "==> Building the test runner 'xitest' from compiler/test.xi ..."
 cp "$XC_OUT/test" bin/xitest
 echo "    built ./bin/xitest"
 
+echo "==> Building the load tester 'loadtest' from compiler/loadtest.xi ..."
+./compiler/xc compiler/loadtest.xi >/dev/null
+cp "$XC_OUT/loadtest" bin/loadtest
+echo "    built ./bin/loadtest"
+
 echo "Bootstrap complete. The compiler is built from current Xi source."
 echo "  ./compiler/xc <file.xi>   compile to a native binary"
 echo "  ./bin/xi                 start the REPL"
