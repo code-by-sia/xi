@@ -94,7 +94,10 @@ class XcCompiler implements Compiler {
         let n = arrays.stringLen(files)
         while i < n {
             let f = arrays.stringAt(files, i)
-            if isBuildable(f) {
+            // Skip the Xi toolchain itself: a manifest sitting next to
+            // xc_helpers.c is the compiler/tooling, which links private FFI via
+            // XC_HELPERS and is built by bootstrap.sh, not `xc --all`.
+            if isBuildable(f) and not host.fileExists(dirOf(f) + "/xc_helpers.c") {
                 system.stdout.writeln("=== xc --all: building " + f + " ===")
                 built = built + 1
                 if build(f) != 0 { fails = fails + 1 }

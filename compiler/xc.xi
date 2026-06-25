@@ -69,21 +69,32 @@ import "impl/driver/xc_compiler.xi"
 // ── composition root ──────────────────────────────────────────────
 // The module + entry live in the manifest (the self-contained buildable unit),
 // not in a separate part file — otherwise `xc --all` would see a part with
-// module+entry and try to build it in isolation.
+// module+entry and try to build it in isolation. The module declares the full
+// set of module fields (see docs/multi-file.md#module-fields); includes/excludes
+// stay empty because the compiler is assembled by explicit `import`, not glob.
 module Compile {
-    bind Text        -> StdText        as singleton
-    bind TokenArrays -> StdTokenArrays as singleton
-    bind SpecArrays  -> StdSpecArrays  as singleton
-    bind Host        -> PosixHost      as singleton
-    bind Diagnostics -> Diag           as singleton
-    bind Lexer       -> XiLexer        as singleton
-    bind Parser      -> XiParser       as singleton
-    bind Codegen     -> XiCodegen      as singleton
-    bind ModuleLoader -> XiModuleLoader as singleton
-    bind Compiler    -> XcCompiler     as singleton
-}
+    id           = "xc"
+    name         = "Xi Compiler"
+    description  = "The Xi language compiler — Xi source to C99 to native binaries."
+    version      = "0.0.81"
+    license      = "Apache 2.0"
+    includes     = []
+    excludes     = []
+    dependencies = []
 
-async entry main(args: String[]) -> Integer {
-    let xc = Compile.resolve(Compiler)
-    return xc.run(args)
+    bind Text         -> StdText        as singleton
+    bind TokenArrays  -> StdTokenArrays as singleton
+    bind SpecArrays   -> StdSpecArrays  as singleton
+    bind Host         -> PosixHost      as singleton
+    bind Diagnostics  -> Diag           as singleton
+    bind Lexer        -> XiLexer        as singleton
+    bind Parser       -> XiParser       as singleton
+    bind Codegen      -> XiCodegen      as singleton
+    bind ModuleLoader -> XiModuleLoader as singleton
+    bind Compiler     -> XcCompiler     as singleton
+
+    async entry main(args: String[]) -> Integer {
+        let xc = Compile.resolve(Compiler)
+        return xc.run(args)
+    }
 }

@@ -16,10 +16,19 @@ import "repl/xi_repl.xi"
 
 // ── composition root (in the manifest, not a part file — see xc.xi) ──
 module Xi {
-    bind Repl -> XiRepl as singleton
-}
+    id           = "xi"
+    name         = "Xi REPL & Runner"
+    description  = "The Xi REPL and run tool: run files, start a session, install, pack."
+    version      = "0.0.81"
+    license      = "Apache 2.0"
+    includes     = []
+    excludes     = []
+    dependencies = []
 
-async entry main(args: String[]) -> Integer {
-    let xi = Xi.resolve(Repl)
-    return xi.run(args)
+    bind Repl -> XiRepl as singleton
+
+    async entry main(args: String[]) -> Integer {
+        let xi = Xi.resolve(Repl)
+        return xi.run(args)
+    }
 }

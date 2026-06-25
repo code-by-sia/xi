@@ -11,18 +11,27 @@ import "testing/tester.xi"
 import "testing/test_runner.xi"
 
 module Test {
-    bind Tester -> XiTester as singleton
-}
+    id           = "xitest"
+    name         = "Xi Test Runner"
+    description  = "Compiles and runs *_test.xi files in test mode, reporting pass/fail."
+    version      = "0.0.81"
+    license      = "Apache 2.0"
+    includes     = []
+    excludes     = []
+    dependencies = []
 
-async entry main(args: String[]) -> Integer {
-    let tester = Test.resolve(Tester)
-    if args.len < 2 {
-        system.stdout.writeln("usage: xitest <file_test.xi> [--filter <substr>]   (or: xitest --all)")
-        return 1
+    bind Tester -> XiTester as singleton
+
+    async entry main(args: String[]) -> Integer {
+        let tester = Test.resolve(Tester)
+        if args.len < 2 {
+            system.stdout.writeln("usage: xitest <file_test.xi> [--filter <substr>]   (or: xitest --all)")
+            return 1
+        }
+        let sub = args.data[1]
+        if sub == "--all" { return tester.testAll() }
+        let filter = ""
+        if args.len >= 4 and args.data[2] == "--filter" { filter = args.data[3] }
+        return tester.test(sub, filter)
     }
-    let sub = args.data[1]
-    if sub == "--all" { return tester.testAll() }
-    let filter = ""
-    if args.len >= 4 and args.data[2] == "--filter" { filter = args.data[3] }
-    return tester.test(sub, filter)
 }

@@ -184,41 +184,50 @@ class XiLoadTester implements LoadTester {
 }
 
 module LoadTest {
-    bind LoadTester -> XiLoadTester as singleton
-}
+    id           = "loadtest"
+    name         = "Xi Load Tester"
+    description  = "Load/perf testing for Xi projects: compile-stress, run-bench, and HTTP load."
+    version      = "0.0.81"
+    license      = "Apache 2.0"
+    includes     = []
+    excludes     = []
+    dependencies = []
 
-entry main(args: String[]) -> Integer {
-    let lt = LoadTest.resolve(LoadTester)
-    if args.len < 2 {
-        io.println("usage:")
-        io.println("  loadtest --compile <file.xi> [more.xi ...]")
-        io.println("  loadtest --bench   <file.xi> [--iters N]")
-        io.println("  loadtest --http    <file.xi> [--url URL] [--requests N]")
+    bind LoadTester -> XiLoadTester as singleton
+
+    entry main(args: String[]) -> Integer {
+        let lt = LoadTest.resolve(LoadTester)
+        if args.len < 2 {
+            io.println("usage:")
+            io.println("  loadtest --compile <file.xi> [more.xi ...]")
+            io.println("  loadtest --bench   <file.xi> [--iters N]")
+            io.println("  loadtest --http    <file.xi> [--url URL] [--requests N]")
+            return 1
+        }
+        let mode = args.data[1]
+        if mode == "--compile" {
+            if args.len < 3 { io.println("loadtest --compile needs at least one file")  return 1 }
+            return lt.compileStress(args, 2)
+        }
+        if mode == "--bench" {
+            if args.len < 3 { io.println("loadtest --bench needs a file")  return 1 }
+            let iters = 20
+            if args.len >= 5 and args.data[3] == "--iters" { iters = parseIntOr(args.data[4], 20) }
+            return lt.bench(args.data[2], iters)
+        }
+        if mode == "--http" {
+            if args.len < 3 { io.println("loadtest --http needs a file")  return 1 }
+            let url = "http://127.0.0.1:8080/"
+            let requests = 200
+            let i = 3
+            while i + 1 < args.len {
+                if args.data[i] == "--url" { url = args.data[i + 1] }
+                if args.data[i] == "--requests" { requests = parseIntOr(args.data[i + 1], 200) }
+                i = i + 1
+            }
+            return lt.httpLoad(args.data[2], url, requests)
+        }
+        io.println("loadtest: unknown mode " + mode)
         return 1
     }
-    let mode = args.data[1]
-    if mode == "--compile" {
-        if args.len < 3 { io.println("loadtest --compile needs at least one file")  return 1 }
-        return lt.compileStress(args, 2)
-    }
-    if mode == "--bench" {
-        if args.len < 3 { io.println("loadtest --bench needs a file")  return 1 }
-        let iters = 20
-        if args.len >= 5 and args.data[3] == "--iters" { iters = parseIntOr(args.data[4], 20) }
-        return lt.bench(args.data[2], iters)
-    }
-    if mode == "--http" {
-        if args.len < 3 { io.println("loadtest --http needs a file")  return 1 }
-        let url = "http://127.0.0.1:8080/"
-        let requests = 200
-        let i = 3
-        while i + 1 < args.len {
-            if args.data[i] == "--url" { url = args.data[i + 1] }
-            if args.data[i] == "--requests" { requests = parseIntOr(args.data[i + 1], 200) }
-            i = i + 1
-        }
-        return lt.httpLoad(args.data[2], url, requests)
-    }
-    io.println("loadtest: unknown mode " + mode)
-    return 1
 }

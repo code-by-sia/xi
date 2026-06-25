@@ -39,7 +39,7 @@ echo "    built ./bin/xi"
 
 echo "==> Building the test runner 'xitest' from compiler/test.xi ..."
 ./compiler/xc compiler/test.xi >/dev/null
-cp "$XC_OUT/test" bin/xitest
+cp "$XC_OUT/xitest" bin/xitest
 echo "    built ./bin/xitest"
 
 echo "==> Building the load tester 'loadtest' from compiler/loadtest.xi ..."
