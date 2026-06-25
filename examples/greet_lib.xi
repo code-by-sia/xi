@@ -15,7 +15,7 @@ library {
     id       = "greet"
     name     = "Greet"
     version  = "1.2.0"
-    license  = "MIT"
+    license  = "Apache 2.0"
     includes = ["./**"]
     excludes = ["**/*_test.xi"]
 }

@@ -223,7 +223,7 @@ module {
     name        = "File Server"
     description = "a simple file server"
     version     = "0.12"
-    license     = "MIT"
+    license     = "Apache 2.0"
 }
 ```
 

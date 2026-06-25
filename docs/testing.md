@@ -33,10 +33,10 @@ nonzero if any failed (so it drops straight into CI). The program's own `entry`
 is ignored in test mode, and `test` cases are **stripped from normal `xc`
 builds**.
 
-There is also a standalone **`xitest`** binary (the `Test` module) with the same
-engine and flags — `xitest <file_test.xi> [--filter <substr>]` and
-`xitest --all` — for running tests without the rest of the `xi` tool. See
-[CLI › `xitest`](cli.md#xitest--test-runner).
+There is also a standalone **`xt`** binary (the `Test` module) with the same
+engine and flags — `xt <file_test.xi> [--filter <substr>]` and
+`xt --all` — for running tests without the rest of the `xi` tool. See
+[CLI › `xt`](cli.md#xt--test-runner).
 
 ## `assert`
 

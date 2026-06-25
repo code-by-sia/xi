@@ -28,7 +28,7 @@ module App {
     id      = "greeter"          // name of the compiled binary
     name    = "Greeter"
     version = "1.0.0"
-    license = "MIT"
+    license = "Apache 2.0"
 
     // the entry can live inside its module; dependencies are auto-wired.
     // `entry` always returns Integer, so `-> Integer` is optional and a body
@@ -135,7 +135,7 @@ xi                 # interactive REPL
 xi version         # print the toolchain version
 xi update          # self-update to the latest release (tarball installs)
 xi skill           # print the AI-agent language guide (xi skill > SKILL.md)
-xitest file_test.xi   # run tests (also: xitest --all)
+xt file_test.xi   # run tests (also: xt --all)
 loadtest --bench app.xi   # load/perf test (--compile / --bench / --http)
 ```
 

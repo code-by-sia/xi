@@ -5,7 +5,7 @@
 //   loadtest --bench   <file.xi> [--iters N]          run-binary benchmark
 //   loadtest --http    <file.xi> [--url U] [--requests N]   HTTP load test
 //
-// Reads XC (compiler path) and XC_RUNTIME from the environment, like xi/xitest.
+// Reads XC (compiler path) and XC_RUNTIME from the environment, like xi/xt.
 // Dogfoods the standard library: std/time, std/http, std/convert, std/io.
 // =============================================================
 

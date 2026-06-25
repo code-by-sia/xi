@@ -357,7 +357,7 @@ module App {
     id          = "file-server"     // -> binary named `file-server`
     name        = "File Server"     // name/description/version/license = metadata
     version     = "0.12"
-    license     = "MIT"
+    license     = "Apache 2.0"
     includes    = ["./**"]          // files that belong to this module (default)
     excludes    = ["scratch/**"]    // ...minus these
     dependencies = ["https://example.com/xi-sqlite-0.1.0.tar.gz"]  // source archives

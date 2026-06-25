@@ -62,7 +62,7 @@ producer runTests(xc: String, rt: String, path: String, filter: String) -> Integ
     let rc = run_command(cmd)
     let log = file_read_all("/tmp/xtest.log")
     if rc != 0 {
-        system.stdout.writeln("xitest: compilation failed:")
+        system.stdout.writeln("xt: compilation failed:")
         system.stdout.writeln(log)
         return 1
     }
@@ -77,7 +77,7 @@ producer runTests(xc: String, rt: String, path: String, filter: String) -> Integ
 producer runTestsAll(xc: String, rt: String) -> Integer {
     let sh = "set -u\n"
     sh = sh + "XC=\"$1\"; RT=\"$2\"; files=$(find . -name '*_test.xi' -not -path '*/build/*' -not -path '*/.git/*' | sort)\n"
-    sh = sh + "if [ -z \"$files\" ]; then echo \"xitest: no *_test.xi files found\"; exit 0; fi\n"
+    sh = sh + "if [ -z \"$files\" ]; then echo \"xt: no *_test.xi files found\"; exit 0; fi\n"
     sh = sh + "fails=0; n=0\n"
     sh = sh + "for f in $files; do\n"
     sh = sh + "  n=$((n+1)); echo \"== $f ==\"\n"
@@ -88,8 +88,8 @@ producer runTestsAll(xc: String, rt: String) -> Integer {
     sh = sh + "done\n"
     sh = sh + "echo; echo \"$n test file(s), $fails failed\"\n"
     sh = sh + "[ \"$fails\" -eq 0 ]\n"
-    file_write("/tmp/xitest-all.sh", sh)
-    return run_command("sh /tmp/xitest-all.sh '" + xc + "' '" + rt + "'")
+    file_write("/tmp/xt-all.sh", sh)
+    return run_command("sh /tmp/xt-all.sh '" + xc + "' '" + rt + "'")
 }
 
 class XiTester implements Tester {

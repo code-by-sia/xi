@@ -13,7 +13,7 @@ module App {
     id      = "module_entry_demo"      // name of the compiled binary
     name    = "Module Entry Demo"
     version = "0.1.0"
-    license = "MIT"
+    license = "Apache 2.0"
 
     // `entry` always returns Integer: `-> Integer` is optional and a body
     // without `return` exits 0.

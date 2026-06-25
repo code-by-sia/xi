@@ -36,7 +36,7 @@ holds the metadata fields and the `entry`):
 |----------|--------|--------|------|
 | `compiler/xc.xi` | `Compile` | `xc` | the compiler |
 | `compiler/xi.xi` | `Xi` | `xi` | REPL / run tool (parts under `compiler/repl/`) |
-| `compiler/test.xi` | `Test` | `xitest` | test runner (parts under `compiler/testing/`) |
+| `compiler/test.xi` | `Test` | `xt` | test runner (parts under `compiler/testing/`) |
 | `compiler/loadtest.xi` | `LoadTest` | `loadtest` | load/perf tester |
 
 `xc` links the private FFI in `compiler/xc_helpers.c` (via `XC_HELPERS`), so it is
@@ -115,7 +115,7 @@ state-machine when used. There is no VM, no GC, and no reflection.
 compiler/
   xc.xi          manifest for the compiler         (module Compile -> ./compiler/xc)
   xi.xi          manifest for the REPL / run tool   (module Xi      -> ./bin/xi)
-  test.xi        manifest for the test runner       (module Test    -> ./bin/xitest)
+  test.xi        manifest for the test runner       (module Test    -> ./bin/xt)
   loadtest.xi    manifest for the load tester       (module LoadTest-> ./bin/loadtest)
   contracts/     the abstraction layer: every interface
   impl/          the implementation layer: ffi/ (text/ arrays/ host/ diag/ — each an extern block + wrapper class) + lexer/ parser/ codegen/ driver/

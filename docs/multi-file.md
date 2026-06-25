@@ -152,7 +152,7 @@ module App {
     id          = "billing"
     name        = "Billing Service"
     version     = "1.4.0"
-    license     = "MIT"
+    license     = "Apache 2.0"
     includes    = ["./**"]
     excludes    = ["scratch/**"]
     bind Clock  -> SystemClock as singleton
@@ -230,7 +230,7 @@ library {
     id       = "greet"
     name     = "Greet"
     version  = "1.2.0"
-    license  = "MIT"
+    license  = "Apache 2.0"
     includes = ["./**"]               // which files belong to the library
     excludes = ["**/*_test.xi"]
 }

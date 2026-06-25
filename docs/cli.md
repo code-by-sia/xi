@@ -7,11 +7,11 @@ own manifest + `module` (`Compile`, `Xi`, `Test`, `LoadTest`):
 |--------|--------|------|
 | `xc` | `Compile` | the compiler (Xi → C99 → native) |
 | `xi` | `Xi` | run a file, REPL, `test`/`install`/`pack`/`skill`/`update` |
-| `xitest` | `Test` | dedicated test runner (same engine as `xi test`) |
+| `xt` | `Test` | dedicated test runner (same engine as `xi test`) |
 | `loadtest` | `LoadTest` | load/perf testing for Xi projects |
 
 `xc` and `xi` are installed on your `PATH` (see
-[Getting started](getting-started.md)); `xitest` and `loadtest` are built into
+[Getting started](getting-started.md)); `xt` and `loadtest` are built into
 `./bin` by bootstrap.
 
 ## `xc` — the compiler
@@ -208,15 +208,15 @@ The REPL is a **compile-and-run loop**:
 | `xi update` | self-update the toolchain to the latest release |
 | `xi version` | print the toolchain version |
 
-## `xitest` — test runner
+## `xt` — test runner
 
 A standalone test runner (`module Test`), the same compile-in-test-mode-and-run
 engine as `xi test`, as its own binary:
 
 ```console
-$ xitest examples/calc_test.xi              # one file
-$ xitest examples/calc_test.xi --filter mul # only matching test names
-$ xitest --all                              # every *_test.xi under the cwd
+$ xt examples/calc_test.xi              # one file
+$ xt examples/calc_test.xi --filter mul # only matching test names
+$ xt --all                              # every *_test.xi under the cwd
 3 tests, 3 passed, 0 failed
 ```
 
