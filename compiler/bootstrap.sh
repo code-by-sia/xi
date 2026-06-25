@@ -37,7 +37,13 @@ mkdir -p bin
 cp "$XC_OUT/xi" bin/xi
 echo "    built ./bin/xi"
 
+echo "==> Building the test runner 'xitest' from compiler/test.xi ..."
+./compiler/xc compiler/test.xi >/dev/null
+cp "$XC_OUT/test" bin/xitest
+echo "    built ./bin/xitest"
+
 echo "Bootstrap complete. The compiler is built from current Xi source."
 echo "  ./compiler/xc <file.xi>   compile to a native binary"
 echo "  ./bin/xi                 start the REPL"
 echo "  ./bin/xi <file.xi>        compile and run a file"
+echo "  ./bin/xitest <file.xi>    run a *_test.xi test file"
