@@ -7,7 +7,7 @@ const path = require('path');
 // Read at build time so the navbar badge tracks releases with no extra bump.
 let xiVersion = '';
 try {
-  const drv = fs.readFileSync(path.join(__dirname, '../compiler/driver.xi'), 'utf8');
+  const drv = fs.readFileSync(path.join(__dirname, '../compiler/impl/driver/driver.xi'), 'utf8');
   const m = drv.match(/xcVersion\(\)\s*->\s*String\s*\{\s*return\s*"([^"]+)"/);
   if (m) xiVersion = m[1];
 } catch (e) { /* leave blank if unreadable */ }
