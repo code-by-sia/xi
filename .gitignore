@@ -3,8 +3,9 @@
 *.gen.c
 
 # Compiled binaries — rebuilt from source via ./compiler/bootstrap.sh
+# NB: /compiler/repl is intentionally NOT ignored — it is the REPL's source
+# directory; the repl binary builds to /build then /bin/xi.
 /compiler/xc
-/compiler/repl
 /bin/
 
 # Tree-sitter / Node
