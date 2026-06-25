@@ -58,4 +58,25 @@ import "impl/codegen/xi_codegen.xi"
 import "impl/driver/driver.xi"
 import "impl/driver/module_loader.xi"
 import "impl/driver/xc_compiler.xi"
-import "impl/driver/app.xi"
+
+// ── composition root ──────────────────────────────────────────────
+// The module + entry live in the manifest (the self-contained buildable unit),
+// not in a separate part file — otherwise `xc --all` would see a part with
+// module+entry and try to build it in isolation.
+module App {
+    bind Text        -> StdText        as singleton
+    bind TokenArrays -> StdTokenArrays as singleton
+    bind SpecArrays  -> StdSpecArrays  as singleton
+    bind Host        -> PosixHost      as singleton
+    bind Diagnostics -> Diag           as singleton
+    bind Lexer       -> XiLexer        as singleton
+    bind Parser      -> XiParser       as singleton
+    bind Codegen     -> XiCodegen      as singleton
+    bind ModuleLoader -> XiModuleLoader as singleton
+    bind Compiler    -> XcCompiler     as singleton
+}
+
+async entry main(args: String[]) -> Integer {
+    let xc = App.resolve(Compiler)
+    return xc.run(args)
+}
