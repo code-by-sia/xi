@@ -70,7 +70,7 @@ import "impl/driver/xc_compiler.xi"
 // The module + entry live in the manifest (the self-contained buildable unit),
 // not in a separate part file — otherwise `xc --all` would see a part with
 // module+entry and try to build it in isolation.
-module App {
+module Compile {
     bind Text        -> StdText        as singleton
     bind TokenArrays -> StdTokenArrays as singleton
     bind SpecArrays  -> StdSpecArrays  as singleton
@@ -84,6 +84,6 @@ module App {
 }
 
 async entry main(args: String[]) -> Integer {
-    let xc = App.resolve(Compiler)
+    let xc = Compile.resolve(Compiler)
     return xc.run(args)
 }

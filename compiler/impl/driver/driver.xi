@@ -385,7 +385,7 @@ producer installOne(url: String) -> Integer {
 
 // Parse a module file and fetch every URL in its `dependencies` field.
 producer installDeps(srcPath: String) -> Integer {
-    let loader = App.resolve(ModuleLoader)
+    let loader = Compile.resolve(ModuleLoader)
     let lr = loader.load(srcPath, emptyStrings())
     let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
     let tokens = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
@@ -418,7 +418,7 @@ producer installDeps(srcPath: String) -> Integer {
 producer installAll() -> Integer {
     run_command("find . -name '*.xi' -not -path '*/build/*' -not -path '*/modules/*' -not -path '*/.git/*' | sort > /tmp/xi-inst.txt 2>/dev/null")
     let files = splitLines(file_read_all("/tmp/xi-inst.txt"))
-    let xc = App.resolve(Compiler)
+    let xc = Compile.resolve(Compiler)
     let fails = 0
     let i = 0
     let n = stringArrLen(files)
@@ -443,7 +443,7 @@ producer findLibraryFile() -> String {
     while i < n {
         let f = stringArrGet(files, i)
         if containsSub(file_read_all(f), "library") {
-            let loader = App.resolve(ModuleLoader)
+            let loader = Compile.resolve(ModuleLoader)
             let lr = loader.load(f, emptyStrings())
             let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
             let toks = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
@@ -468,7 +468,7 @@ producer packLibrary(srcPath: String) -> Integer {
         system.stdout.writeln("xi pack: no `library { }` manifest found (pass a file, or add a library block)")
         return 1
     }
-    let loader = App.resolve(ModuleLoader)
+    let loader = Compile.resolve(ModuleLoader)
     let lr = loader.load(path, emptyStrings())
     let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
     let tokens = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })

@@ -15,11 +15,11 @@ import "repl/repl.xi"
 import "repl/xi_repl.xi"
 
 // ── composition root (in the manifest, not a part file — see xc.xi) ──
-module App {
+module Xi {
     bind Repl -> XiRepl as singleton
 }
 
 async entry main(args: String[]) -> Integer {
-    let xi = App.resolve(Repl)
+    let xi = Xi.resolve(Repl)
     return xi.run(args)
 }
