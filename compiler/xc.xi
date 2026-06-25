@@ -39,7 +39,14 @@ import "impl/lexer/scanner.xi"
 import "impl/lexer/xi_lexer.xi"
 
 // ── implementation layer: parser ──────────────────────────────────
-import "impl/parser/grammar.xi"
+import "impl/parser/pstate.xi"
+import "impl/parser/type_parser.xi"
+import "impl/parser/specs.xi"
+import "impl/parser/sig_parser.xi"
+import "impl/parser/decision_parser.xi"
+import "impl/parser/decl_parser.xi"
+import "impl/parser/module_parser.xi"
+import "impl/parser/program_parser.xi"
 import "impl/parser/xi_parser.xi"
 
 // ── implementation layer: codegen ─────────────────────────────────
