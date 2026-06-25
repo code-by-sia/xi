@@ -16,6 +16,12 @@ extern "C" {
     mapper xstd_replace(s: String, a: String, b: String) -> String
     mapper xstd_split(s: String, sep: String) -> String[]
     mapper xstd_join(parts: String[], sep: String) -> String
+    predicate xstd_is_alpha(c: Integer) -> Bool
+    predicate xstd_is_digit(c: Integer) -> Bool
+    predicate xstd_is_alnum(c: Integer) -> Bool
+    predicate xstd_is_space(c: Integer) -> Bool
+    mapper xstd_index_of_char(s: String, c: Integer) -> Integer
+    mapper xstd_from_char(c: Integer) -> String
 }
 
 mapper length(s: String) -> Integer { return xstd_strlen(s) }
@@ -37,3 +43,13 @@ mapper replace(s: String, from: String, to: String) -> String {
 predicate isEmpty(s: String) { return xstd_strlen(s) == 0 }
 mapper split(s: String, sep: String) -> String[] { return xstd_split(s, sep) }
 mapper join(parts: String[], sep: String) -> String { return xstd_join(parts, sep) }
+
+// Character-level helpers. `c` is a char code, e.g. from `text.charAt(s, i)`.
+predicate isAlpha(c: Integer) { return xstd_is_alpha(c) }
+predicate isDigit(c: Integer) { return xstd_is_digit(c) }
+predicate isAlnum(c: Integer) { return xstd_is_alnum(c) }
+predicate isSpace(c: Integer) { return xstd_is_space(c) }
+// Index of the first occurrence of char code `c` in `s` (or -1).
+mapper indexOfChar(s: String, c: Integer) -> Integer { return xstd_index_of_char(s, c) }
+// A one-character String from a char code.
+mapper fromCharCode(c: Integer) -> String { return xstd_from_char(c) }

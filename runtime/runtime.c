@@ -575,6 +575,25 @@ xc_integer_t xstd_index_of(xc_string_t s, xc_string_t n) {
 }
 xc_bool_t xstd_contains(xc_string_t s, xc_string_t n) { return xstd_index_of(s, n) >= 0; }
 
+/* Character-level helpers (operate on a char code, as from text.charAt). */
+xc_bool_t xstd_is_alpha(xc_integer_t c) { return (xc_bool_t)(isalpha((int)c) != 0); }
+xc_bool_t xstd_is_digit(xc_integer_t c) { return (xc_bool_t)(isdigit((int)c) != 0); }
+xc_bool_t xstd_is_alnum(xc_integer_t c) { return (xc_bool_t)(isalnum((int)c) != 0); }
+xc_bool_t xstd_is_space(xc_integer_t c) { return (xc_bool_t)(isspace((int)c) != 0); }
+/* Index of the first occurrence of char code `c` in `s`, or -1. */
+xc_integer_t xstd_index_of_char(xc_string_t s, xc_integer_t c) {
+    for (xc_size_t i = 0; i < s.len; i++)
+        if ((unsigned char)s.data[i] == (unsigned char)c) return (xc_integer_t)i;
+    return -1;
+}
+/* One-character string from a char code. */
+xc_string_t xstd_from_char(xc_integer_t c) {
+    char* b = (char*)malloc(2);
+    if (!b) abort();
+    b[0] = (char)c; b[1] = '\0';
+    return (xc_string_t){ .data = b, .len = 1 };
+}
+
 xc_string_t xstd_to_upper(xc_string_t s) {
     char* b = (char*)malloc(s.len + 1); if (!b) abort();
     for (xc_size_t i = 0; i < s.len; i++) b[i] = (char)toupper((unsigned char)s.data[i]);
