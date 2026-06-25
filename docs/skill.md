@@ -513,7 +513,8 @@ action handle(req: HttpRequest, res: HttpResponse) where web.route(req, "POST", 
 ```
 
 - `web.route(req, method, pattern) -> Bool` (guard; captures `:params`); `web.params`
-  / `web.query` / `web.headers` / `web.body` each return a `Json`.
+  / `web.query` / `web.headers` / `web.body` each return a `Json`. Patterns may have
+  multiple params: `"/foo/:id/bar/:second"`, adjacent `"/x/:a/:b"`, leading `"/:a/foo/:b"`.
 - `<json> as T` is a **general** decode (any `Json` -> compound type, lenient string
   coercion) — not web-specific; also `json.parse(s) as T`.
 - `async entry main(...) { web.serve(8080) }`. Capture works in the handler body.

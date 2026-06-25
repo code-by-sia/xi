@@ -129,11 +129,14 @@ Either way you get `xc` and `xi`:
 
 ```sh
 xc hello.xi        # compile  -> build/hello
+xc --all           # build every module project under the current dir
 xi hello.xi        # compile and run
 xi                 # interactive REPL
 xi version         # print the toolchain version
 xi update          # self-update to the latest release (tarball installs)
 xi skill           # print the AI-agent language guide (xi skill > SKILL.md)
+xitest file_test.xi   # run tests (also: xitest --all)
+loadtest --bench app.xi   # load/perf test (--compile / --bench / --http)
 ```
 
 Once installed, `xi update` upgrades the toolchain in place (downloads the latest

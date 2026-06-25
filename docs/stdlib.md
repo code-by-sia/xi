@@ -54,6 +54,10 @@ $ xc myapp.xi
 | `repeat` | `(String, Integer) -> String` |
 | `replace` | `(String, String, String) -> String` (all occurrences) |
 | `isEmpty` | `predicate (String)` |
+| `split`, `join` | `(String, String) -> String[]` / `(String[], String) -> String` |
+| `isAlpha`, `isDigit`, `isAlnum`, `isSpace` | `predicate (Integer)` — classify a char code (e.g. from `charAt`) |
+| `indexOfChar` | `(String, Integer) -> Integer` — first index of a char code (`-1` if absent) |
+| `fromCharCode` | `(Integer) -> String` — a one-character string from a char code |
 
 ### `bytes` — `std/bytes.xi`
 

@@ -209,8 +209,10 @@ one open transport.
 
 - HTTP/1.1, blocking, one request per connection (no keep-alive) — fine for an
   API behind a reverse proxy; concurrency and keep-alive are future work.
-- Routing is by exact `req.path` match in `where` guards. There is no path-pattern
-  capture (`/users/:id`); read sub-paths from `req.path` or use query parameters.
+- Routing supports exact `req.path` matches **and** path-pattern capture via
+  `web.route(req, method, "/users/:id")` — including multiple parameters
+  (`/foo/:id/bar/:second`), adjacent (`/x/:a/:b`) and leading (`/:a/foo/:b`)
+  params. Captured `:params` are read with `web.params(req) as T`.
 - HTTPS / HTTP/2 need OpenSSL (and nghttp2) at build time (`XC_TLS=1` /
   `XC_HTTP2=1`). **HTTP/3** is the one remaining transport (QUIC).
 - No `%`-decoding of query values yet; no multipart parsing.

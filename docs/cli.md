@@ -1,7 +1,18 @@
 # CLI & REPL
 
-The toolchain has two commands, installed on your `PATH` (see
-[Getting started](getting-started.md)): `xc` compiles, `xi` runs and more.
+The toolchain is four binaries, each built by `./compiler/bootstrap.sh` from its
+own manifest + `module` (`Compile`, `Xi`, `Test`, `LoadTest`):
+
+| Binary | Module | Role |
+|--------|--------|------|
+| `xc` | `Compile` | the compiler (Xi → C99 → native) |
+| `xi` | `Xi` | run a file, REPL, `test`/`install`/`pack`/`skill`/`update` |
+| `xitest` | `Test` | dedicated test runner (same engine as `xi test`) |
+| `loadtest` | `LoadTest` | load/perf testing for Xi projects |
+
+`xc` and `xi` are installed on your `PATH` (see
+[Getting started](getting-started.md)); `xitest` and `loadtest` are built into
+`./bin` by bootstrap.
 
 ## `xc` — the compiler
 
@@ -196,3 +207,34 @@ The REPL is a **compile-and-run loop**:
 | `xi skill` | print the AI-agent language guide ([skill](skill.md)) |
 | `xi update` | self-update the toolchain to the latest release |
 | `xi version` | print the toolchain version |
+
+## `xitest` — test runner
+
+A standalone test runner (`module Test`), the same compile-in-test-mode-and-run
+engine as `xi test`, as its own binary:
+
+```console
+$ xitest examples/calc_test.xi              # one file
+$ xitest examples/calc_test.xi --filter mul # only matching test names
+$ xitest --all                              # every *_test.xi under the cwd
+3 tests, 3 passed, 0 failed
+```
+
+Reads `XC` (compiler path) and `XC_RUNTIME` from the environment, like `xi`.
+
+## `loadtest` — load / perf tester
+
+A load/performance tester for Xi projects (`module LoadTest`), built on the std
+library (`std/time`, `std/http`). Three modes:
+
+```console
+$ loadtest --compile a.xi b.xi          # compiler stress: compile time + C size per file
+$ loadtest --bench   app.xi --iters 50  # run-binary benchmark: min/mean/max run time
+$ loadtest --http    web.xi --url http://127.0.0.1:8080/health --requests 200
+http-load http://127.0.0.1:8080/health:   200 req, 0 errors
+   4576 req/s   min 129us   mean 218us   max 2880us
+```
+
+The `--http` mode compiles the web example, starts its server, fires the GETs,
+then stops the server. (It is sequential for now; concurrent connections are a
+future enhancement.)
