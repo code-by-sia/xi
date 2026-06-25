@@ -401,50 +401,6 @@ type Program = {
 }
 
 // C helpers for building typed arrays used by Program
-extern "C" {
-    mapper appendFieldSpec(arr: FieldSpec[], s: FieldSpec) -> FieldSpec[]
-    mapper appendMethodSpec(arr: MethodSpec[], s: MethodSpec) -> MethodSpec[]
-    mapper appendTypeSpec(arr: TypeSpec[], s: TypeSpec) -> TypeSpec[]
-    mapper appendIfaceSpec(arr: IfaceSpec[], s: IfaceSpec) -> IfaceSpec[]
-    mapper appendDepSpec(arr: DepSpec[], s: DepSpec) -> DepSpec[]
-    mapper appendClassSpec(arr: ClassSpec[], s: ClassSpec) -> ClassSpec[]
-    mapper appendBindSpec(arr: BindSpec[], s: BindSpec) -> BindSpec[]
-    mapper appendModuleSpec(arr: ModuleSpec[], s: ModuleSpec) -> ModuleSpec[]
-    mapper appendFuncSpec(arr: FuncSpec[], s: FuncSpec) -> FuncSpec[]
-    mapper appendAtomSpec(arr: AtomSpec[], s: AtomSpec) -> AtomSpec[]
-    mapper atomSpecLen(arr: AtomSpec[]) -> Integer
-    mapper atomSpecGet(arr: AtomSpec[], i: Integer) -> AtomSpec
-    mapper appendMachineSpec(arr: MachineSpec[], s: MachineSpec) -> MachineSpec[]
-    mapper machineSpecLen(arr: MachineSpec[]) -> Integer
-    mapper machineSpecGet(arr: MachineSpec[], i: Integer) -> MachineSpec
-    mapper appendMachineTransition(arr: MachineTransition[], s: MachineTransition) -> MachineTransition[]
-    mapper machineTransLen(arr: MachineTransition[]) -> Integer
-    mapper machineTransGet(arr: MachineTransition[], i: Integer) -> MachineTransition
-    mapper appendDecisionRow(arr: DecisionRow[], s: DecisionRow) -> DecisionRow[]
-    mapper decisionRowLen(arr: DecisionRow[]) -> Integer
-    mapper decisionRowGet(arr: DecisionRow[], i: Integer) -> DecisionRow
-    mapper appendDecisionTable(arr: DecisionTable[], s: DecisionTable) -> DecisionTable[]
-    mapper decisionTableLen(arr: DecisionTable[]) -> Integer
-    mapper decisionTableGet(arr: DecisionTable[], i: Integer) -> DecisionTable
-
-    mapper methodSpecLen(arr: MethodSpec[]) -> Integer
-    mapper methodSpecGet(arr: MethodSpec[], i: Integer) -> MethodSpec
-    mapper depSpecLen(arr: DepSpec[]) -> Integer
-    mapper depSpecGet(arr: DepSpec[], i: Integer) -> DepSpec
-    mapper bindSpecLen(arr: BindSpec[]) -> Integer
-    mapper bindSpecGet(arr: BindSpec[], i: Integer) -> BindSpec
-    mapper typeSpecLen(arr: TypeSpec[]) -> Integer
-    mapper typeSpecGet(arr: TypeSpec[], i: Integer) -> TypeSpec
-    mapper ifaceSpecLen(arr: IfaceSpec[]) -> Integer
-    mapper ifaceSpecGet(arr: IfaceSpec[], i: Integer) -> IfaceSpec
-    mapper classSpecLen(arr: ClassSpec[]) -> Integer
-    mapper classSpecGet(arr: ClassSpec[], i: Integer) -> ClassSpec
-    mapper moduleSpecLen(arr: ModuleSpec[]) -> Integer
-    mapper moduleSpecGet(arr: ModuleSpec[], i: Integer) -> ModuleSpec
-    mapper funcSpecLen(arr: FuncSpec[]) -> Integer
-    mapper funcSpecGet(arr: FuncSpec[], i: Integer) -> FuncSpec
-}
-
 // ── Parsing helpers ────────────────────────────────────────────────
 
 // A binary/prefix operator that still needs a right operand — used to let a

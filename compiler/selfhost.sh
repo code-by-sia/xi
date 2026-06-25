@@ -20,8 +20,9 @@ export XC_RUNTIME="$ROOT/runtime"
 HELP="$ROOT/compiler/xc_helpers.c"
 W=/tmp/xc_selfhost; rm -rf "$W"; mkdir -p "$W"
 
-# Copy ALL compiler sources so relative `import`s resolve in the work dir.
-cp compiler/*.xi "$W"/
+# Copy ALL compiler sources (preserving the folder layout) so relative
+# `import`s resolve in the work dir.
+cp -R compiler/. "$W"/
 
 echo "==> [gen0] seed = released X compiler (no checked-in C seed)"
 SEED="$("$ROOT/compiler/fetch-seed.sh")"

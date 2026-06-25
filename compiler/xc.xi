@@ -1,17 +1,61 @@
 // =============================================================
 // xc — the X language compiler, written in X (self-hosting)
 //
-// This file is the manifest: it imports the compiler's parts.
-// The `import` mechanism (implemented in driver.x) splices each
-// file's declarations into one compilation unit.
+// Manifest for the `xc` binary. The compiler is organized in two layers:
 //
-//   lexer.x    source text -> tokens
-//   parser.x   tokens -> Program (spec structs)
-//   codegen.x  Program -> C99
-//   driver.x   import resolution + entry point (main)
+//   contracts/      the abstraction layer — every interface (the contracts)
+//   impl/           the implementation layer — all the code
+//     text/ arrays/ host/ diag/   FFI components: each file declares its
+//                   `extern "C"` block on top and a class that wraps it
+//     lexer/ parser/ codegen/ driver/   the four compiler stages
+//
+// `import` (impl/driver/driver.xi) splices each file's declarations into one
+// compilation unit, so this layout is organizational: each interface and class
+// lives in its own file, and the driver depends on the stage/service
+// *interfaces* — the `module` in impl/driver/app.xi binds the implementations.
 // =============================================================
 
-import "lexer.xi"
-import "parser.xi"
-import "codegen.xi"
-import "driver.xi"
+// ── contracts: interfaces ─────────────────────────────────────────
+import "contracts/text.xi"
+import "contracts/token_arrays.xi"
+import "contracts/spec_arrays.xi"
+import "contracts/host.xi"
+import "contracts/diagnostics.xi"
+import "contracts/lexer.xi"
+import "contracts/parser.xi"
+import "contracts/codegen.xi"
+import "contracts/compiler.xi"
+import "contracts/module_loader.xi"
+
+// ── implementation layer: FFI components (extern block + wrapper class) ──
+import "impl/ffi/text/std_text.xi"
+import "impl/ffi/arrays/token_arrays.xi"
+import "impl/ffi/arrays/spec_arrays.xi"
+import "impl/ffi/host/posix_host.xi"
+import "impl/ffi/diag/diagnostics.xi"
+
+// ── implementation layer: lexer ───────────────────────────────────
+import "impl/lexer/scanner.xi"
+import "impl/lexer/xi_lexer.xi"
+
+// ── implementation layer: parser ──────────────────────────────────
+import "impl/parser/grammar.xi"
+import "impl/parser/xi_parser.xi"
+
+// ── implementation layer: codegen ─────────────────────────────────
+import "impl/codegen/core.xi"
+import "impl/codegen/xtype.xi"
+import "impl/codegen/expr.xi"
+import "impl/codegen/seq.xi"
+import "impl/codegen/postfix.xi"
+import "impl/codegen/stmt.xi"
+import "impl/codegen/decl.xi"
+import "impl/codegen/emit.xi"
+import "impl/codegen/top.xi"
+import "impl/codegen/xi_codegen.xi"
+
+// ── implementation layer: driver + composition root ───────────────
+import "impl/driver/driver.xi"
+import "impl/driver/module_loader.xi"
+import "impl/driver/xc_compiler.xi"
+import "impl/driver/app.xi"

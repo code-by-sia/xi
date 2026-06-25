@@ -1,0 +1,588 @@
+// xc codegen — expressions: args, literals, lambdas, primary
+// (part of the xc code generator — Program -> C99; spliced via codegen.xi)
+
+// ── argument list ─────────────────────────────────────────────────
+mapper genArgs(toks: Token[], pos: Integer, ctx: GCtx) -> GArgs {
+    let p = pos + 1
+    let firstRaw = gtext(toks, p)
+    let out = ""
+    let first = true
+    while gkind(toks, p) != 101 and gkind(toks, p) != 0 {
+        let e = genExpr(toks, p, ctx)
+        p = e.pos
+        if not first { out = out + ", " }
+        out = out + e.code
+        first = false
+        if gkind(toks, p) == 106 { p = p + 1 }
+    }
+    if gkind(toks, p) == 101 { p = p + 1 }
+    return GArgs { code: out, pos: p, firstRaw: firstRaw }
+}
+
+// ── type literal:  TypeName { field: expr, ... } ──────────────────
+mapper genTypeLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let typeName = gtext(toks, pos)
+    let p = pos + 2
+    let out = "(xc_" + typeName + "_t){ "
+    let first = true
+    while gkind(toks, p) != 103 and gkind(toks, p) != 0 {
+        let fname = gtext(toks, p)
+        p = p + 1
+        if gkind(toks, p) == 108 { p = p + 1 }
+        let e = genExpr(toks, p, ctx)
+        p = e.pos
+        if not first { out = out + ", " }
+        // Construction is gated: if the field's type is a refined type, run its
+        // constraint check on the assigned value.
+        let chk = fieldCheckFn(ctx.prog, typeName, fname)
+        let val = e.code
+        if string_len(chk) > 0 { val = chk + "(" + e.code + ")" }
+        out = out + "." + fname + " = " + val
+        first = false
+        if gkind(toks, p) == 106 { p = p + 1 }
+    }
+    if gkind(toks, p) == 103 { p = p + 1 }
+    out = out + " }"
+    return ExprRes { code: out, pos: p, xtyp: typeName , owned: false }
+}
+
+// Construct a sum-type value:  Variant { f: v, ... }  or a bare  Variant.
+mapper genVariantLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let vname = gtext(toks, pos)
+    let sum = sumOfVariant(ctx.prog, vname)
+    if gkind(toks, pos + 1) != 102 {                      // no payload
+        return ExprRes {
+            code: "(xc_" + sum + "_t){ .tag = xc_" + sum + "_" + vname + " }",
+            pos: pos + 1, xtyp: sum
+        , owned: false }
+    }
+    let p = pos + 2
+    let inner = ""
+    let first = true
+    while gkind(toks, p) != 103 and gkind(toks, p) != 0 {
+        let fname = gtext(toks, p)
+        p = p + 1
+        if gkind(toks, p) == 108 { p = p + 1 }           // :
+        let e = genExpr(toks, p, ctx)
+        p = e.pos
+        if not first { inner = inner + ", " }
+        inner = inner + "." + fname + " = " + e.code
+        first = false
+        if gkind(toks, p) == 106 { p = p + 1 }           // ,
+    }
+    if gkind(toks, p) == 103 { p = p + 1 }               // }
+    return ExprRes {
+        code: "(xc_" + sum + "_t){ .tag = xc_" + sum + "_" + vname + ", .u." + vname + " = { " + inner + " } }",
+        pos: p, xtyp: sum
+    , owned: false }
+}
+
+// ── first-class closures: lambdas `(p: T, …) => expr` ─────────────────────────
+// A lambda lowers to a top-level `static R xc_lam_<tag>_<pos>(void* env, params…)`
+// (emitted by hoistLambdas, keyed by token position so the value site names the
+// same helper) and an xc_fn_t value { fn, env }. v1: capture-free (the body sees
+// only the params) with single-token param types; call via the Fn(...) xtype.
+type LamParams = { cparams: String, pctypes: String, bodyStart: Integer, ctx: GCtx }
+
+// `pos` at the lambda's '(' — is it `( … ) =>` (a lambda) rather than a grouped
+// expression?
+predicate isLambdaAt(toks: Token[], pos: Integer) {
+    if gkind(toks, pos) != 100 { return false }
+    let n = tokenArrLen(toks)
+    let rp = pos + 1
+    let pd = 1
+    while rp < n and pd > 0 {
+        let kk = gkind(toks, rp)
+        if kk == 100 { pd = pd + 1 }
+        if kk == 101 { pd = pd - 1 }
+        if pd > 0 { rp = rp + 1 }
+    }
+    return gkind(toks, rp + 1) == 110   // '=>' after the matching ')'
+}
+
+mapper parseLamParams(toks: Token[], pos: Integer, prog: Program) -> LamParams {
+    let p = pos + 1                        // past '('
+    let cparams = ""
+    let pctypes = ""
+    let pctx = mkGCtx(prog)
+    let first = true
+    while gkind(toks, p) != 101 and gkind(toks, p) != 0 {
+        if gkind(toks, p) == 106 { p = p + 1 }    // ,
+        let nm = gtext(toks, p)
+        p = p + 1
+        if gkind(toks, p) == 108 { p = p + 1 }    // :
+        let pc = typeCtypeOf(toks, p)
+        p = p + 1                                  // single-token param type
+        if not first { cparams = cparams + ", "  pctypes = pctypes + "," }
+        cparams = cparams + pc + " " + nm
+        pctypes = pctypes + pc
+        pctx = addSym(pctx, nm, ctypeToXName(pc))
+        first = false
+    }
+    let bs = p
+    if gkind(toks, bs) == 101 { bs = bs + 1 }      // ')'
+    if gkind(toks, bs) == 110 { bs = bs + 1 }      // '=>'
+    return LamParams { cparams: cparams, pctypes: pctypes, bodyStart: bs, ctx: pctx }
+}
+
+mapper genLambda(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let lp = parseLamParams(toks, pos, ctx.prog)
+    let body = genExpr(toks, lp.bodyStart, lp.ctx)
+    let retC = xnameToCtype(body.xtyp)
+    let id = "xc_lam_" + ctx.fnTag + "_" + int_to_string(pos)
+    let fnX = "Fn(" + lp.pctypes + ")(" + retC + ")"
+    return ExprRes { code: "(xc_fn_t){ (void*)" + id + ", (void*)0 }", pos: body.pos, xtyp: fnX , owned: false }
+}
+
+// Emit a top-level C function for every lambda in `toks` (mirrors hoistParallel).
+mapper hoistLambdas(prog: Program, toks: Token[], tag: String) -> String {
+    let out = ""
+    let n = tokenArrLen(toks)
+    let i = 0
+    while i < n {
+        if isLambdaAt(toks, i) {
+            let lp = parseLamParams(toks, i, prog)
+            let body = genExpr(toks, lp.bodyStart, lp.ctx)
+            let retC = xnameToCtype(body.xtyp)
+            let id = "xc_lam_" + tag + "_" + int_to_string(i)
+            let sig = "void* __env"
+            if string_len(lp.cparams) > 0 { sig = sig + ", " + lp.cparams }
+            out = out + "static " + retC + " " + id + "(" + sig + ") {\n"
+                      + "    (void)__env;\n    return (" + body.code + ");\n}\n"
+        }
+        i = i + 1
+    }
+    return out
+}
+
+// ── primary ───────────────────────────────────────────────────────
+mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
+    let k = gkind(toks, pos)
+    let txt = gtext(toks, pos)
+    // `empty T` — the zero value of T (struct all-zero, array empty, ...).
+    // Contextual: only when `empty` starts a primary AND is followed by a type
+    // (so `bytes.empty()` and any var/field named `empty` still work).
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "List" and gkind(toks, pos + 2) == 114 {
+        // `empty List<T>` — a fresh, empty list
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }   // `>`
+        return ExprRes {
+            code: "xstd_list_new(sizeof(" + elemCtype + "))",
+            pos: endp, xtyp: "List_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "Set" and gkind(toks, pos + 2) == 114 {
+        // `empty Set<T>` — a fresh, empty set
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }   // `>`
+        return ExprRes {
+            code: "xstd_set_new(sizeof(" + elemCtype + "), " + strFlagFor(elemCtype) + ")",
+            pos: endp, xtyp: "Set_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "Map" and gkind(toks, pos + 2) == 114 {
+        // `empty Map<K, V>` — a fresh, empty map (K is a primitive or String)
+        let ktk = gkind(toks, pos + 3)
+        let kc = primCtypeK(ktk)
+        if string_len(kc) == 0 { kc = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let q = pos + 4
+        if gkind(toks, q) == 106 { q = q + 1 }            // `,`
+        let vtk = gkind(toks, q)
+        let vc = primCtypeK(vtk)
+        if string_len(vc) == 0 { vc = "xc_" + gtext(toks, q) + "_t" }
+        let endp = q + 1
+        if gkind(toks, endp) == 115 { endp = endp + 1 }   // `>`
+        return ExprRes {
+            code: "xstd_map_new(sizeof(" + kc + "), sizeof(" + vc + "), " + strFlagFor(kc) + ")",
+            pos: endp, xtyp: "Map_" + ctypeSuffix(kc) + "_" + ctypeSuffix(vc)
+        , owned: false }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "Vec" and gkind(toks, pos + 2) == 114 {
+        // `empty Vec<T>` — a fresh, empty vector (a List under the hood)
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }   // `>`
+        return ExprRes {
+            code: "xstd_list_new(sizeof(" + elemCtype + "))",
+            pos: endp, xtyp: "List_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "Stack" and gkind(toks, pos + 2) == 114 {
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }
+        return ExprRes {
+            code: "xstd_stack_new(sizeof(" + elemCtype + "))",
+            pos: endp, xtyp: "Stack_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "Queue" and gkind(toks, pos + 2) == 114 {
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }
+        return ExprRes {
+            code: "xstd_queue_new(sizeof(" + elemCtype + "))",
+            pos: endp, xtyp: "Queue_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
+    if k == 1 and txt == "empty" and gtext(toks, pos + 1) == "SortedQueue" and gkind(toks, pos + 2) == 114 {
+        let etk = gkind(toks, pos + 3)
+        let elemCtype = primCtypeK(etk)
+        if string_len(elemCtype) == 0 { elemCtype = "xc_" + gtext(toks, pos + 3) + "_t" }
+        let endp = pos + 4
+        if gkind(toks, endp) == 115 { endp = endp + 1 }
+        return ExprRes {
+            code: "xstd_pqueue_new(sizeof(" + elemCtype + "), " + pqCmpKind(elemCtype) + ")",
+            pos: endp, xtyp: "SortedQueue_" + ctypeSuffix(elemCtype)
+        , owned: false }
+    }
+    // ── builders: listOf(a, b, ...) / setOf(a, b, ...) / mapOf(k to v, ...) ──
+    // Element/key types are inferred from the first argument (homogeneous).
+    // readConfig<T>("file.{json,yaml,xml}") — read + decode a config file into T
+    if k == 1 and txt == "readConfig" and gkind(toks, pos + 1) == 114 {
+        let tname = gtext(toks, pos + 2)         // T
+        let q = pos + 3
+        if gkind(toks, q) == 115 { q = q + 1 }   // >
+        if gkind(toks, q) == 100 { q = q + 1 }   // (
+        let pe = genExpr(toks, q, ctx)           // the path expression
+        q = pe.pos
+        if gkind(toks, q) == 101 { q = q + 1 }   // )
+        return ExprRes {
+            code: "xc_fromjson_" + tname + "(xstd_config_parse(" + pe.code + "))",
+            pos: q, xtyp: tname
+        , owned: false }
+    }
+    if k == 1 and txt == "generateSequence" and gkind(toks, pos + 1) == 100 {
+        // generateSequence(seed) { [p =>] next } .<lazy ops> .<terminal> — a fused
+        // lazy recurrence source: the value starts at `seed` and advances through
+        // the inlined generator each step. Must be bounded by a take/takeWhile/
+        // first in the chain, or it loops forever.
+        let se = genExpr(toks, pos + 2, ctx)
+        let seedX = se.xtyp
+        let aq = se.pos
+        if gkind(toks, aq) == 101 { aq = aq + 1 }                 // ')'
+        let bo = aq                                               // '{'
+        let close = matchBrace(toks, bo)
+        let arrow = lambdaArrow(toks, bo + 1, close)
+        let gp = "it"
+        let bstart = bo + 1
+        if arrow >= 0 { gp = gtext(toks, bo + 1)  bstart = arrow + 1 }
+        let gbody = genExpr(toks, bstart, addSym(ctx, gp, seedX))
+        let dotp = close + 1                                      // first '.' of the chain
+        return genSequenceChain(toks, dotp - 2, "", seedX, ctx, true, se.code, gbody.code, gp)
+    }
+    if k == 1 and txt == "listOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_List_t _t = xstd_list_new(sizeof(" + ec + ")); "
+                 + "xstd_list_push(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_list_push(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "List_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "vecOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_List_t _t = xstd_list_new(sizeof(" + ec + ")); "
+                 + "xstd_list_push(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_list_push(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "List_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "stackOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_Stack_t _t = xstd_stack_new(sizeof(" + ec + ")); "
+                 + "xstd_stack_push(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_stack_push(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "Stack_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "queueOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_Queue_t _t = xstd_queue_new(sizeof(" + ec + ")); "
+                 + "xstd_queue_enqueue(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_queue_enqueue(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "Queue_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "sortedQueueOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_SortedQueue_t _t = xstd_pqueue_new(sizeof(" + ec + "), " + pqCmpKind(ec) + "); "
+                 + "xstd_pqueue_push(_t, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_pqueue_push(_t, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "SortedQueue_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "setOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let first = genExpr(toks, pos + 2, ctx)
+        let ec = xnameToCtype(first.xtyp)
+        let body = "xc_Set_t _s = xstd_set_new(sizeof(" + ec + "), " + strFlagFor(ec) + "); "
+                 + "xstd_set_add(_s, (" + ec + "[]){ " + first.code + " }); "
+        let p = first.pos
+        while gkind(toks, p) == 106 {
+            let a = genExpr(toks, p + 1, ctx)
+            body = body + "xstd_set_add(_s, (" + ec + "[]){ " + a.code + " }); "
+            p = a.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_s; })", pos: p, xtyp: "Set_" + arrSuffixOf(first.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "mapOf" and gkind(toks, pos + 1) == 100 and gkind(toks, pos + 2) != 101 {
+        let k1 = genAnd(toks, pos + 2, ctx)   // genAnd, not genExpr, so the `to` stays for us
+        let kc = xnameToCtype(k1.xtyp)
+        let q = k1.pos
+        if gkind(toks, q) == 1 and gtext(toks, q) == "to" { q = q + 1 }   // `k to v`
+        let v1 = genExpr(toks, q, ctx)
+        let vc = xnameToCtype(v1.xtyp)
+        let body = "xc_Map_t _m = xstd_map_new(sizeof(" + kc + "), sizeof(" + vc + "), " + strFlagFor(kc) + "); "
+                 + "xstd_map_put(_m, (" + kc + "[]){ " + k1.code + " }, (" + vc + "[]){ " + v1.code + " }); "
+        let p = v1.pos
+        while gkind(toks, p) == 106 {
+            let kk = genAnd(toks, p + 1, ctx)   // genAnd so `to` stays for us
+            let qq = kk.pos
+            if gkind(toks, qq) == 1 and gtext(toks, qq) == "to" { qq = qq + 1 }
+            let vv = genExpr(toks, qq, ctx)
+            body = body + "xstd_map_put(_m, (" + kc + "[]){ " + kk.code + " }, (" + vc + "[]){ " + vv.code + " }); "
+            p = vv.pos
+        }
+        if gkind(toks, p) == 101 { p = p + 1 }
+        return ExprRes { code: "({ " + body + "_m; })", pos: p, xtyp: "Map_" + arrSuffixOf(k1.xtyp) + "_" + arrSuffixOf(v1.xtyp) , owned: false }
+    }
+    if k == 1 and txt == "empty" {
+        let nk = gkind(toks, pos + 1)
+        if nk == 1 or string_len(primCtypeK(nk)) > 0 {
+            let ctype = typeCtypeOf(toks, pos + 1)
+            let tp = pos + 2                     // after the base type token
+            let cont = true
+            while cont {
+                let pk = gkind(toks, tp)
+                if pk == 127 { tp = tp + 1 }                                   // ?
+                else { if pk == 126 { tp = tp + 1 }                            // !
+                else { if pk == 104 and gkind(toks, tp + 1) == 105 { tp = tp + 2 }  // []
+                else { cont = false } } }
+            }
+            return ExprRes { code: "(" + ctype + "){0}", pos: tp, xtyp: gtext(toks, pos + 1) , owned: false }
+        }
+    }
+    if k == 2 { return ExprRes { code: txt + "LL", pos: pos + 1, xtyp: "Integer" , owned: false } }
+    if k == 3 { return ExprRes { code: txt, pos: pos + 1, xtyp: "Number" , owned: false } }
+    if k == 4 { return ExprRes { code: "xc_string_from_cstr(\"" + txt + "\")", pos: pos + 1, xtyp: "String" , owned: false } }
+    if k == 236 { return ExprRes { code: "true", pos: pos + 1, xtyp: "Bool" , owned: false } }
+    if k == 237 { return ExprRes { code: "false", pos: pos + 1, xtyp: "Bool" , owned: false } }
+    if k == 254 { return ExprRes { code: "{0}", pos: pos + 1, xtyp: "" , owned: false } }
+    if k == 253 { return ExprRes { code: "input", pos: pos + 1, xtyp: "" , owned: false } }
+    if k == 243 { return ExprRes { code: "value", pos: pos + 1, xtyp: lookupVar(ctx, "value") , owned: false } }
+    if k == 238 { return ExprRes { code: "self", pos: pos + 1, xtyp: "self" , owned: false } }
+    if k == 100 {
+        if isLambdaAt(toks, pos) { return genLambda(toks, pos, ctx) }
+        let inner = genExpr(toks, pos + 1, ctx)
+        let p2 = inner.pos
+        if gkind(toks, p2) == 101 { p2 = p2 + 1 }
+        return ExprRes { code: "(" + inner.code + ")", pos: p2, xtyp: inner.xtyp , owned: false }
+    }
+    if k == 104 {
+        // Array literal [ e1, e2, ... ]
+        let p = pos + 1
+        let out = ""
+        let count = 0
+        let firstX = ""
+        let first = true
+        while gkind(toks, p) != 105 and gkind(toks, p) != 0 {
+            let e = genExpr(toks, p, ctx)
+            p = e.pos
+            if first { firstX = e.xtyp }
+            if not first { out = out + ", " }
+            out = out + e.code
+            count = count + 1
+            first = false
+            if gkind(toks, p) == 106 { p = p + 1 }
+        }
+        if gkind(toks, p) == 105 { p = p + 1 }
+        if count == 0 {
+            return ExprRes { code: "{0}", pos: p, xtyp: "emptyarr" , owned: false }
+        }
+        let arrType = "xc_arr_" + arrSuffixOf(firstX) + "_t"
+        let elemCtype = xnameToCtype(firstX)
+        let code = "(" + arrType + "){ .data = (" + elemCtype + "[]){ " + out
+                 + " }, .len = " + int_to_string(count) + ", .cap = " + int_to_string(count) + " }"
+        return ExprRes { code: code, pos: p, xtyp: arrSuffixOf(firstX) + "[]" , owned: false }
+    }
+    if k == 1 {
+        if isParallelAt(toks, pos) {
+            // parallel [(cap,...)] { body } -> spawn a thread, yield a Thread
+            let pp = parseParallelAt(toks, pos)
+            let id = ctx.fnTag + "_" + int_to_string(pos)
+            let args = ""
+            let nc = stringArrLen(pp.caps)
+            let c = 0
+            while c < nc {
+                if c > 0 { args = args + ", " }
+                args = args + stringArrGet(pp.caps, c)
+                c = c + 1
+            }
+            return ExprRes { code: "xc_parspawn_" + id + "(" + args + ")", pos: pp.endPos, xtyp: "Thread" , owned: false }
+        }
+        if isRunWithDelayAt(toks, pos) {
+            // runWithDelay(ms) { body } -> run body after `ms`, yield Future<Integer>
+            let dp = parseDelayAt(toks, pos)
+            let id = ctx.fnTag + "_" + int_to_string(pos)
+            let ms = genExpr(toks, dp.msStart, ctx)
+            let caps = capturesIn(toks, dp.bodyStart, dp.bodyEnd, ctx.capNames, ctx.capTypes)
+            let args = ms.code
+            let nc = stringArrLen(caps.names)
+            let c = 0
+            while c < nc { args = args + ", " + stringArrGet(caps.names, c)  c = c + 1 }
+            return ExprRes { code: "xc_delayspawn_" + id + "(" + args + ")", pos: dp.endPos, xtyp: "Future_integer" , owned: false }
+        }
+        if txt == "thread" {
+            // built-in thread facility: thread.channel() / thread.stopped()
+            return ExprRes { code: "", pos: pos + 1, xtyp: "thread:" , owned: false }
+        }
+        if isVariantNameC(ctx.prog, txt) {
+            // sum-type constructor: Variant { ... } or a bare nullary Variant
+            return genVariantLiteral(toks, pos, ctx)
+        }
+        if gkind(toks, pos + 1) == 102 and isTypeNameC(ctx.prog, txt) {
+            return genTypeLiteral(toks, pos, ctx)
+        }
+        if isDepNameC(ctx, txt) {
+            return ExprRes { code: "self->" + txt, pos: pos + 1, xtyp: depTypeOf(ctx, txt) , owned: false }
+        }
+        if txt == "system" {
+            return ExprRes { code: "system", pos: pos + 1, xtyp: "ns:system" , owned: false }
+        }
+        if txt == "Events" {
+            // built-in event facility: Events.dispatch/encode/decode/topic/type/run
+            return ExprRes { code: "", pos: pos + 1, xtyp: "events:" , owned: false }
+        }
+        if isModuleNameC(ctx.prog, txt) {
+            return ExprRes { code: txt, pos: pos + 1, xtyp: "module:" + txt , owned: false }
+        }
+        if isAtomNameC(ctx.prog, txt) {
+            return ExprRes { code: "__atom_" + txt, pos: pos + 1, xtyp: "atom:" + txt , owned: false }
+        }
+        if isMachineTypeC(ctx.prog, txt) {
+            return ExprRes { code: txt, pos: pos + 1, xtyp: "machinetype:" + txt , owned: false }
+        }
+        return ExprRes { code: txt, pos: pos + 1, xtyp: lookupVar(ctx, txt) , owned: false }
+    }
+    return ExprRes { code: txt, pos: pos + 1, xtyp: "" , owned: false }
+}
+
+// ── functional API on List<T> (lambdas inlined as generated loops) ─────────
+// Method names that take a `{ lambda }` (and maybe a leading `(arg)`).
+predicate isListFunc(fld: String) {
+    if fld == "map"      { return true }
+    if fld == "filter"   { return true }
+    if fld == "filterNot"{ return true }
+    if fld == "partition"{ return true }
+    if fld == "zip"      { return true }
+    if fld == "unzip"    { return true }
+    if fld == "forEach"  { return true }
+    if fld == "fold"     { return true }
+    if fld == "reduce"   { return true }
+    if fld == "count"    { return true }
+    if fld == "any"      { return true }
+    if fld == "all"      { return true }
+    if fld == "none"     { return true }
+    if fld == "sumOf"    { return true }
+    if fld == "joinToString" { return true }
+    if fld == "mapIndexed" { return true }
+    if fld == "takeWhile" { return true }
+    if fld == "dropWhile" { return true }
+    if fld == "flatMap"  { return true }
+    if fld == "take"     { return true }
+    if fld == "drop"     { return true }
+    if fld == "reversed" { return true }
+    if fld == "distinct" { return true }
+    if fld == "first"    { return true }
+    if fld == "last"     { return true }
+    if fld == "toSet"    { return true }
+    if fld == "find"     { return true }
+    if fld == "firstOrNone" { return true }
+    if fld == "lastOrNone"  { return true }
+    if fld == "maxByOrNone" { return true }
+    if fld == "minByOrNone" { return true }
+    if fld == "average"  { return true }
+    if fld == "sorted"   { return true }
+    if fld == "sortedDescending" { return true }
+    if fld == "sortedBy" { return true }
+    if fld == "sortedByDescending" { return true }
+    if fld == "groupBy"  { return true }
+    if fld == "associateBy" { return true }
+    if fld == "associateWith" { return true }
+    if fld == "chunked"  { return true }
+    if fld == "windowed" { return true }
+    if fld == "sum"      { return true }
+    if fld == "min"      { return true }
+    if fld == "max"      { return true }
+    if fld == "minOrNone" { return true }
+    if fld == "maxOrNone" { return true }
+    if fld == "contains" { return true }
+    if fld == "indexOf"  { return true }
+    if fld == "toList"   { return true }
+    if fld == "withIndex" { return true }
+    if fld == "flatten"  { return true }
+    if fld == "single"   { return true }
+    if fld == "singleOrNone" { return true }
+    if fld == "onEach"   { return true }
+    if fld == "maxOf"    { return true }
+    if fld == "minOf"    { return true }
+    if fld == "scan"     { return true }
+    if fld == "runningFold" { return true }
+    return false
+}
+// index of the top-level `=>` (kind 110) within (start, close), or -1.
+mapper lambdaArrow(toks: Token[], start: Integer, close: Integer) -> Integer {
+    let depth = 0
+    let i = start
+    while i < close {
+        let k = gkind(toks, i)
+        if k == 102 or k == 100 or k == 104 { depth = depth + 1 }
+        if k == 103 or k == 101 or k == 105 { depth = depth - 1 }
+        if depth == 0 and k == 110 { return i }
+        i = i + 1
+    }
+    return 0 - 1
+}
+

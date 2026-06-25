@@ -9,16 +9,6 @@
 // prefixes a file's top-level symbol names with `a_b__` so independently
 // authored files can reuse short names without colliding (see applyNamespace).
 
-extern "C" {
-    predicate xstd_file_exists(path: String) -> Bool
-    mapper    get_env(name: String, dflt: String) -> String
-    mapper    set_env(name: String, val: String) -> Integer
-    mapper    run_command(cmd: String) -> Integer
-    consumer  diag_set_file(path: String)
-    consumer  diag_error(line: Integer, msg: String)
-    consumer  diag_warn(line: Integer, msg: String)
-}
-
 // LoadResult carries the merged tokens, the visited-paths set (dedup), and a
 // registry mapping qualified names "ns.Name" -> mangled "ns__Name" so that
 // cross-file references can be collapsed after all files are merged.
@@ -237,77 +227,6 @@ mapper renameTok(t: Token, prefix: String, exports: String[]) -> Token {
 // a call argument, so we build it via a return-cast here).
 creator emptyStrings() -> String[] => []
 
-creator loadModule(rawPath: String, visited: String[]) -> LoadResult {
-    let path = canonPath(rawPath)   // dedup key: same file via any spelling
-    if strArrContains(visited, path) {
-        return LoadResult { tokens: [], visited: visited, qnames: [], qrepl: [] }
-    }
-    let vis = appendString(visited, path)
-    let src = file_read_all(path)
-    diag_set_file(path)              // lexer errors report this file
-    let toks = tokenise(src)
-    let dir = dirOf(path)
-
-    let nsName = scanNamespaceName(toks)
-    let prefix = nsPrefixOf(nsName)
-    let hasNs = string_len(nsName) > 0
-    let exports: String[] = []
-    let qnames: String[] = []
-    let qrepl: String[] = []
-    if hasNs {
-        exports = collectExports(toks)
-        let ei = 0
-        let en = stringArrLen(exports)
-        while ei < en {
-            let nm = stringArrGet(exports, ei)
-            qnames = appendString(qnames, nsName + "." + nm)
-            qrepl  = appendString(qrepl,  prefix + "__" + nm)
-            ei = ei + 1
-        }
-    }
-
-    let out: Token[] = []
-    let prevKind = 0
-    let i = 0
-    let n = tokenArrLen(toks)
-    while i < n {
-        let t = tokenArrGet(toks, i)
-        if t.kind == 244 and tokenArrGet(toks, i + 1).kind == 4 {
-            let rel = tokenArrGet(toks, i + 1).text
-            let sub = loadModule(resolveImport(dir, rel), vis)
-            vis = sub.visited
-            out = concatTokens(out, sub.tokens)
-            qnames = concatStrings(qnames, sub.qnames)
-            qrepl  = concatStrings(qrepl,  sub.qrepl)
-            i = i + 2
-            prevKind = 0
-        } else {
-            if t.kind == 255 {
-                i = i + 1
-                let cont = true
-                while cont and i < n {
-                    let nt = tokenArrGet(toks, i).kind
-                    if nt == 1 or nt == 107 { i = i + 1 } else { cont = false }
-                }
-            } else {
-                if t.kind == 0 {
-                    i = i + 1
-                } else {
-                    // Rename top-level names, but NOT identifiers after '.'
-                    // (those are field/method accesses, never namespaced).
-                    if hasNs and prevKind != 107 and prevKind != 129 {
-                        out = appendToken(out, renameTok(t, prefix, exports))
-                    } else {
-                        out = appendToken(out, t)
-                    }
-                    prevKind = t.kind
-                    i = i + 1
-                }
-            }
-        }
-    }
-    return LoadResult { tokens: out, visited: vis, qnames: qnames, qrepl: qrepl }
-}
 
 mapper concatStrings(a: String[], b: String[]) -> String[] {
     let out = a
@@ -413,33 +332,6 @@ predicate containsSub(s: String, sub: String) {
     }
     return false
 }
-// Does the file declare its own `entry` or `module`? Such a file is an app/demo,
-// not library code, so it must not be folded into a consumer's build.
-predicate declaresEntryOrModule(path: String) {
-    let toks = tokenise(file_read_all(path))
-    let n = tokenArrLen(toks)
-    let i = 0
-    while i < n {
-        let k = tokenArrGet(toks, i).kind
-        if k == 219 { return true }   // entry
-        if k == 210 { return true }   // module
-        i = i + 1
-    }
-    return false
-}
-// A gathered dependency file under ./modules that is NOT library source: an
-// example/test/demo (own entry/module, a *_test.xi, or under examples/tests).
-// These often `import "../src/..."`, which would double-load the library, and
-// carry their own entry — so they're excluded from the consumer's build.
-predicate isDepNonLib(path: String, rel: String) {
-    if not startsWith2(rel, "modules/") { return false }
-    if containsSub(rel, "/examples/") or containsSub(rel, "/example/") { return true }
-    if containsSub(rel, "/tests/") or containsSub(rel, "/test/") { return true }
-    if containsSub(rel, "/.claude/") or containsSub(rel, "/build/") { return true }
-    if endsWith2(baseNameOf(rel), "_test.xi") { return true }
-    if declaresEntryOrModule(path) { return true }
-    return false
-}
 mapper splitLines(s: String) -> String[] {
     let out: String[] = []
     let n = string_len(s)
@@ -477,35 +369,6 @@ mapper moduleGlobs(prog: Program, which: Integer) -> String[] {
     }
     return out
 }
-// Re-load `srcPath` (+ its imports) plus every .xi under its directory that
-// matches `inc` and not `exc`. Returns the merged LoadResult.
-creator gatherSources(srcPath: String, inc: String[], exc: String[]) -> LoadResult {
-    let base = dirOf(srcPath)
-    if string_len(base) == 0 { base = "." }   // bare filename -> current directory
-    run_command("find '" + base + "' -name '*.xi' > /tmp/xi-srcs.txt 2>/dev/null")
-    let files = splitLines(file_read_all("/tmp/xi-srcs.txt"))
-    let acc = loadModule(srcPath, emptyStrings())
-    let toks = acc.tokens
-    let visited = acc.visited
-    let qn = acc.qnames
-    let qr = acc.qrepl
-    let i = 0
-    let n = stringArrLen(files)
-    while i < n {
-        let f = stringArrGet(files, i)
-        let cf = canonPath(f)
-        let rel = relPath(base, f)
-        if cf != canonPath(srcPath) and not strArrContains(visited, cf) and not isDepNonLib(f, rel) and matchesAny(inc, rel) and not matchesAny(exc, rel) {
-            let sub = loadModule(f, visited)
-            visited = sub.visited
-            toks = concatTokens(toks, sub.tokens)
-            qn = concatStrings(qn, sub.qnames)
-            qr = concatStrings(qr, sub.qrepl)
-        }
-        i = i + 1
-    }
-    return LoadResult { tokens: toks, visited: visited, qnames: qn, qrepl: qr }
-}
 
 // ── Dependencies: `xi install` fetches module dependency archives ────────────
 // Download one archive URL and extract it into ./modules (handles .tar.gz / .zip).
@@ -522,7 +385,8 @@ producer installOne(url: String) -> Integer {
 
 // Parse a module file and fetch every URL in its `dependencies` field.
 producer installDeps(srcPath: String) -> Integer {
-    let lr = loadModule(srcPath, emptyStrings())
+    let loader = App.resolve(ModuleLoader)
+    let lr = loader.load(srcPath, emptyStrings())
     let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
     let tokens = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
     let prog = parseProgram(tokens)
@@ -554,12 +418,13 @@ producer installDeps(srcPath: String) -> Integer {
 producer installAll() -> Integer {
     run_command("find . -name '*.xi' -not -path '*/build/*' -not -path '*/modules/*' -not -path '*/.git/*' | sort > /tmp/xi-inst.txt 2>/dev/null")
     let files = splitLines(file_read_all("/tmp/xi-inst.txt"))
+    let xc = App.resolve(Compiler)
     let fails = 0
     let i = 0
     let n = stringArrLen(files)
     while i < n {
         let f = stringArrGet(files, i)
-        if isBuildableModule(f) {
+        if xc.isBuildable(f) {
             if installDeps(f) != 0 { fails = fails + 1 }
         }
         i = i + 1
@@ -578,7 +443,8 @@ producer findLibraryFile() -> String {
     while i < n {
         let f = stringArrGet(files, i)
         if containsSub(file_read_all(f), "library") {
-            let lr = loadModule(f, emptyStrings())
+            let loader = App.resolve(ModuleLoader)
+            let lr = loader.load(f, emptyStrings())
             let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
             let toks = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
             let prog = parseProgram(toks)
@@ -602,7 +468,8 @@ producer packLibrary(srcPath: String) -> Integer {
         system.stdout.writeln("xi pack: no `library { }` manifest found (pass a file, or add a library block)")
         return 1
     }
-    let lr = loadModule(path, emptyStrings())
+    let loader = App.resolve(ModuleLoader)
+    let lr = loader.load(path, emptyStrings())
     let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
     let tokens = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
     let prog = parseProgram(tokens)
@@ -653,111 +520,6 @@ producer packLibrary(srcPath: String) -> Integer {
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
 mapper xcVersion() -> String { return "0.0.81" }
 
-// Compile one source file (resolving imports + module source sets) to a native
-// binary. Returns 0 on success.
-producer buildOne(srcPath: String) -> Integer {
-    system.stdout.writeln("xc: loading + lexing " + srcPath + " ...")
-    let lr = loadModule(srcPath, emptyStrings())
-    let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
-    let tokens = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
-
-    system.stdout.writeln("xc: parsing ...")
-    diag_set_file(srcPath)           // parse errors report the main source
-    let prog = parseProgram(tokens)
-
-    // Module source set: if a module declares includes/excludes, glob-gather the
-    // matching .xi files under the source's directory and re-parse the merged set.
-    let inc = moduleGlobs(prog, 0)
-    let exc = moduleGlobs(prog, 1)
-    // Installed dependencies under ./modules join the gather automatically, so
-    // `xi install`ed libraries compile in without an explicit include.
-    let modBase = dirOf(srcPath)
-    if string_len(modBase) == 0 { modBase = "." }
-    if dirHasXi(modBase + "/modules") { inc = appendString(inc, "modules/**") }
-    if stringArrLen(inc) > 0 or stringArrLen(exc) > 0 {
-        if stringArrLen(inc) == 0 { inc = ["./**"] }   // default when only excludes given
-        system.stdout.writeln("xc: gathering module sources ...")
-        let lr2 = gatherSources(srcPath, inc, exc)
-        let collapsed2 = collapseQualified(lr2.tokens, lr2.qnames, lr2.qrepl)
-        let tokens2 = appendToken(collapsed2, Token { kind: 0, text: "", line: 0 })
-        diag_set_file(srcPath)
-        prog = parseProgram(tokens2)
-    }
-
-    checkMachines(prog)              // static machine-graph validation
-    checkPurity(prog)                // pure-kind functions must stay side-effect-free
-
-    system.stdout.writeln("xc: generating C ...")
-    let cSource = genAll(prog, srcPath)
-
-    let outDir = get_env("XC_OUT", "build")
-    run_command("mkdir -p '" + outDir + "'")
-    // Binary name: the module's `id` if it declares one, else the source basename.
-    let base = baseName(srcPath)
-    let mid = moduleId(prog)
-    if string_len(mid) > 0 { base = mid }
-    let outPath = outDir + "/" + base + ".gen.c"
-    file_write(outPath, cSource)
-    let binPath = outDir + "/" + base
-
-    system.stdout.writeln("xc: compiling C to native binary ...")
-    let rc = compile_c(outPath, binPath)
-    if rc == 0 {
-        // Drop the generated C once it's built (XC_KEEP_C=1 retains it).
-        if string_len(get_env("XC_KEEP_C", "")) == 0 {
-            run_command("rm -f '" + outPath + "'")
-        }
-        if get_env("XC_TARGET", "") == "wasm" {
-            system.stdout.writeln("xc: built WebAssembly " + binPath + ".{html,js,wasm}")
-            system.stdout.writeln("xc: serve it, e.g.  python3 -m http.server -d " + outDir + "  then open " + base + ".html")
-        } else {
-            system.stdout.writeln("xc: built executable " + binPath)
-        }
-        return 0
-    }
-    system.stderr.writeln("xc: C compilation failed")
-    return 1
-}
-
-// A file is a buildable module if it has both an `entry` and a `module`.
-predicate isBuildableModule(path: String) {
-    let toks = tokenise(file_read_all(path))
-    let n = tokenArrLen(toks)
-    let hasEntry = false
-    let hasModule = false
-    let i = 0
-    while i < n {
-        let k = tokenArrGet(toks, i).kind
-        if k == 219 { hasEntry = true }
-        if k == 210 { hasModule = true }
-        i = i + 1
-    }
-    return hasEntry and hasModule
-}
-
-// `xc --all` — discover every buildable module under the current directory and
-// build each (into its own binary, named by its module `id`).
-producer buildAll() -> Integer {
-    run_command("find . -name '*.xi' -not -path '*/build/*' -not -path '*/.git/*' | sort > /tmp/xi-modules.txt 2>/dev/null")
-    let files = splitLines(file_read_all("/tmp/xi-modules.txt"))
-    let built = 0
-    let fails = 0
-    let i = 0
-    let n = stringArrLen(files)
-    while i < n {
-        let f = stringArrGet(files, i)
-        if isBuildableModule(f) {
-            system.stdout.writeln("=== xc --all: building " + f + " ===")
-            built = built + 1
-            if buildOne(f) != 0 { fails = fails + 1 }
-        }
-        i = i + 1
-    }
-    system.stdout.writeln("xc --all: built " + int_to_string(built) + " module(s), " + int_to_string(fails) + " failed")
-    if fails > 0 { return 1 }
-    return 0
-}
-
 // The value of a `--target <t>` / `--target=<t>` flag anywhere in args, or "".
 mapper argTarget(args: String[]) -> String {
     let i = 1
@@ -789,35 +551,6 @@ mapper cliSource(args: String[]) -> String {
     return ""
 }
 
-async entry main(args: String[]) -> Integer {
-    if args.len < 2 {
-        system.stdout.writeln("Usage: xc <source.xi>   (or: xc --all, xc --target wasm <source.xi>, xc version)")
-        return 1
-    }
-    let tgt = argTarget(args)
-    if string_len(tgt) > 0 {
-        if tgt != "wasm" and tgt != "native" {
-            system.stderr.writeln("xc: unknown --target '" + tgt + "' (expected: native, wasm)")
-            return 1
-        }
-        set_env("XC_TARGET", tgt)
-    }
-    let srcPath = cliSource(args)
-    if srcPath == "version" or srcPath == "--version" or srcPath == "-v" {
-        system.stdout.writeln("xc " + xcVersion())
-        return 0
-    }
-    if srcPath == "--all" { return buildAll() }
-    if srcPath == "--install" {
-        if args.len >= 3 { return installDeps(args.data[2]) }
-        return installAll()
-    }
-    if srcPath == "--pack" {
-        if args.len >= 3 { return packLibrary(args.data[2]) }
-        return packLibrary("")
-    }
-    return buildOne(srcPath)
-}
 
 // The first non-empty module `id` in the program (used as the binary name), or "".
 mapper moduleId(prog: Program) -> String {

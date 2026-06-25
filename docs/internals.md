@@ -7,15 +7,30 @@
 
 ## The compiler is written in Xi
 
-`compiler/xc.xi` is the Xi compiler, written in Xi. It is split across four files
-(imported by the `xc.xi` manifest):
+`compiler/xc.xi` is the Xi compiler, written in Xi. It is a manifest that imports
+two layers: an **abstraction layer** (`contracts/` — every interface) and an
+**implementation layer** (`impl/` — all the code). The stages and services are
+wired together with Xi's own dependency injection: classes declare `deps` on the
+*interfaces*, and the `module` in `impl/driver/app.xi` binds the implementations.
+Each interface and class lives in its own file.
 
-| File | Role |
-|------|------|
-| `lexer.xi`   | source text → tokens |
-| `parser.xi`  | tokens → `Program` (spec structs) |
-| `codegen.xi` | `Program` → C99 |
-| `driver.xi`  | `import` resolution + entry point |
+| Layer / folder | Role |
+|----------------|------|
+| `contracts/` | the contracts: `Lexer`, `Parser`, `Codegen`, `Compiler`, plus the FFI components `Text`, `TokenArrays`, `SpecArrays`, `Host` (file IO, env, processes) and `Diagnostics` |
+| `impl/ffi/text/`, `impl/ffi/arrays/`, `impl/ffi/host/`, `impl/ffi/diag/` | the FFI components — each file declares its `extern "C"` block on top (externs cannot live in a class) and a class (`StdText`, `StdTokenArrays`, `StdSpecArrays`, `PosixHost`, `Diag`) that wraps it |
+| `impl/lexer/`   | source text → tokens (`scanner.xi` logic + `XiLexer`) |
+| `impl/parser/`  | tokens → `Program` (`grammar.xi` logic + `XiParser`) |
+| `impl/codegen/` | `Program` → C99 (`core/xtype/expr/seq/postfix/stmt/decl/emit/top.xi` passes + `XiCodegen`) |
+| `impl/driver/`  | `import` resolution + the DI-wired `XcCompiler` + composition root (`app.xi`) |
+
+`XcCompiler` depends on the three stage interfaces **and** on `Host` +
+`Diagnostics`, so the orchestration reads/writes files, runs the C compiler, and
+reports errors through injected services rather than raw FFI. Pure value helpers
+(string ops, char classes, typed-array accessors) stay as free functions called
+directly.
+
+The `xi` REPL / run tool is a separate binary built from `compiler/xi.xi`, with
+its parts under `compiler/repl/` (`runner.xi`, `repl.xi`, `xi_repl.xi`, `app.xi`).
 
 The compiler emits C and then invokes `cc` to produce a native binary. The only
 non-Xi code is:
@@ -68,10 +83,10 @@ performs this build and diffs the outputs.
 
 ```mermaid
 flowchart LR
-    src["source.xi<br/>(+ imports)"] --> load["load<br/>imports + namespaces<br/>(driver.xi)"]
-    load --> lex["lex<br/>tokeniser<br/>(lexer.xi)"]
-    lex --> parse["parse<br/>recursive descent → Program<br/>(parser.xi)"]
-    parse --> codegen["codegen<br/>DI, vtables, refined types,<br/>overloads, results, match → C99<br/>(codegen.xi)"]
+    src["source.xi<br/>(+ imports)"] --> load["load<br/>imports + namespaces<br/>(impl/driver/)"]
+    load --> lex["lex<br/>tokeniser<br/>(impl/lexer/)"]
+    lex --> parse["parse<br/>recursive descent → Program<br/>(impl/parser/)"]
+    parse --> codegen["codegen<br/>DI, vtables, refined types,<br/>overloads, results, match → C99<br/>(impl/codegen/)"]
     codegen --> cc["cc<br/>C → native binary"]
     cc --> bin([native binary])
 ```
@@ -87,9 +102,11 @@ state-machine when used. There is no VM, no GC, and no reflection.
 
 ```
 compiler/
-  xc.xi          manifest (imports the parts)
-  lexer.xi parser.xi codegen.xi driver.xi   the compiler, in Xi
-  repl.xi        the REPL / run tool (compiled to ./bin/xi)
+  xc.xi          manifest for the compiler (imports the parts)
+  xi.xi          manifest for the REPL / run tool (compiled to ./bin/xi)
+  contracts/     the abstraction layer: every interface
+  impl/          the implementation layer: ffi/ (text/ arrays/ host/ diag/ — each an extern block + wrapper class) + lexer/ parser/ codegen/ driver/
+  repl/          the REPL / run tool parts
   xc_helpers.c  C primitives (extern "C")
   fetch-seed.sh download the released seed compiler
   bootstrap.sh selfhost.sh
