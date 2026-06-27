@@ -10,9 +10,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let cont = true
     while cont {
         let k = gkind(toks, p)
-        // extension function call: recv.method(args) -> xc_<typ>__<method>(recv, args)
-        if (k == 107 or k == 129) and gkind(toks, p + 2) == 100 and (ctx.prog).isFuncNameC(typ + "__" + gtext(toks, p + 1)) {
-            let ext = typ + "__" + gtext(toks, p + 1)
+        // extension function call: recv.method(args) -> xc_<key>__<method>(recv, args).
+        // `key` is the receiver xtype, normalizing an array literal's `X[]` form to
+        // the `arr_X` form array params/returns carry (and that the parser keys on).
+        let extKey = typ
+        if endsWith2(typ, "[]") { extKey = "arr_" + string_slice(typ, 0, string_len(typ) - 2) }
+        if (k == 107 or k == 129) and gkind(toks, p + 2) == 100 and (ctx.prog).isFuncNameC(extKey + "__" + gtext(toks, p + 1)) {
+            let ext = extKey + "__" + gtext(toks, p + 1)
             let al = genArgs(toks, p + 2, ctx)
             let callArgs = code
             if string_len(al.code) > 0 { callArgs = code + ", " + al.code }

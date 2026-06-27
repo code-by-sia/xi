@@ -25,3 +25,17 @@ test "chained extension calls" {
     let n: Integer = 5
     assertEq(n.double().plus(1), 11)
 }
+
+// extensions also work on array types: `Type[].method`, with `this` the array.
+mapper Integer[].total() -> Integer {
+    let s = 0
+    let i = 0
+    while i < this.len { s = s + this.data[i]  i = i + 1 }
+    return s
+}
+
+test "extension on an array type (param + literal-var)" {
+    let xs: Integer[] = [3, 4, 5]
+    assertEq(xs.total(), 12)
+    assertEq([10, 20, 30].total(), 60)
+}

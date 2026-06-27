@@ -41,18 +41,31 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         }
     }
 
-    // name — may be an extension function `Type.method`, e.g. `Integer.double`
-    // or `Person.fullName`. The receiver is passed as a `this` parameter, and the
-    // function is named `<recvSuffix>__<method>` (e.g. integer__double).
+    // name — may be an extension function `Type.method` (e.g. `Integer.double`,
+    // `Person.fullName`) or on an array type `Type[].method` (e.g.
+    // `Token[].kindAt`). The receiver is passed as a `this` parameter; the
+    // function is named `<recvXtype>__<method>` (the xtype a receiver carries).
     let nameTok = peek(ps2)
     ps2 = advance(ps2)
     let fname = nameTok.text
     let extThis = ""
+    let arrRecv = false
+    if peek(ps2).kind == 104 and peekAt(ps2, 1).kind == 105 {   // `Type[]` receiver
+        arrRecv = true
+        ps2 = advance(advance(ps2))            // past `[` `]`
+    }
     if peek(ps2).kind == 107 {                 // '.'  -> extension on a type
         let recvCtype = identToCtype(nameTok.text)
         if nameTok.kind >= 260 and nameTok.kind <= 269 { recvCtype = primKindToCtype(nameTok.kind) }
+        let xkey = nameTok.text                // the xtype the extension is keyed on
+        if arrRecv {
+            let elemSuf = nameTok.text         // user type: keep the name (xc_arr_Token_t)
+            if nameTok.kind >= 260 and nameTok.kind <= 269 { elemSuf = ctypeSuffix(primKindToCtype(nameTok.kind)) }
+            recvCtype = "xc_arr_" + elemSuf + "_t"
+            xkey = "arr_" + elemSuf
+        }
         ps2 = advance(ps2)                     // '.'
-        fname = nameTok.text + "__" + peek(ps2).text   // keyed by xtype (the type name)
+        fname = xkey + "__" + peek(ps2).text
         ps2 = advance(ps2)                     // method name
         extThis = recvCtype + " this"
     }

@@ -311,7 +311,21 @@ Call them with the usual `receiver.method(args)` syntax. Extensions take regular
 parameters after the receiver, return like any function, and **chain**
 (`n.double().plus(1)`). Any function kind works (`mapper`, `predicate`, …). They
 desugar to a plain function taking the receiver as a `this` parameter, so there's
-no runtime cost. See `examples/extensions_test.xi`.
+no runtime cost.
+
+The receiver may also be an **array type** — `Type[].method` — with `this` the
+array:
+
+```x
+mapper Integer[].total() -> Integer {
+    let s = 0
+    for x in this.data { s = s + x }
+    return s
+}
+[3, 4, 5].total()      // 12
+```
+
+See `examples/extensions_test.xi`.
 
 ## `capture` — name a sub-expression's value
 
