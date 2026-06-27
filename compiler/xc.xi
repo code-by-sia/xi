@@ -51,13 +51,17 @@ import "impl/parser/xi_parser.xi"
 
 // ── implementation layer: codegen ─────────────────────────────────
 import "impl/codegen/core.xi"
+import "impl/codegen/checks.xi"
 import "impl/codegen/xtype.xi"
 import "impl/codegen/expr.xi"
 import "impl/codegen/seq.xi"
 import "impl/codegen/postfix.xi"
+import "impl/codegen/operators.xi"
 import "impl/codegen/stmt.xi"
 import "impl/codegen/decl.xi"
 import "impl/codegen/emit.xi"
+import "impl/codegen/di.xi"
+import "impl/codegen/codecs.xi"
 import "impl/codegen/top.xi"
 import "impl/codegen/xi_codegen.xi"
 
