@@ -31,7 +31,7 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         // infer the unwrapped element's xtype from an "opt_<suffix>" optional
         let nmType = ""
         if startsWith2(e.xtyp, "opt_") { nmType = xnameFromArrSuffix(string_slice(e.xtyp, 4, string_len(e.xtyp))) }
-        let bctx = addSym(ctx, nm, nmType)
+        let bctx = ctx.addSym(nm, nmType)
         let body = "        __auto_type " + nm + " = (" + e.code + ").value;\n" + genStmts(toks, pe + 1, close, bctx)
         let code = "    if ((" + e.code + ").has_value) {\n" + body + "    }\n"
         return StmtRes { code: code, ctx: ctx, pos: close + 1 }
@@ -130,10 +130,10 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             let line = "    __auto_type " + tmp + " = " + e.code + ";\n"
                      + "    if (!" + tmp + ".ok) return (" + ctx.retCtype + "){ .ok = false, .err = " + tmp + ".err };\n"
                      + "    " + cdecl + " " + name + " = " + tmp + ".value;\n"
-            return StmtRes { code: line, ctx: addSym(ctx, name, ""), pos: e.pos + 1 }
+            return StmtRes { code: line, ctx: ctx.addSym(name, ""), pos: e.pos + 1 }
         }
         let line = "    " + cdecl + " " + name + " = " + e.code + ";\n"
-        return StmtRes { code: line, ctx: addSym(ctx, name, e.xtyp), pos: e.pos }
+        return StmtRes { code: line, ctx: ctx.addSym(name, e.xtyp), pos: e.pos }
     }
     if k == 221 {
         let nk = gkind(toks, pos + 1)
@@ -184,7 +184,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         if isListXType(it.xtyp) {
             // for x in <List<T>>
             let elem = listElemCtype(it.xtyp)
-            let bctx = addSym(ctx, varName, listElemXName(it.xtyp))
+            let bctx = ctx.addSym(varName, listElemXName(it.xtyp))
             let body = genStmts(toks, it.pos + 1, close, bctx)
             let code = "    { xc_List_t " + itv + " = " + it.code + ";\n"
                      + "      for (xc_integer_t " + idv + " = 0; " + idv + " < xstd_list_len(" + itv + "); " + idv + " = " + idv + " + 1) {\n"
@@ -195,7 +195,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         if isSetXType(it.xtyp) {
             // for x in <Set<T>> — snapshot the live elements into a List, iterate it
             let elem = setElemCtype(it.xtyp)
-            let bctx = addSym(ctx, varName, setElemXName(it.xtyp))
+            let bctx = ctx.addSym(varName, setElemXName(it.xtyp))
             let body = genStmts(toks, it.pos + 1, close, bctx)
             let code = "    { xc_List_t " + itv + " = xstd_set_items(" + it.code + ");\n"
                      + "      for (xc_integer_t " + idv + " = 0; " + idv + " < xstd_list_len(" + itv + "); " + idv + " = " + idv + " + 1) {\n"
@@ -205,7 +205,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         }
         if it.xtyp == "Range" {
             // for i in <range> — a..b / until / downTo / step
-            let bctx = addSym(ctx, varName, "Integer")
+            let bctx = ctx.addSym(varName, "Integer")
             let body = genStmts(toks, it.pos + 1, close, bctx)
             let code = "    { xc_range_t " + itv + " = " + it.code + ";\n"
                      + "      for (xc_integer_t " + varName + " = " + itv + ".start;\n"
@@ -214,7 +214,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
                      + body + "      } }\n"
             return StmtRes { code: code, ctx: ctx, pos: close + 1 }
         }
-        let bctx = addSym(ctx, varName, "")
+        let bctx = ctx.addSym(varName, "")
         let body = genStmts(toks, it.pos + 1, close, bctx)
         let code = "    { __auto_type " + itv + " = " + it.code + ";\n"
                  + "      for (xc_size_t " + idv + " = 0; " + idv + " < " + itv + ".len; " + idv + " = " + idv + " + 1) {\n"
@@ -368,7 +368,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         } } } } } } } }
         if gkind(toks, p) == 109 { p = p + 1 }   // ->
         let bctx = ctx
-        if string_len(bindName) > 0 { bctx = addSym(ctx, bindName, "") }
+        if string_len(bindName) > 0 { bctx = ctx.addSym(bindName, "") }
         let bindLine = ""
         if string_len(bindName) > 0 {
             bindLine = "        __auto_type " + bindName + " = " + bindExpr + ";\n"
@@ -483,7 +483,7 @@ mapper hoistCatches(prog: Program, toks: Token[], tag: String) -> String {
                 let typeName = gtext(toks, cp + 3)
                 let catchOpen = cp + 4
                 let catchClose = matchBrace(toks, catchOpen)
-                let bctx = withTag(addSym(mkGCtx(prog), varName, typeName), tag)
+                let bctx = ((mkGCtx(prog)).addSym(varName, typeName)).withTag(tag)
                 let cbody = genStmts(toks, catchOpen + 1, catchClose, bctx)
                 let hname = "xc_catch_" + tag + "_" + int_to_string(cp)
                 out = out + "static int " + hname + "(void* __pp) {\n"
@@ -550,14 +550,14 @@ mapper hoistParallel(prog: Program, toks: Token[], tag: String) -> String {
             }
             // thread body
             out = out + "static void* xc_par_" + id + "(void* __a) {\n"
-            let bctx = withTag(withRet(mkGCtx(prog), "void"), id)
+            let bctx = ((mkGCtx(prog)).withRet("void")).withTag(id)
             if nc > 0 {
                 out = out + "    xc_parenv_" + id + "_t* __e = (xc_parenv_" + id + "_t*)__a;\n"
                 let c = 0
                 while c < nc {
                     let nm = stringArrGet(pp.caps, c)
                     out = out + "    xc_Channel_t " + nm + " = __e->" + nm + ";\n"
-                    bctx = addSym(bctx, nm, "Channel")
+                    bctx = bctx.addSym(nm, "Channel")
                     c = c + 1
                 }
             } else {

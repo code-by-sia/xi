@@ -188,7 +188,7 @@ mapper genIfaceDefaults(prog: Program) -> String {
                 out = out + "static " + ms.retCtype + " xc_" + is2.name + "_" + ms.name + "_default_impl(void* self_ptr" + pstr + ") {\n"
                 out = out + "    (void)self_ptr;\n"
                 out = out + captureDecls(ms.bodyTokens)
-                let ctx = seedCaptures(withTag(withRet(seedParams(mkGCtx(prog), ms.params), ms.retCtype), tag), ms.bodyTokens)
+                let ctx = seedCaptures(((seedParams(mkGCtx(prog), ms.params)).withRet(ms.retCtype)).withTag(tag), ms.bodyTokens)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
             }

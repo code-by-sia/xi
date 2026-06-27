@@ -34,7 +34,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
             let param = "it"
             let bstart = bo + 1
             if arrow >= 0 { param = gtext(toks, bo + 1)  bstart = arrow + 1 }
-            let body = genExpr(toks, bstart, addSym(ctx, param, curX))
+            let body = genExpr(toks, bstart, ctx.addSym(param, curX))
             // each op binds its param in its own block so reused names (e.g. `it`) don't clash
             if fld == "map" {
                 step = step + 1
@@ -91,7 +91,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         let arrow = lambdaArrow(toks, bo + 1, close)
         let param = "it"  let bstart = bo + 1
         if arrow >= 0 { param = gtext(toks, bo + 1)  bstart = arrow + 1 }
-        let body = genExpr(toks, bstart, addSym(ctx, param, curX))
+        let body = genExpr(toks, bstart, ctx.addSym(param, curX))
         let code = head + loopHdr + inner + "        " + curC + " " + param + " = " + curVar + "; (void)(" + body.code + "); } (void)0; })"
         return ExprRes { code: code, pos: close + 1, xtyp: "" , owned: false }
     }
@@ -107,7 +107,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
             while pi < arrow { if gkind(toks, pi) == 1 { if firstP { pa = gtext(toks, pi)  firstP = false } else { px = gtext(toks, pi) } } pi = pi + 1 }
             bstart = arrow + 1
         }
-        let body = genExpr(toks, bstart, addSym(addSym(ctx, pa, accX), px, curX))
+        let body = genExpr(toks, bstart, (ctx.addSym(pa, accX)).addSym(px, curX))
         let accC = xnameToCtype(accX)
         let code = head + "      " + accC + " " + pa + " = " + seed + ";\n" + loopHdr + inner
                  + "        " + curC + " " + px + " = " + curVar + "; " + pa + " = (" + body.code + "); } " + pa + "; })"
@@ -126,7 +126,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         let arrow = lambdaArrow(toks, bo + 1, close)
         let param = "it"  let bstart = bo + 1
         if arrow >= 0 { param = gtext(toks, bo + 1)  bstart = arrow + 1 }
-        let body = genExpr(toks, bstart, addSym(ctx, param, curX))
+        let body = genExpr(toks, bstart, ctx.addSym(param, curX))
         let init = "0"  let setv = "1"  let cond = "(" + body.code + ")"
         if tf == "all" { init = "1"  setv = "0"  cond = "!(" + body.code + ")" }
         let code = head + "      xc_bool_t _r" + u + " = " + init + ";\n" + loopHdr + inner
@@ -411,7 +411,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     if fld == "fold" or fld == "reduce" {
         let accX = elemX
         if fld == "fold" { accX = argX }
-        let bctx = addSym(addSym(ctx, p0, accX), p1, elemX)
+        let bctx = (ctx.addSym(p0, accX)).addSym(p1, elemX)
         let body = genExpr(toks, bstart, bctx)
         let elDecl = "        " + elem + " " + p1 + " = " + elAt + ";\n"
         if fld == "fold" {
@@ -431,7 +431,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         // Result is List<Acc> of length len+1.
         let accX = argX
         let accC = xnameToCtype(accX)
-        let bctx = addSym(addSym(ctx, p0, accX), p1, elemX)
+        let bctx = (ctx.addSym(p0, accX)).addSym(p1, elemX)
         let body = genExpr(toks, bstart, bctx)
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + accC + ")); " + accC + " " + p0 + " = " + argCode + ";\n"
                  + "      xstd_list_push(" + rv + ", &" + p0 + ");\n"
@@ -441,7 +441,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     }
     if fld == "mapIndexed" {
         // { i, x => body } — p0 = index (Integer), p1 = element
-        let bctx = addSym(addSym(ctx, p0, "Integer"), p1, elemX)
+        let bctx = (ctx.addSym(p0, "Integer")).addSym(p1, elemX)
         let body = genExpr(toks, bstart, bctx)
         let uc = xnameToCtype(body.xtyp)
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + uc + "));\n"
@@ -452,7 +452,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     }
 
     // single-param lambdas: p0 binds the element
-    let bctx = addSym(ctx, p0, elemX)
+    let bctx = ctx.addSym(p0, elemX)
     let body = genExpr(toks, bstart, bctx)
     let loopOpen = "for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
                  + "        " + elem + " " + p0 + " = " + elAt + ";\n"
@@ -664,7 +664,7 @@ mapper seedCaptures(ctx: GCtx, toks: Token[]) -> GCtx {
     while i < n {
         if gkind(toks, i) == 1 and gtext(toks, i) == "capture"
            and gkind(toks, i + 1) == 1 and gkind(toks, i + 2) == 108 {
-            result = addSym(result, gtext(toks, i + 1), gtext(toks, i + 3))
+            result = result.addSym(gtext(toks, i + 1), gtext(toks, i + 3))
         }
         i = i + 1
     }

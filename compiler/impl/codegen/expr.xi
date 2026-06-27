@@ -116,7 +116,7 @@ mapper parseLamParams(toks: Token[], pos: Integer, prog: Program) -> LamParams {
         if not first { cparams = cparams + ", "  pctypes = pctypes + "," }
         cparams = cparams + pc + " " + nm
         pctypes = pctypes + pc
-        pctx = addSym(pctx, nm, ctypeToXName(pc))
+        pctx = pctx.addSym(nm, ctypeToXName(pc))
         first = false
     }
     let bs = p
@@ -279,7 +279,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         let gp = "it"
         let bstart = bo + 1
         if arrow >= 0 { gp = gtext(toks, bo + 1)  bstart = arrow + 1 }
-        let gbody = genExpr(toks, bstart, addSym(ctx, gp, seedX))
+        let gbody = genExpr(toks, bstart, ctx.addSym(gp, seedX))
         let dotp = close + 1                                      // first '.' of the chain
         return genSequenceChain(toks, dotp - 2, "", seedX, ctx, true, se.code, gbody.code, gp)
     }
@@ -411,7 +411,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     if k == 237 { return ExprRes { code: "false", pos: pos + 1, xtyp: "Bool" , owned: false } }
     if k == 254 { return ExprRes { code: "{0}", pos: pos + 1, xtyp: "" , owned: false } }
     if k == 253 { return ExprRes { code: "input", pos: pos + 1, xtyp: "" , owned: false } }
-    if k == 243 { return ExprRes { code: "value", pos: pos + 1, xtyp: lookupVar(ctx, "value") , owned: false } }
+    if k == 243 { return ExprRes { code: "value", pos: pos + 1, xtyp: ctx.lookupVar("value") , owned: false } }
     if k == 238 { return ExprRes { code: "self", pos: pos + 1, xtyp: "self" , owned: false } }
     if k == 100 {
         if isLambdaAt(toks, pos) { return genLambda(toks, pos, ctx) }
@@ -485,8 +485,8 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if gkind(toks, pos + 1) == 102 and isTypeNameC(ctx.prog, txt) {
             return genTypeLiteral(toks, pos, ctx)
         }
-        if isDepNameC(ctx, txt) {
-            return ExprRes { code: "self->" + txt, pos: pos + 1, xtyp: depTypeOf(ctx, txt) , owned: false }
+        if ctx.isDepNameC(txt) {
+            return ExprRes { code: "self->" + txt, pos: pos + 1, xtyp: ctx.depTypeOf(txt) , owned: false }
         }
         if txt == "system" {
             return ExprRes { code: "system", pos: pos + 1, xtyp: "ns:system" , owned: false }
@@ -504,7 +504,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if isMachineTypeC(ctx.prog, txt) {
             return ExprRes { code: txt, pos: pos + 1, xtyp: "machinetype:" + txt , owned: false }
         }
-        return ExprRes { code: txt, pos: pos + 1, xtyp: lookupVar(ctx, txt) , owned: false }
+        return ExprRes { code: txt, pos: pos + 1, xtyp: ctx.lookupVar(txt) , owned: false }
     }
     return ExprRes { code: txt, pos: pos + 1, xtyp: "" , owned: false }
 }

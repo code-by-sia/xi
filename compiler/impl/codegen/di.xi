@@ -27,7 +27,7 @@ mapper wireDep(prog: Program, dep: DepSpec, target: String) -> String {
     if form == "where" {
         let impls = implementorsOf(prog, j)
         let nimp = stringArrLen(impls)
-        let gctx = addSym(mkGCtx(prog), dep.name, j)
+        let gctx = (mkGCtx(prog)).addSym(dep.name, j)
         let cond = genExpr(dep.whereTokens, 0, gctx)
         let out = "    { bool _ok = false;\n"
         let k = 0
@@ -78,7 +78,7 @@ mapper genCheckFns(prog: Program) -> String {
         if not ts.isCompound {
             if ts.hasWhere {
                 let base = ts.baseCtype
-                let ctx = addSym(mkGCtx(prog), "value", ctypeToXName(base))
+                let ctx = (mkGCtx(prog)).addSym("value", ctypeToXName(base))
                 let cond = genExpr(ts.whereTokens, 0, ctx)
                 out = out + "static " + base + " xc_check_" + ts.name + "(" + base + " value) {\n"
                 out = out + "    XC_CONSTRAINT_CHECK(" + cond.code + ", \"" + ts.name + "\");\n"

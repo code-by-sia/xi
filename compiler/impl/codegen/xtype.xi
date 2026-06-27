@@ -416,13 +416,13 @@ mapper hoistDelays(prog: Program, toks: Token[], tag: String, capNames: String[]
             out = out + "static void* xc_delaythunk_" + id + "(void* __a) {\n"
             out = out + "    xc_delayenv_" + id + "_t* __e = (xc_delayenv_" + id + "_t*)__a;\n"
             out = out + "    xstd_sleep_ms(__e->__ms);\n"
-            let bctx = withTag(withRet(mkGCtx(prog), "void"), id)
+            let bctx = ((mkGCtx(prog)).withRet("void")).withTag(id)
             c = 0
             while c < nc {
                 let nm = stringArrGet(caps.names, c)
                 let xt = stringArrGet(caps.xtypes, c)
                 out = out + "    " + xnameToCtype(xt) + " " + nm + " = __e->" + nm + ";\n"
-                bctx = addSym(bctx, nm, xt)
+                bctx = bctx.addSym(nm, xt)
                 c = c + 1
             }
             out = out + genStmts(toks, dp.bodyStart, dp.bodyEnd, bctx)
@@ -555,7 +555,7 @@ mapper addParamSym(ctx: GCtx, seg: String) -> GCtx {
     if lastSp < 0 { return ctx }
     let ctype = string_slice(seg, s, lastSp)
     let name  = string_slice(seg, lastSp + 1, n)
-    return addSym(ctx, name, resolveX(ctx.prog, ctypeToXName(ctype)))
+    return ctx.addSym(name, resolveX(ctx.prog, ctypeToXName(ctype)))
 }
 
 mapper seedParams(ctx: GCtx, cparams: String) -> GCtx {

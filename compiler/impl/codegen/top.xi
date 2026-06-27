@@ -17,7 +17,7 @@ mapper genTestRunner(prog: Program, srcPath: String) -> String {
         out = out + hoistLambdas(prog, t.bodyTokens, "test" + int_to_string(i))
         out = out + "static void xc_test_body_" + int_to_string(i) + "(void) {\n"
         out = out + funcDepPrologue(prog, t.fnDeps)
-        let ctx = withTag(seedFuncDeps(mkGCtx(prog), t.fnDeps), "test" + int_to_string(i))
+        let ctx = (seedFuncDeps(mkGCtx(prog), t.fnDeps)).withTag("test" + int_to_string(i))
         out = out + genBody2(t.bodyTokens, ctx)
         out = out + "}\n"
         i = i + 1
@@ -57,11 +57,11 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
     out = out + "    xc_args.data = (xc_string_t*)malloc(argc * sizeof(xc_string_t));\n"
     out = out + "    for (int i = 0; i < argc; i++) xc_args.data[i] = xc_string_from_cstr(argv[i]);\n"
     out = out + funcDepPrologue(prog, es.fnDeps)
-    let ctx = withCaps(withTag(seedFuncDeps(mkGCtx(prog), es.fnDeps), "entry"), capN, capX)
+    let ctx = ((seedFuncDeps(mkGCtx(prog), es.fnDeps)).withTag("entry")).withCaps(capN, capX)
     if string_len(es.params) > 0 {
         let pname = lastWord(es.params)
         out = out + "    xc_arr_string_t " + pname + " = xc_args;\n"
-        ctx = addSym(ctx, pname, "arr_string")
+        ctx = ctx.addSym(pname, "arr_string")
     }
     out = out + captureDecls(es.bodyTokens)
     ctx = seedCaptures(ctx, es.bodyTokens)
@@ -278,7 +278,7 @@ mapper machineCond(prog: Program, m: MachineSpec, tr: MachineTransition) -> Stri
     let cond = machineStateCond(m, tr.froms)
     if tr.hasGuard {
         let gctx = seedParams(mkGCtx(prog), tr.params)
-        if m.hasData { gctx = addSym(gctx, "data", m.name + "Data") }
+        if m.hasData { gctx = gctx.addSym("data", m.name + "Data") }
         cond = "(" + cond + ") && (" + genExpr(tr.guardTokens, 0, gctx).code + ")"
     }
     return cond
@@ -374,7 +374,7 @@ mapper genMachineDefs(prog: Program) -> String {
                 let ut = tr.updateTokens
                 let up = 0
                 let uctx = seedParams(mkGCtx(prog), tr.params)
-                if m.hasData { uctx = addSym(uctx, "data", mn + "Data") }
+                if m.hasData { uctx = uctx.addSym("data", mn + "Data") }
                 while gkind(ut, up) != 0 {
                     let fname = gtext(ut, up)
                     up = up + 1

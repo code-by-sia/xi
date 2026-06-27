@@ -485,7 +485,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         } else {
             if k == 100 {
                 let al = genArgs(toks, p, ctx)
-                let _fx = lookupVar(ctx, bname)
+                let _fx = ctx.lookupVar(bname)
                 if isFnXType(_fx) {
                     // Closure call: cast the stored fn pointer to the signature
                     // recovered from the value's Fn(...) xtype and invoke it.
