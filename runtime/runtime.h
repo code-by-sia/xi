@@ -278,7 +278,8 @@ xc_bool_t     xstd_future_done(xc_Future_t);    /* has it finished (non-blocking
  * `scheduled name() cron "<expr>" { … }` registers a job; the scheduler fires
  * each job when local time matches its 5-field cron (min hour dom month dow).   */
 void xstd_sched_register(void (*fn)(void), const char* cron);
-void xstd_scheduler_run(void);   /* blocks forever, firing due jobs (minute resolution) */
+void xstd_sched_register_interval(void (*fn)(void), long ms);   /* fixed ms interval */
+void xstd_scheduler_run(void);   /* blocks forever, firing due cron + interval jobs */
 
 xc_Event_t   xstd_event_make(xc_string_t topic, xc_string_t type, void* payload);
 xc_string_t  xstd_event_topic(xc_Event_t);

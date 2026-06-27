@@ -240,11 +240,12 @@ function. See `examples/delay_demo.xi`.
   is the established synchronous form and is unchanged — only free `async`
   functions spawn. See `examples/async_demo.xi`.
 
-## Scheduled jobs — `scheduled … cron`
+## Scheduled jobs — `scheduled … cron` / `every`
 
-A `scheduled` job runs a block on a **cron schedule**. It declares its own
-dependencies (auto-wired, exactly like a function or `entry`) and a 5-field cron
-expression — `minute hour day-of-month month day-of-week`:
+A `scheduled` job runs a block on a schedule. It declares its own dependencies
+(auto-wired, exactly like a function or `entry`) and either a 5-field **cron**
+expression — `minute hour day-of-month month day-of-week` — or a fixed
+**millisecond interval** with `every <N>ms`:
 
 ```x
 scheduled (logger: Logger) greeter() cron "5 4 * * *" {   // 04:05 every day
@@ -252,10 +253,16 @@ scheduled (logger: Logger) greeter() cron "5 4 * * *" {   // 04:05 every day
 }
 
 scheduled (logger: Logger) heartbeat() cron "* * * * *" { logger.info("tick") }  // every minute
+
+scheduled (logger: Logger) poll() every 5000ms {          // every 5 seconds
+    logger.info("polling")
+}
 ```
 
 Cron fields accept `*`, a number (`5`), a range (`1-5`), a step (`*/15`,
 `0-30/10`), and comma lists (`0,15,30,45`). Day-of-week is `0`–`6` (Sunday = 0).
+The `every <N>ms` form fires every `N` milliseconds (the `ms` unit is optional;
+sub-second intervals are honored, unlike cron's minute resolution).
 
 Declaring any scheduled job makes the program **run a scheduler** that keeps the
 process alive and fires each job (at minute resolution) when local time matches.

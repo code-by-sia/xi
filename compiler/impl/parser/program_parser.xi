@@ -172,6 +172,7 @@ creator parseProgram(tokens: Token[]) -> Program {
                         } else {
                         if t.kind == 1 and t.text == "scheduled" {
                             // scheduled (deps) name() cron "<expr>" { body }
+                            //   or  scheduled (deps) name() every <N>ms { body }
                             ps = advance(ps)                       // 'scheduled'
                             let sdeps: DepSpec[] = []
                             if peek(ps).kind == 100 {              // (deps)
@@ -187,9 +188,19 @@ creator parseProgram(tokens: Token[]) -> Program {
                             ps = advance(ps)
                             if peek(ps).kind == 100 { ps = advance(ps) }   // (
                             if peek(ps).kind == 101 { ps = advance(ps) }   // )
-                            if peek(ps).text == "cron" { ps = advance(ps) } // 'cron'
-                            let scron = peek(ps).text              // cron string literal
-                            ps = advance(ps)
+                            // schedule clause: `cron "<expr>"` or `every <N>ms`
+                            let scron = ""
+                            if peek(ps).text == "every" {
+                                ps = advance(ps)                   // 'every'
+                                let nms = peek(ps).text            // milliseconds (a number)
+                                ps = advance(ps)
+                                if peek(ps).text == "ms" { ps = advance(ps) }   // optional 'ms' unit
+                                scron = "every:" + nms
+                            } else {
+                                if peek(ps).text == "cron" { ps = advance(ps) } // 'cron'
+                                scron = peek(ps).text              // cron string literal
+                                ps = advance(ps)
+                            }
                             let sb = parseBody(ps)
                             ps = sb.ps
                             scheduled = appendFuncSpec(scheduled, FuncSpec {

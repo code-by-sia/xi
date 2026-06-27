@@ -2354,7 +2354,10 @@ xc_bool_t xstd_future_done(xc_Future_t f) { return f ? (f->done != 0) : true; }
  * Each of the 5 cron fields is parsed into a bitmask of matching values; the
  * scheduler wakes ~once a second and fires any job whose mask matches the
  * current local minute (deduped so a job fires at most once per minute).        */
-typedef struct { uint64_t min, hour, dom, mon, dow; void (*fn)(void); long last; } xc_sched_job;
+/* A job is either cron (min..dow masks) or a fixed millisecond interval
+ * (interval_ms > 0, next due at next_ms on the monotonic ms clock). */
+typedef struct { uint64_t min, hour, dom, mon, dow; void (*fn)(void); long last;
+                 long interval_ms; long long next_ms; } xc_sched_job;
 static xc_sched_job xc_sched_jobs[128];
 static int xc_sched_n = 0;
 
@@ -2404,7 +2407,15 @@ void xstd_sched_register(void (*fn)(void), const char* cron) {
     j->dom  = xc_cron_field(fields[2], 1, 31);
     j->mon  = xc_cron_field(fields[3], 1, 12);
     j->dow  = xc_cron_field(fields[4], 0, 6);
-    j->fn = fn; j->last = -1;
+    j->fn = fn; j->last = -1; j->interval_ms = 0; j->next_ms = 0;
+}
+/* Register a job that fires every `ms` milliseconds (fixed interval). */
+void xstd_sched_register_interval(void (*fn)(void), long ms) {
+    if (xc_sched_n >= 128) return;
+    if (ms < 1) ms = 1;
+    xc_sched_job* j = &xc_sched_jobs[xc_sched_n++];
+    j->min = j->hour = j->dom = j->mon = j->dow = 0;
+    j->fn = fn; j->last = -1; j->interval_ms = ms; j->next_ms = 0;
 }
 static int xc_cron_match(xc_sched_job* j, struct tm* t) {
     return (j->min  & (1ULL << (t->tm_min)))        &&
@@ -2415,15 +2426,34 @@ static int xc_cron_match(xc_sched_job* j, struct tm* t) {
 }
 void xstd_scheduler_run(void) {
     if (xc_sched_n == 0) return;
+    /* seed each interval job's first due time relative to "now" */
+    long long mono = (long long)(xstd_now_nanos() / 1000000);
+    for (int i = 0; i < xc_sched_n; i++)
+        if (xc_sched_jobs[i].interval_ms > 0)
+            xc_sched_jobs[i].next_ms = mono + xc_sched_jobs[i].interval_ms;
     for (;;) {
         time_t now = time(NULL);
         struct tm lt; localtime_r(&now, &lt);
         long minute = (long)(now / 60);
+        long long mnow = (long long)(xstd_now_nanos() / 1000000);
+        long sleep_ms = 1000;                 /* cron needs only ~1s resolution */
         for (int i = 0; i < xc_sched_n; i++) {
             xc_sched_job* j = &xc_sched_jobs[i];
-            if (j->last != minute && xc_cron_match(j, &lt)) { j->last = minute; j->fn(); }
+            if (j->interval_ms > 0) {
+                if (mnow >= j->next_ms) {
+                    j->fn();
+                    j->next_ms += j->interval_ms;
+                    if (j->next_ms <= mnow) j->next_ms = mnow + j->interval_ms;  /* fell behind: don't burst */
+                }
+                if (j->interval_ms < sleep_ms) sleep_ms = j->interval_ms;        /* wake often enough */
+            } else {
+                if (j->last != minute && xc_cron_match(j, &lt)) { j->last = minute; j->fn(); }
+            }
         }
-        struct timespec ts; ts.tv_sec = 1; ts.tv_nsec = 0; nanosleep(&ts, NULL);
+        if (sleep_ms < 10) sleep_ms = 10;     /* floor: avoid a busy loop */
+        if (sleep_ms > 1000) sleep_ms = 1000;
+        struct timespec ts; ts.tv_sec = sleep_ms / 1000; ts.tv_nsec = (long)((sleep_ms % 1000) * 1000000L);
+        nanosleep(&ts, NULL);
     }
 }
 xc_bool_t xstd_thread_running(xc_Thread_t t) { return t ? !t->done : false; }

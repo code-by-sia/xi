@@ -304,9 +304,11 @@ await d
 - `async entry main` and async **methods** stay synchronous (only free async fns spawn).
 
 ```x
-// scheduled job: deps auto-wired, 5-field cron "min hour dom month dow".
-// Declaring one runs a scheduler that keeps the process alive.
+// scheduled job: deps auto-wired. Schedule is a 5-field cron "min hour dom
+// month dow", or a fixed interval `every <N>ms`. Declaring one runs a scheduler
+// that keeps the process alive.
 scheduled (logger: Logger) greeter() cron "5 4 * * *" { logger.info("test!") }
+scheduled (logger: Logger) poll() every 5000ms { logger.info("every 5s") }
 ```
 
 ## Dependency injection

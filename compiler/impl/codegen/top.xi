@@ -397,7 +397,12 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
         let s = 0
         while s < sn {
             let job = funcSpecGet(prog.scheduled, s)
-            out = out + "    xstd_sched_register((void(*)(void))xc_" + job.name + ", \"" + cEscape(job.topic) + "\");\n"
+            if startsWith2(job.topic, "every:") {
+                let everyMs = string_slice(job.topic, 6, string_len(job.topic))
+                out = out + "    xstd_sched_register_interval((void(*)(void))xc_" + job.name + ", " + everyMs + ");\n"
+            } else {
+                out = out + "    xstd_sched_register((void(*)(void))xc_" + job.name + ", \"" + cEscape(job.topic) + "\");\n"
+            }
             s = s + 1
         }
         out = out + "    xstd_scheduler_run();\n"
