@@ -54,7 +54,7 @@ jobs:
             case "$(basename "$f")" in
               # Long-running demos block forever (web.serve / the cron scheduler) —
               # compile only.
-              web_demo.xi|web_params_demo.xi|web_capture_demo.xi|web_route_capture_demo.xi|scheduled_demo.xi) echo "  (long-running example — compile-only)" ;;
+              web_demo.xi|web_params_demo.xi|web_capture_demo.xi|web_route_capture_demo.xi|web_route_move_demo.xi|scheduled_demo.xi) echo "  (long-running example — compile-only)" ;;
               *) if [ -x "$bin" ]; then "$bin" | head -3 || true; fi ;;
             esac
           done
@@ -67,3 +67,6 @@ jobs:
             echo "== xi test $f =="
             ./bin/xi test "$f"
           done
+
+      - name: Web route integration test (multi-param + trailing literal)
+        run: ./scripts/web_route_test.sh
