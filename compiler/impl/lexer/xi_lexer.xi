@@ -223,7 +223,9 @@ class XiLexer implements Lexer {
                 let start = p
                 while p + 2 < slen {
                     if string_char_at(src, p) == 34 and string_char_at(src, p + 1) == 34 and string_char_at(src, p + 2) == 34 {
-                        let content = string_slice(src, start, p)
+                        // strip common indentation, then escape the real newlines/
+                        // tabs/quotes so the content is a valid C string-literal body.
+                        let content = escRawC(stripIndent(string_slice(src, start, p)))
                         p = p + 3
                         return LexStep { tok: Token { kind: 4, text: content, line: ln }, pos: p, line: ln }
                     }

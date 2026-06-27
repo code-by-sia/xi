@@ -149,3 +149,57 @@ mapper appendToken(arr: Token[], tok: Token) -> Token[] {
     // bootstrapping we use a helper written inline.
     return appendTokenC(arr, tok)
 }
+
+// Escape a raw string (actual chars) into a C string-literal body: backslash,
+// quote and control chars become their C escapes. Used for triple-quoted
+// strings, whose content holds real newlines/tabs (a regular `"..."` already
+// carries source escapes, so it's emitted as-is).
+mapper escRawC(s: String) -> String {
+    let out = ""
+    let n = string_len(s)
+    let i = 0
+    while i < n {
+        let c = string_char_at(s, i)
+        if c == 92      { out = out + "\\" + "\\" }     // \  -> \\
+        else { if c == 34 { out = out + "\\" + "\"" }   // "  -> \"
+        else { if c == 10 { out = out + "\\" + "n" }    // LF -> \n
+        else { if c == 9  { out = out + "\\" + "t" }    // TAB-> \t
+        else { if c == 13 { out = out + "\\" + "r" }    // CR -> \r
+        else { out = out + string_slice(s, i, i + 1) } } } } }
+        i = i + 1
+    }
+    return out
+}
+
+// Strip common leading indentation from a triple-quoted string: drop one leading
+// newline (so the text can start on the line after `"""`), then remove the least
+// indentation shared by all non-blank lines.
+mapper stripIndent(s: String) -> String {
+    let n = string_len(s)
+    let start = 0
+    if n > 0 and string_char_at(s, 0) == 10 { start = 1 }   // drop a leading newline
+    // minimum leading-space count over non-blank lines
+    let minInd = 1000000
+    let i = start
+    while i < n {
+        let ind = 0
+        let j = i
+        while j < n and string_char_at(s, j) == 32 { ind = ind + 1  j = j + 1 }
+        if j < n and string_char_at(s, j) != 10 {       // non-blank line
+            if ind < minInd { minInd = ind }
+        }
+        while i < n and string_char_at(s, i) != 10 { i = i + 1 }
+        if i < n { i = i + 1 }
+    }
+    if minInd == 1000000 { minInd = 0 }
+    // re-emit each line with `minInd` leading spaces removed
+    let out = ""
+    i = start
+    while i < n {
+        let skipped = 0
+        while skipped < minInd and i < n and string_char_at(s, i) == 32 { i = i + 1  skipped = skipped + 1 }
+        while i < n and string_char_at(s, i) != 10 { out = out + string_slice(s, i, i + 1)  i = i + 1 }
+        if i < n { out = out + string_slice(s, i, i + 1)  i = i + 1 }   // keep the newline
+    }
+    return out
+}
