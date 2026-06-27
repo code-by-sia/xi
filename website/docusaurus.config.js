@@ -32,7 +32,23 @@ const config = {
     format: 'detect',
     hooks: {onBrokenMarkdownLinks: 'warn'},
   },
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+    // Offline full-text search (no Algolia / external service). Adds a search
+    // box to the navbar; the index is built at build time and shipped statically.
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      /** @type {import('@easyops-cn/docusaurus-search-local').PluginOptions} */
+      ({
+        hashed: true,
+        indexBlog: false,
+        docsDir: '../docs',          // docs live outside website/ (preset path)
+        docsRouteBasePath: '/',
+        highlightSearchTermsOnTargetPage: true,
+        explicitSearchResultPath: true,
+      }),
+    ],
+  ],
 
   presets: [
     [
