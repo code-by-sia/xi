@@ -41,9 +41,21 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         }
     }
 
-    // name
+    // name — may be an extension function `Type.method`, e.g. `Integer.double`
+    // or `Person.fullName`. The receiver is passed as a `this` parameter, and the
+    // function is named `<recvSuffix>__<method>` (e.g. integer__double).
     let nameTok = peek(ps2)
     ps2 = advance(ps2)
+    let fname = nameTok.text
+    let extThis = ""
+    if peek(ps2).kind == 107 {                 // '.'  -> extension on a type
+        let recvCtype = identToCtype(nameTok.text)
+        if nameTok.kind >= 260 and nameTok.kind <= 269 { recvCtype = primKindToCtype(nameTok.kind) }
+        ps2 = advance(ps2)                     // '.'
+        fname = nameTok.text + "__" + peek(ps2).text   // keyed by xtype (the type name)
+        ps2 = advance(ps2)                     // method name
+        extThis = recvCtype + " this"
+    }
 
     // (params) — table-form decisions have none (columns are declared in the body)
     let pr = ParamResult { params: "", ps: ps2 }
@@ -52,6 +64,11 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         pr = parseParams(ps2)
         ps2 = pr.ps
         if peek(ps2).kind == 101 { ps2 = advance(ps2) }  // )
+    }
+    // extension: prepend the receiver as `this` (so `this`/`this.field` just work)
+    if string_len(extThis) > 0 {
+        if string_len(pr.params) > 0 { pr = ParamResult { params: extThis + ", " + pr.params, ps: pr.ps } }
+        else { pr = ParamResult { params: extThis, ps: pr.ps } }
     }
 
     // -> rettype
@@ -145,7 +162,7 @@ mapper parseFunc(ps: PState, isAsync: Bool, isCreator: Bool) -> FuncResult {
         isCreator: isCreator,
         isAsync: isAsync,
         kind: kindStr,
-        name: nameTok.text,
+        name: fname,
         params: pr.params,
         retCtype: retCtype,
         bodyTokens: br.bodyTokens,

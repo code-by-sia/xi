@@ -291,6 +291,28 @@ Infix functions bind at low precedence (looser than arithmetic, like `to`), so
 `predicate`, `creator`, …); the `infix` modifier goes first, before `async` and
 the kind. See `examples/infix_demo.xi`.
 
+## Extension functions — `mapper Type.method(...)`
+
+Add a method to **any type** — a primitive or your own — by qualifying the name
+with the receiver type. Inside the body, `this` is the receiver:
+
+```x
+mapper Integer.double() -> Integer => this * 2
+
+type Person = { name: String, family: String }
+mapper Person.fullName() -> String { return this.name + " " + this.family }
+
+let n = 21
+n.double()                                  // 42
+Person { name: "Ada", family: "Lovelace" }.fullName()   // "Ada Lovelace"
+```
+
+Call them with the usual `receiver.method(args)` syntax. Extensions take regular
+parameters after the receiver, return like any function, and **chain**
+(`n.double().plus(1)`). Any function kind works (`mapper`, `predicate`, …). They
+desugar to a plain function taking the receiver as a `this` parameter, so there's
+no runtime cost. See `examples/extensions_test.xi`.
+
 ## `capture` — name a sub-expression's value
 
 `EXPR capture name: Type` evaluates `EXPR`, binds its value to `name` (of the

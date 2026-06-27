@@ -198,6 +198,15 @@ infix mapper plus(a: Integer, b: Integer) -> Integer { return a + b }
 5 plus 3            // 8
 ```
 
+**Extension functions** — qualify the name with a receiver type (primitive or
+user-defined) to add a method; `this` is the receiver. Chains like a method:
+
+```x
+mapper Integer.double() -> Integer => this * 2          // 21.double() ... use (21).double()
+type Person = { name: String, family: String }
+mapper Person.fullName() -> String { return this.name + " " + this.family }
+```
+
 **`capture`** — `EXPR capture name: Type` binds a sub-expression's value (the
 type annotation is required) and still yields it; the name is usable for the rest
 of the function (works in functions, methods, entry — not inside a `where` guard):
