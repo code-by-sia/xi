@@ -8,7 +8,9 @@ name: Docs
 on:
   push:
     branches: [main]
-    paths: ["docs/**", "website/**", ".github/workflows/docs.yml"]
+    # Rebuild on docs/site changes AND on the version source (the navbar badge
+    # reads xcVersion() from driver.xi at build time), so a release bump shows.
+    paths: ["docs/**", "website/**", ".github/workflows/docs.yml", "compiler/impl/driver/driver.xi"]
   workflow_dispatch:
 
 permissions:
