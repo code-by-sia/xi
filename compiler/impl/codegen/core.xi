@@ -203,16 +203,16 @@ mapper ctypeToXName(ctype: String) -> String {
 
 // Resolve a refined type name to its underlying primitive X-type name.
 // e.g. NonEmpty -> String, Age -> Number. Compounds/interfaces pass through.
-mapper resolveX(prog: Program, xname: String) -> String {
+mapper Program.resolveX(xname: String) -> String {
     if xname == "String"  { return "String" }
     if xname == "Number"  { return "Number" }
     if xname == "Integer" { return "Integer" }
     if xname == "Bool"    { return "Bool" }
     if xname == "Char"    { return "Char" }
     let i = 0
-    let n = typeSpecLen(prog.types)
+    let n = typeSpecLen(this.types)
     while i < n {
-        let ts = typeSpecGet(prog.types, i)
+        let ts = typeSpecGet(this.types, i)
         if ts.name == xname {
             if ts.isCompound {
                 return xname
@@ -224,74 +224,74 @@ mapper resolveX(prog: Program, xname: String) -> String {
     return xname
 }
 
-predicate isModuleNameC(prog: Program, name: String) {
+predicate Program.isModuleNameC(name: String) {
     let i = 0
-    let n = moduleSpecLen(prog.modules)
+    let n = moduleSpecLen(this.modules)
     while i < n {
-        if moduleSpecGet(prog.modules, i).name == name { return true }
+        if moduleSpecGet(this.modules, i).name == name { return true }
         i = i + 1
     }
     return false
 }
 
-predicate isFuncNameC(prog: Program, name: String) {
+predicate Program.isFuncNameC(name: String) {
     let i = 0
-    let n = funcSpecLen(prog.functions)
+    let n = funcSpecLen(this.functions)
     while i < n {
-        if funcSpecGet(prog.functions, i).name == name { return true }
+        if funcSpecGet(this.functions, i).name == name { return true }
         i = i + 1
     }
     return false
 }
 
-predicate isAtomNameC(prog: Program, name: String) {
+predicate Program.isAtomNameC(name: String) {
     let i = 0
-    let n = atomSpecLen(prog.atoms)
+    let n = atomSpecLen(this.atoms)
     while i < n {
-        if atomSpecGet(prog.atoms, i).name == name { return true }
+        if atomSpecGet(this.atoms, i).name == name { return true }
         i = i + 1
     }
     return false
 }
 
-mapper atomStateTypeName(prog: Program, name: String) -> String {
+mapper Program.atomStateTypeName(name: String) -> String {
     let i = 0
-    let n = atomSpecLen(prog.atoms)
+    let n = atomSpecLen(this.atoms)
     while i < n {
-        let a = atomSpecGet(prog.atoms, i)
+        let a = atomSpecGet(this.atoms, i)
         if a.name == name { return a.stateTypeName }
         i = i + 1
     }
     return ""
 }
 
-predicate isMachineTypeC(prog: Program, name: String) {
+predicate Program.isMachineTypeC(name: String) {
     let i = 0
-    let n = machineSpecLen(prog.machines)
+    let n = machineSpecLen(this.machines)
     while i < n {
-        if machineSpecGet(prog.machines, i).name == name { return true }
+        if machineSpecGet(this.machines, i).name == name { return true }
         i = i + 1
     }
     return false
 }
 
 // Is `name` (an X type name) a declared typed `event`?
-predicate isEventTypeC(prog: Program, name: String) {
+predicate Program.isEventTypeC(name: String) {
     let i = 0
-    let n = stringArrLen(prog.eventTypes)
+    let n = stringArrLen(this.eventTypes)
     while i < n {
-        if stringArrGet(prog.eventTypes, i) == name { return true }
+        if stringArrGet(this.eventTypes, i) == name { return true }
         i = i + 1
     }
     return false
 }
 
 // Is `name` a declared compound (struct-like) type?
-predicate isCompoundTypeC(prog: Program, name: String) {
+predicate Program.isCompoundTypeC(name: String) {
     let i = 0
-    let n = typeSpecLen(prog.types)
+    let n = typeSpecLen(this.types)
     while i < n {
-        let ts = typeSpecGet(prog.types, i)
+        let ts = typeSpecGet(this.types, i)
         if ts.name == name and ts.isCompound { return true }
         i = i + 1
     }
@@ -299,11 +299,11 @@ predicate isCompoundTypeC(prog: Program, name: String) {
 }
 
 // ── Sum / algebraic types ─────────────────────────────────────────
-predicate isSumTypeC(prog: Program, name: String) {
+predicate Program.isSumTypeC(name: String) {
     let i = 0
-    let n = typeSpecLen(prog.types)
+    let n = typeSpecLen(this.types)
     while i < n {
-        let ts = typeSpecGet(prog.types, i)
+        let ts = typeSpecGet(this.types, i)
         if ts.name == name and ts.isSum { return true }
         i = i + 1
     }
@@ -312,11 +312,11 @@ predicate isSumTypeC(prog: Program, name: String) {
 
 // The sum type that owns variant `vname` (or "" if none). Variant names must be
 // globally unique across sum types.
-mapper sumOfVariant(prog: Program, vname: String) -> String {
+mapper Program.sumOfVariant(vname: String) -> String {
     let i = 0
-    let n = typeSpecLen(prog.types)
+    let n = typeSpecLen(this.types)
     while i < n {
-        let ts = typeSpecGet(prog.types, i)
+        let ts = typeSpecGet(this.types, i)
         if ts.isSum {
             let vi = 0
             let vn = stringArrLen(ts.variants)
@@ -332,11 +332,11 @@ mapper sumOfVariant(prog: Program, vname: String) -> String {
     return ""
 }
 
-predicate isVariantNameC(prog: Program, vname: String) => string_len(sumOfVariant(prog, vname)) > 0
+predicate Program.isVariantNameC(vname: String) => string_len(this.sumOfVariant(vname)) > 0
 
 // The "f1:ct1,f2:ct2" field string for a variant ("" if it carries no payload).
-mapper variantFieldsC(prog: Program, sumName: String, vname: String) -> String {
-    let ts = findTypeSpec(prog, sumName)
+mapper Program.variantFieldsC(sumName: String, vname: String) -> String {
+    let ts = findTypeSpec(this, sumName)
     let vi = 0
     let vn = stringArrLen(ts.variants)
     while vi < vn {
@@ -376,9 +376,9 @@ mapper sumFieldsToC(fstr: String) -> String {
 
 // std/web's handler model is active when at least one class implements
 // WebRequestHandler (controllers are auto-registered — no explicit bind needed).
-predicate webEnabled(prog: Program) {
-    if not isInterface(prog, "WebRequestHandler") { return false }
-    return stringArrLen(implementorsOf(prog, "WebRequestHandler")) > 0
+predicate Program.webEnabled() {
+    if not isInterface(this, "WebRequestHandler") { return false }
+    return stringArrLen(implementorsOf(this, "WebRequestHandler")) > 0
 }
 
 // Does a token body reference threading (a `parallel` block or the `thread`
@@ -397,18 +397,18 @@ predicate tokensUseThread(toks: Token[]) {
     return false
 }
 
-predicate usesThreads(prog: Program) {
-    if tokensUseThread(prog.entrySpec.bodyTokens) { return true }
+predicate Program.usesThreads() {
+    if tokensUseThread(this.entrySpec.bodyTokens) { return true }
     let i = 0
-    let n = funcSpecLen(prog.functions)
+    let n = funcSpecLen(this.functions)
     while i < n {
-        if tokensUseThread(funcSpecGet(prog.functions, i).bodyTokens) { return true }
+        if tokensUseThread(funcSpecGet(this.functions, i).bodyTokens) { return true }
         i = i + 1
     }
     let ci = 0
-    let cn = classSpecLen(prog.classes)
+    let cn = classSpecLen(this.classes)
     while ci < cn {
-        let cs = classSpecGet(prog.classes, ci)
+        let cs = classSpecGet(this.classes, ci)
         let mi = 0
         let mn = methodSpecLen(cs.methList)
         while mi < mn {
@@ -424,11 +424,11 @@ predicate usesThreads(prog: Program) {
 // type, plus (when web or threading is in use, so channels can carry structured
 // payloads) every compound type.
 // Any `bind I -> readConfig("...")` in the program?
-predicate usesConfig(prog: Program) {
+predicate Program.usesConfig() {
     let i = 0
-    let n = moduleSpecLen(prog.modules)
+    let n = moduleSpecLen(this.modules)
     while i < n {
-        let mod = moduleSpecGet(prog.modules, i)
+        let mod = moduleSpecGet(this.modules, i)
         let j = 0
         let m = bindSpecLen(mod.bindings)
         while j < m {
@@ -441,12 +441,12 @@ predicate usesConfig(prog: Program) {
 }
 
 // The config file path bound to interface `ifn`, or "" if it isn't config-backed.
-mapper configPathFor(prog: Program, ifn: String) -> String {
+mapper Program.configPathFor(ifn: String) -> String {
     let i = 0
-    let n = moduleSpecLen(prog.modules)
+    let n = moduleSpecLen(this.modules)
     let found = ""
     while i < n {
-        let mod = moduleSpecGet(prog.modules, i)
+        let mod = moduleSpecGet(this.modules, i)
         let isTest = (mod.name == "Test")
         let j = 0
         let m = bindSpecLen(mod.bindings)
@@ -474,18 +474,18 @@ predicate tokensHaveIdent(toks: Token[], name: String) {
     }
     return false
 }
-predicate progUsesReadConfig(prog: Program) {
-    if tokensHaveIdent(prog.entrySpec.bodyTokens, "readConfig") { return true }
+predicate Program.progUsesReadConfig() {
+    if tokensHaveIdent(this.entrySpec.bodyTokens, "readConfig") { return true }
     let i = 0
-    let n = funcSpecLen(prog.functions)
-    while i < n { if tokensHaveIdent(funcSpecGet(prog.functions, i).bodyTokens, "readConfig") { return true }  i = i + 1 }
+    let n = funcSpecLen(this.functions)
+    while i < n { if tokensHaveIdent(funcSpecGet(this.functions, i).bodyTokens, "readConfig") { return true }  i = i + 1 }
     let ti = 0
-    let tn = funcSpecLen(prog.tests)
-    while ti < tn { if tokensHaveIdent(funcSpecGet(prog.tests, ti).bodyTokens, "readConfig") { return true }  ti = ti + 1 }
+    let tn = funcSpecLen(this.tests)
+    while ti < tn { if tokensHaveIdent(funcSpecGet(this.tests, ti).bodyTokens, "readConfig") { return true }  ti = ti + 1 }
     let ci = 0
-    let cn = classSpecLen(prog.classes)
+    let cn = classSpecLen(this.classes)
     while ci < cn {
-        let cs = classSpecGet(prog.classes, ci)
+        let cs = classSpecGet(this.classes, ci)
         let mi = 0
         let mn = methodSpecLen(cs.methList)
         while mi < mn { if tokensHaveIdent(methodSpecGet(cs.methList, mi).bodyTokens, "readConfig") { return true }  mi = mi + 1 }
@@ -502,18 +502,18 @@ predicate tokensHaveKind(toks: Token[], k: Integer) {
     while i < n { if tokenArrGet(toks, i).kind == k { return true }  i = i + 1 }
     return false
 }
-predicate progUsesAsDecode(prog: Program) {
-    if tokensHaveKind(prog.entrySpec.bodyTokens, 209) { return true }
+predicate Program.progUsesAsDecode() {
+    if tokensHaveKind(this.entrySpec.bodyTokens, 209) { return true }
     let i = 0
-    let n = funcSpecLen(prog.functions)
-    while i < n { if tokensHaveKind(funcSpecGet(prog.functions, i).bodyTokens, 209) { return true }  i = i + 1 }
+    let n = funcSpecLen(this.functions)
+    while i < n { if tokensHaveKind(funcSpecGet(this.functions, i).bodyTokens, 209) { return true }  i = i + 1 }
     let ti = 0
-    let tn = funcSpecLen(prog.tests)
-    while ti < tn { if tokensHaveKind(funcSpecGet(prog.tests, ti).bodyTokens, 209) { return true }  ti = ti + 1 }
+    let tn = funcSpecLen(this.tests)
+    while ti < tn { if tokensHaveKind(funcSpecGet(this.tests, ti).bodyTokens, 209) { return true }  ti = ti + 1 }
     let ci = 0
-    let cn = classSpecLen(prog.classes)
+    let cn = classSpecLen(this.classes)
     while ci < cn {
-        let cs = classSpecGet(prog.classes, ci)
+        let cs = classSpecGet(this.classes, ci)
         let mi = 0
         let mn = methodSpecLen(cs.methList)
         while mi < mn { if tokensHaveKind(methodSpecGet(cs.methList, mi).bodyTokens, 209) { return true }  mi = mi + 1 }
@@ -521,13 +521,13 @@ predicate progUsesAsDecode(prog: Program) {
     }
     return false
 }
-predicate codecsEnabled(prog: Program) {
-    return webEnabled(prog) or usesThreads(prog) or usesConfig(prog) or progUsesReadConfig(prog) or progUsesAsDecode(prog)
+predicate Program.codecsEnabled() {
+    return this.webEnabled() or this.usesThreads() or this.usesConfig() or this.progUsesReadConfig() or this.progUsesAsDecode()
 }
 
-predicate hasCodec(prog: Program, xn: String) {
-    if isEventTypeC(prog, xn) { return true }
-    if isCompoundTypeC(prog, xn) and codecsEnabled(prog) { return true }
+predicate Program.hasCodec(xn: String) {
+    if this.isEventTypeC(xn) { return true }
+    if this.isCompoundTypeC(xn) and this.codecsEnabled() { return true }
     return false
 }
 
@@ -614,18 +614,18 @@ predicate csvHasState(csv: String, name: String) {
     return false
 }
 
-mapper funcRetXType(prog: Program, name: String) -> String {
+mapper Program.funcRetXType(name: String) -> String {
     let i = 0
-    let n = funcSpecLen(prog.functions)
+    let n = funcSpecLen(this.functions)
     while i < n {
-        let fs = funcSpecGet(prog.functions, i)
+        let fs = funcSpecGet(this.functions, i)
         if fs.name == name {
             // `async` free function: callers receive a Future<T> over the inner T.
             // (A plain `-> Future<T>` already resolves to a Future xtype below.)
             if fs.isAsync {
                 return futureXtypeFor(asyncInnerCtype(fs))
             }
-            return resolveX(prog, ctypeToXName(fs.retCtype))
+            return this.resolveX(ctypeToXName(fs.retCtype))
         }
         i = i + 1
     }
@@ -634,11 +634,11 @@ mapper funcRetXType(prog: Program, name: String) -> String {
 
 // Is `name` a method of class `cls`? Used to resolve unqualified (and recursive)
 // calls inside a method body to a self-dispatched `xc_<cls>_<name>_impl` call.
-predicate isSelfMethodC(prog: Program, cls: String, name: String) {
+predicate Program.isSelfMethodC(cls: String, name: String) {
     let i = 0
-    let n = classSpecLen(prog.classes)
+    let n = classSpecLen(this.classes)
     while i < n {
-        let cs = classSpecGet(prog.classes, i)
+        let cs = classSpecGet(this.classes, i)
         if cs.name == cls {
             let mi = 0
             let mn = methodSpecLen(cs.methList)
@@ -653,17 +653,17 @@ predicate isSelfMethodC(prog: Program, cls: String, name: String) {
     return false
 }
 
-mapper selfMethodRetXType(prog: Program, cls: String, name: String) -> String {
+mapper Program.selfMethodRetXType(cls: String, name: String) -> String {
     let i = 0
-    let n = classSpecLen(prog.classes)
+    let n = classSpecLen(this.classes)
     while i < n {
-        let cs = classSpecGet(prog.classes, i)
+        let cs = classSpecGet(this.classes, i)
         if cs.name == cls {
             let mi = 0
             let mn = methodSpecLen(cs.methList)
             while mi < mn {
                 let ms = methodSpecGet(cs.methList, mi)
-                if ms.name == name { return resolveX(prog, ctypeToXName(ms.retCtype)) }
+                if ms.name == name { return this.resolveX(ctypeToXName(ms.retCtype)) }
                 mi = mi + 1
             }
         }
@@ -672,49 +672,49 @@ mapper selfMethodRetXType(prog: Program, cls: String, name: String) -> String {
     return ""
 }
 
-predicate isExternNameC(prog: Program, name: String) {
+predicate Program.isExternNameC(name: String) {
     let i = 0
-    let n = funcSpecLen(prog.externs)
+    let n = funcSpecLen(this.externs)
     while i < n {
-        if funcSpecGet(prog.externs, i).name == name { return true }
+        if funcSpecGet(this.externs, i).name == name { return true }
         i = i + 1
     }
     return false
 }
 
-mapper externRetXType(prog: Program, name: String) -> String {
+mapper Program.externRetXType(name: String) -> String {
     let i = 0
-    let n = funcSpecLen(prog.externs)
+    let n = funcSpecLen(this.externs)
     while i < n {
-        let fs = funcSpecGet(prog.externs, i)
-        if fs.name == name { return resolveX(prog, ctypeToXName(fs.retCtype)) }
+        let fs = funcSpecGet(this.externs, i)
+        if fs.name == name { return this.resolveX(ctypeToXName(fs.retCtype)) }
         i = i + 1
     }
     return ""
 }
 
-predicate isTypeNameC(prog: Program, name: String) {
+predicate Program.isTypeNameC(name: String) {
     let i = 0
-    let n = typeSpecLen(prog.types)
+    let n = typeSpecLen(this.types)
     while i < n {
-        if typeSpecGet(prog.types, i).name == name { return true }
+        if typeSpecGet(this.types, i).name == name { return true }
         i = i + 1
     }
     let j = 0
-    let m = classSpecLen(prog.classes)
+    let m = classSpecLen(this.classes)
     while j < m {
-        if classSpecGet(prog.classes, j).name == name { return true }
+        if classSpecGet(this.classes, j).name == name { return true }
         j = j + 1
     }
     return false
 }
 
 // Is `name` a refined type carrying a `where` constraint?
-predicate isRefinedConstrained(prog: Program, name: String) {
+predicate Program.isRefinedConstrained(name: String) {
     let i = 0
-    let n = typeSpecLen(prog.types)
+    let n = typeSpecLen(this.types)
     while i < n {
-        let ts = typeSpecGet(prog.types, i)
+        let ts = typeSpecGet(this.types, i)
         if ts.name == name {
             if not ts.isCompound {
                 if ts.hasWhere { return true }
@@ -727,11 +727,11 @@ predicate isRefinedConstrained(prog: Program, name: String) {
 
 // If compound `typeName`'s `field` has a constrained refined type, return the
 // name of its check function (e.g. "xc_check_Age"); else "".
-mapper fieldCheckFn(prog: Program, typeName: String, field: String) -> String {
+mapper Program.fieldCheckFn(typeName: String, field: String) -> String {
     let i = 0
-    let n = typeSpecLen(prog.types)
+    let n = typeSpecLen(this.types)
     while i < n {
-        let ts = typeSpecGet(prog.types, i)
+        let ts = typeSpecGet(this.types, i)
         if ts.name == typeName {
             let fi = 0
             let fn2 = stringArrLen(ts.fields)
@@ -741,7 +741,7 @@ mapper fieldCheckFn(prog: Program, typeName: String, field: String) -> String {
                 if string_slice(fentry, 0, colon) == field {
                     let fctype = string_slice(fentry, colon + 1, string_len(fentry))
                     let xname = ctypeToXName(fctype)
-                    if isRefinedConstrained(prog, xname) { return "xc_check_" + xname }
+                    if this.isRefinedConstrained(xname) { return "xc_check_" + xname }
                     return ""
                 }
                 fi = fi + 1
@@ -752,18 +752,18 @@ mapper fieldCheckFn(prog: Program, typeName: String, field: String) -> String {
     return ""
 }
 
-mapper fieldTypeNameC(prog: Program, typeName: String, field: String) -> String {
+mapper Program.fieldTypeNameC(typeName: String, field: String) -> String {
     // Result<T> fields: .ok is Bool, .err is String, .value is T.
     if field == "ok"  { return "Bool" }
     if field == "err" { return "String" }
     if startsWith2(typeName, "res_") and field == "value" {
         let elem = string_slice(typeName, 4, string_len(typeName))
-        return resolveX(prog, xnameFromArrSuffix(elem))
+        return this.resolveX(xnameFromArrSuffix(elem))
     }
     let i = 0
-    let n = typeSpecLen(prog.types)
+    let n = typeSpecLen(this.types)
     while i < n {
-        let ts = typeSpecGet(prog.types, i)
+        let ts = typeSpecGet(this.types, i)
         if ts.name == typeName {
             let fi = 0
             let fn2 = stringArrLen(ts.fields)
@@ -773,7 +773,7 @@ mapper fieldTypeNameC(prog: Program, typeName: String, field: String) -> String 
                 let fname = string_slice(fentry, 0, colon)
                 if fname == field {
                     let fctype = string_slice(fentry, colon + 1, string_len(fentry))
-                    return resolveX(prog, ctypeToXName(fctype))
+                    return this.resolveX(ctypeToXName(fctype))
                 }
                 fi = fi + 1
             }

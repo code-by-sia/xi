@@ -231,7 +231,7 @@ mapper genExpr(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             let fname = gtext(toks, p)
             let right = genAnd(toks, p + 1, ctx)
             code = "xc_" + fname + "(" + code + ", " + right.code + ")"
-            typ = funcRetXType(ctx.prog, fname)
+            typ = (ctx.prog).funcRetXType(fname)
             p = right.pos
         } else {
             icont = false

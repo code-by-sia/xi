@@ -34,7 +34,7 @@ mapper genTypeLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if not first { out = out + ", " }
         // Construction is gated: if the field's type is a refined type, run its
         // constraint check on the assigned value.
-        let chk = fieldCheckFn(ctx.prog, typeName, fname)
+        let chk = (ctx.prog).fieldCheckFn(typeName, fname)
         let val = e.code
         if string_len(chk) > 0 { val = chk + "(" + e.code + ")" }
         out = out + "." + fname + " = " + val
@@ -49,7 +49,7 @@ mapper genTypeLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
 // Construct a sum-type value:  Variant { f: v, ... }  or a bare  Variant.
 mapper genVariantLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let vname = gtext(toks, pos)
-    let sum = sumOfVariant(ctx.prog, vname)
+    let sum = (ctx.prog).sumOfVariant(vname)
     if gkind(toks, pos + 1) != 102 {                      // no payload
         return ExprRes {
             code: "(xc_" + sum + "_t){ .tag = xc_" + sum + "_" + vname + " }",
@@ -478,11 +478,11 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             // built-in thread facility: thread.channel() / thread.stopped()
             return ExprRes { code: "", pos: pos + 1, xtyp: "thread:" , owned: false }
         }
-        if isVariantNameC(ctx.prog, txt) {
+        if (ctx.prog).isVariantNameC(txt) {
             // sum-type constructor: Variant { ... } or a bare nullary Variant
             return genVariantLiteral(toks, pos, ctx)
         }
-        if gkind(toks, pos + 1) == 102 and isTypeNameC(ctx.prog, txt) {
+        if gkind(toks, pos + 1) == 102 and (ctx.prog).isTypeNameC(txt) {
             return genTypeLiteral(toks, pos, ctx)
         }
         if ctx.isDepNameC(txt) {
@@ -495,13 +495,13 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             // built-in event facility: Events.dispatch/encode/decode/topic/type/run
             return ExprRes { code: "", pos: pos + 1, xtyp: "events:" , owned: false }
         }
-        if isModuleNameC(ctx.prog, txt) {
+        if (ctx.prog).isModuleNameC(txt) {
             return ExprRes { code: txt, pos: pos + 1, xtyp: "module:" + txt , owned: false }
         }
-        if isAtomNameC(ctx.prog, txt) {
+        if (ctx.prog).isAtomNameC(txt) {
             return ExprRes { code: "__atom_" + txt, pos: pos + 1, xtyp: "atom:" + txt , owned: false }
         }
-        if isMachineTypeC(ctx.prog, txt) {
+        if (ctx.prog).isMachineTypeC(txt) {
             return ExprRes { code: txt, pos: pos + 1, xtyp: "machinetype:" + txt , owned: false }
         }
         return ExprRes { code: txt, pos: pos + 1, xtyp: ctx.lookupVar(txt) , owned: false }

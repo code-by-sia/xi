@@ -301,7 +301,7 @@ mapper ifaceMethodRet(prog: Program, iface: String, method: String) -> String {
                 let ms = methodSpecGet(is2.methList, mi)
                 if ms.name == method {
                     if ms.kind == "predicate" { return "Bool" }
-                    return resolveX(prog, ctypeToXName(ms.retCtype))
+                    return prog.resolveX(ctypeToXName(ms.retCtype))
                 }
                 mi = mi + 1
             }
@@ -393,7 +393,7 @@ mapper chosenImpl(prog: Program, iface: String) -> String {
 predicate isResolvable(prog: Program, iface: String) {
     if string_len(bindFor(prog, iface)) > 0 { return true }
     if stringArrLen(implementorsOf(prog, iface)) > 0 { return true }
-    if string_len(configPathFor(prog, iface)) > 0 { return true }   // config-backed
+    if string_len(prog.configPathFor(iface)) > 0 { return true }   // config-backed
     return false
 }
 

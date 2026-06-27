@@ -138,7 +138,7 @@ mapper genConstructors(prog: Program) -> String {
 // Config-backed implementors: a vtable whose methods read the parsed config tree
 // by method name and decode into each method's return type.
 mapper genConfigImpls(prog: Program) -> String {
-    if not usesConfig(prog) { return "" }
+    if not prog.usesConfig() { return "" }
     let out = "/* === Config-backed interface implementors === */\n"
     out = out + "extern xc_string_t file_read_all(xc_string_t);\n"
     out = out + "extern xc_Json_t xstd_json_parse(xc_string_t);\n"
@@ -152,7 +152,7 @@ mapper genConfigImpls(prog: Program) -> String {
     while i < n {
         let is2 = ifaceSpecGet(prog.ifaces, i)
         let ifn = is2.name
-        if string_len(configPathFor(prog, ifn)) > 0 {
+        if string_len(prog.configPathFor(ifn)) > 0 {
             let mn = methodSpecLen(is2.methList)
             let mi = 0
             while mi < mn {
@@ -189,7 +189,7 @@ mapper genResolvers(prog: Program) -> String {
     while i < n {
         let is2 = ifaceSpecGet(prog.ifaces, i)
         let ifn = is2.name
-        let cfgp = configPathFor(prog, ifn)
+        let cfgp = prog.configPathFor(ifn)
         if string_len(cfgp) > 0 {
             // config-backed: parse the file once, return a fat ptr over the tree
             let parse = "xstd_yaml_parse(_src" + ifn + ")"

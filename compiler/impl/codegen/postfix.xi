@@ -11,13 +11,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     while cont {
         let k = gkind(toks, p)
         // extension function call: recv.method(args) -> xc_<typ>__<method>(recv, args)
-        if (k == 107 or k == 129) and gkind(toks, p + 2) == 100 and isFuncNameC(ctx.prog, typ + "__" + gtext(toks, p + 1)) {
+        if (k == 107 or k == 129) and gkind(toks, p + 2) == 100 and (ctx.prog).isFuncNameC(typ + "__" + gtext(toks, p + 1)) {
             let ext = typ + "__" + gtext(toks, p + 1)
             let al = genArgs(toks, p + 2, ctx)
             let callArgs = code
             if string_len(al.code) > 0 { callArgs = code + ", " + al.code }
             code = "xc_" + ext + "(" + callArgs + ")"
-            typ = funcRetXType(ctx.prog, ext)
+            typ = (ctx.prog).funcRetXType(ext)
             p = al.pos
             continue
         }
@@ -63,7 +63,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         // (event/compound) is JSON-serialized; primitives stringify.
                         let dtoE = genExpr(toks, p + 3, ctx)
                         let payload = dtoE.code   // String / unknown: send as-is
-                        if hasCodec(ctx.prog, dtoE.xtyp) {
+                        if (ctx.prog).hasCodec(dtoE.xtyp) {
                             payload = "xstd_json_stringify(xc_tojson_" + dtoE.xtyp + "(" + dtoE.code + "))"
                         } else {
                             if dtoE.xtyp == "Integer" or dtoE.xtyp == "Number" or dtoE.xtyp == "Bool" {
@@ -338,7 +338,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "undo" {
                         // atom.undo(): revert to the previous state (no-op if none)
                         code = "xc_atom_" + an + "_undo()"
-                        typ = atomStateTypeName(ctx.prog, an)
+                        typ = (ctx.prog).atomStateTypeName(an)
                     } else {
                     if fld == "canUndo" {
                         code = "(__atom_" + an + "_histlen > 0)"
@@ -348,7 +348,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         let sep = ""
                         if string_len(al.code) > 0 { sep = ", " }
                         code = "(xc_atom_" + an + "_push(), __atom_" + an + " = xc_" + an + "__" + fld + "(__atom_" + an + sep + al.code + "))"
-                        typ = atomStateTypeName(ctx.prog, an)
+                        typ = (ctx.prog).atomStateTypeName(an)
                     } }
                 } else {
                 if startsWith2(typ, "machinetype:") {
@@ -357,7 +357,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     code = "xc_" + mmn + "__" + fld + "(" + al.code + ")"
                     typ = mmn
                 } else {
-                if isMachineTypeC(ctx.prog, typ) {
+                if (ctx.prog).isMachineTypeC(typ) {
                     if fld == "can" {
                         // m.can(transition, args?) -> xc_M__can_<transition>(value, args?)
                         // first arg is the transition NAME (a bare identifier).
@@ -403,7 +403,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                             code = code + ".vtable->" + fld + "(" + code + ".self" + sep + al.code + ")"
                             typ = mret
                         } else {
-                            if isTypeNameC(ctx.prog, typ) {
+                            if (ctx.prog).isTypeNameC(typ) {
                                 code = "xc_" + typ + "_" + fld + "(" + al.code + ")"
                                 typ = ""
                             } else {
@@ -442,9 +442,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     // atom.current (or any field) -> the holder value
                     let an = string_slice(typ, 5, string_len(typ))
                     code = "__atom_" + an
-                    typ = atomStateTypeName(ctx.prog, an)
+                    typ = (ctx.prog).atomStateTypeName(an)
                 } else {
-                if isMachineTypeC(ctx.prog, typ) and fld == "state" {
+                if (ctx.prog).isMachineTypeC(typ) and fld == "state" {
                     code = "xc_" + typ + "__state(" + code + ")"
                     typ = "String"
                 } else {
@@ -468,7 +468,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                             code = "xstd_strlen(" + code + ")"
                             typ = "Integer"
                         } else {
-                            let ft = fieldTypeNameC(ctx.prog, typ, fld)
+                            let ft = (ctx.prog).fieldTypeNameC(typ, fld)
                             code = code + "." + fld
                             typ = ft
                         }
@@ -516,25 +516,25 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     code = "(!(" + al.code + ").ok)"
                     typ = "Bool"
                 } else {
-                if string_len(ctx.selfClass) > 0 and isSelfMethodC(ctx.prog, ctx.selfClass, bname) {
+                if string_len(ctx.selfClass) > 0 and (ctx.prog).isSelfMethodC(ctx.selfClass, bname) {
                     // Unqualified (or recursive) call to a sibling method.
                     let sargs = "self"
                     if string_len(al.code) > 0 { sargs = "self, " + al.code }
                     code = "xc_" + ctx.selfClass + "_" + bname + "_impl(" + sargs + ")"
-                    typ = selfMethodRetXType(ctx.prog, ctx.selfClass, bname)
+                    typ = (ctx.prog).selfMethodRetXType(ctx.selfClass, bname)
                 } else {
-                if isFuncNameC(ctx.prog, bname) {
+                if (ctx.prog).isFuncNameC(bname) {
                     if isAsyncFuncC(ctx.prog, bname) {
                         // async call: spawn a worker, yield a Future immediately
                         code = "xc_spawn_" + bname + "(" + al.code + ")"
                     } else {
                         code = "xc_" + bname + "(" + al.code + ")"
                     }
-                    typ = funcRetXType(ctx.prog, bname)
+                    typ = (ctx.prog).funcRetXType(bname)
                 } else {
-                    if isExternNameC(ctx.prog, bname) {
+                    if (ctx.prog).isExternNameC(bname) {
                         code = bname + "(" + al.code + ")"
-                        typ = externRetXType(ctx.prog, bname)
+                        typ = (ctx.prog).externRetXType(bname)
                     } else {
                         code = bname + "(" + al.code + ")"
                         typ = ""
@@ -578,7 +578,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = "(" + code + ".has_value ? " + code + ".value : " + r.code + ")"
                         p = r.pos
                     } else {
-                    if k == 209 and gkind(toks, p + 1) == 1 and isTypeNameC(ctx.prog, gtext(toks, p + 1)) {
+                    if k == 209 and gkind(toks, p + 1) == 1 and (ctx.prog).isTypeNameC(gtext(toks, p + 1)) {
                         // `<json> as T` — decode a Json value into a typed T (lenient
                         // coercion of string scalars). Reuses the derived JSON codec.
                         let tn = gtext(toks, p + 1)

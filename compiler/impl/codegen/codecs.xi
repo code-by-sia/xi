@@ -70,7 +70,7 @@ mapper jsonEncodeExpr(prog: Program, fct: String, expr: String) -> String {
         "xc_Json_t"    -> expr
         _ -> {
             let xn = ctypeToXName(fct)
-            if hasCodec(prog, xn) { return "xc_tojson_" + xn + "(" + expr + ")" }
+            if prog.hasCodec(xn) { return "xc_tojson_" + xn + "(" + expr + ")" }
             return ""
         }
     }
@@ -84,7 +84,7 @@ mapper jsonDecodeExpr(prog: Program, fct: String, getexpr: String) -> String {
         "xc_Json_t"    -> getexpr
         _ -> {
             let xn = ctypeToXName(fct)
-            if hasCodec(prog, xn) { return "xc_fromjson_" + xn + "(" + getexpr + ")" }
+            if prog.hasCodec(xn) { return "xc_fromjson_" + xn + "(" + getexpr + ")" }
             return ""
         }
     }
@@ -155,7 +155,7 @@ class JsonCodecs implements Codecs {
             types = appendString(types, stringArrGet(prog.eventTypes, ei))
             ei = ei + 1
         }
-        if codecsEnabled(prog) {
+        if prog.codecsEnabled() {
             let ti = 0
             let tn = typeSpecLen(prog.types)
             while ti < tn {
@@ -255,7 +255,7 @@ class JsonCodecs implements Codecs {
             while mi < mn {
                 let ms = methodSpecGet(cs.methList, mi)
                 let pt = firstParamXType(ms.params)
-                if ms.kind == "listener" and string_len(ms.topic) > 0 and isEventTypeC(prog, pt) {
+                if ms.kind == "listener" and string_len(ms.topic) > 0 and prog.isEventTypeC(pt) {
                     let tr = "xc_evtT_" + cs.name + "_" + ms.name
                     out = out + "static void " + tr + "(xc_" + pt + "_t e) {\n"
                     out = out + "    xc_" + cs.name + "_" + ms.name + "_impl((void*)xc_new_" + cs.name + "(), e);\n}\n"
@@ -313,7 +313,7 @@ class JsonCodecs implements Codecs {
     // declaration order; the first whose handle sets the response wins. Routing is
     // the `where`-overloaded handle methods inside each controller.
     mapper genWebDispatch(prog: Program) -> String {
-        if not webEnabled(prog) { return "" }
+        if not prog.webEnabled() { return "" }
         let out = "/* === Web (WebRequestHandler controllers) === */\n"
         out = out + "static void xc_web_handle(xc_HttpRequest_t __req, xc_HttpResponse_t __res) {\n"
         let impls = implementorsOf(prog, "WebRequestHandler")

@@ -50,7 +50,7 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
     out = out + "    xc_atoms_init();\n"
-    if webEnabled(prog) { out = out + "    xc_web_init();\n" }
+    if prog.webEnabled() { out = out + "    xc_web_init();\n" }
     out = out + "    xc_arr_string_t xc_args;\n"
     out = out + "    xc_args.len = (xc_size_t)argc;\n"
     out = out + "    xc_args.cap = (xc_size_t)argc;\n"

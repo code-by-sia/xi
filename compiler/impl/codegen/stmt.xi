@@ -329,9 +329,9 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             if gkind(toks, p) == 101 { p = p + 1 }       // )
             cond = "(" + parts + ")"
         } else {
-        if pt.kind == 1 and isVariantNameC(ctx.prog, pt.text) {
+        if pt.kind == 1 and (ctx.prog).isVariantNameC(pt.text) {
             // sum-type variant pattern:  Variant [binding] -> body
-            let sumN = sumOfVariant(ctx.prog, pt.text)
+            let sumN = (ctx.prog).sumOfVariant(pt.text)
             cond = subj + ".tag == xc_" + sumN + "_" + pt.text
             bindExpr = subj + ".u." + pt.text
             p = p + 1

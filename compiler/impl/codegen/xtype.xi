@@ -555,7 +555,7 @@ mapper addParamSym(ctx: GCtx, seg: String) -> GCtx {
     if lastSp < 0 { return ctx }
     let ctype = string_slice(seg, s, lastSp)
     let name  = string_slice(seg, lastSp + 1, n)
-    return ctx.addSym(name, resolveX(ctx.prog, ctypeToXName(ctype)))
+    return ctx.addSym(name, (ctx.prog).resolveX(ctypeToXName(ctype)))
 }
 
 mapper seedParams(ctx: GCtx, cparams: String) -> GCtx {
