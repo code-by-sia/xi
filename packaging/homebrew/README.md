@@ -44,9 +44,13 @@ Then add a repository secret to **this** repo so CI can push formula bumps:
 - `HOMEBREW_TAP_TOKEN` — a fine-grained PAT (or deploy token) with
   `contents: write` on `code-by-sia/homebrew-xi`.
 
-After that, every tagged release auto-updates the tap. If the secret is absent,
-the release still succeeds — the formula bump step is skipped and you can run
-`scripts/update-formula.sh <version>` locally and push `xi.rb` by hand.
+After that, every tagged release auto-updates the tap. **The secret is optional**
+— even without it the tap never lags: `code-by-sia/homebrew-xi` runs its own
+hourly `.github/workflows/sync.yml`, which reads xi's latest release, regenerates
+the formula via `scripts/update-formula.sh`, and commits any change (it runs in
+the tap repo, so its built-in `GITHUB_TOKEN` is sufficient — no cross-repo token
+needed). The secret only makes the bump *immediate* instead of within ~1h. You
+can also bump it by hand with `scripts/update-formula.sh <version>` + push.
 
 ## Updating the formula manually
 

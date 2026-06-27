@@ -152,9 +152,10 @@ jobs:
 
   # After all platform tarballs are attached to the release, refresh the
   # Homebrew formula (urls + sha256) and push it to the tap repo. Gated on a
-  # token secret: without it the release still succeeds and the bump is skipped
-  # (run scripts/update-formula.sh + push xi.rb by hand). See
-  # packaging/homebrew/README.md.
+  # token secret for an immediate bump; without it this is skipped and the tap
+  # self-syncs instead — code-by-sia/homebrew-xi runs an hourly `sync.yml` that
+  # regenerates the formula from the latest release (no cross-repo token needed),
+  # so the tap never lags by more than ~1h. See packaging/homebrew/README.md.
   homebrew:
     name: bump homebrew tap
     needs: [build, macos-x86_64]
