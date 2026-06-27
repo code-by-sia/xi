@@ -6,7 +6,7 @@ mapper genStmts(toks: Token[], start: Integer, stop: Integer, ctx: GCtx) -> Stri
     let out = ""
     let p = start
     let curCtx = ctx
-    while p < stop and gkind(toks, p) != 0 {
+    while p < stop and toks.kindAt(p) != 0 {
         let sr = genStmt(toks, p, curCtx)
         out = out + sr.code
         curCtx = sr.ctx
@@ -21,10 +21,10 @@ mapper genStmts(toks: Token[], start: Integer, stop: Integer, ctx: GCtx) -> Stri
 
 mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     let p = pos + 1
-    if gkind(toks, p) == 220 {
-        let nm = gtext(toks, p + 1)
+    if toks.kindAt(p) == 220 {
+        let nm = toks.textAt(p + 1)
         let p2 = p + 2
-        if gkind(toks, p2) == 111 { p2 = p2 + 1 }
+        if toks.kindAt(p2) == 111 { p2 = p2 + 1 }
         let e = genExpr(toks, p2, ctx)
         let pe = e.pos
         let close = matchBrace(toks, pe)
@@ -42,8 +42,8 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     let body = genStmts(toks, pc + 1, close, ctx)
     let code = "    if (" + c.code + ") {\n" + body + "    }"
     let np = close + 1
-    if gkind(toks, np) == 223 {
-        if gkind(toks, np + 1) == 222 {
+    if toks.kindAt(np) == 223 {
+        if toks.kindAt(np + 1) == 222 {
             let inner = genIf(toks, np + 1, ctx)
             code = code + " else " + inner.code
             np = inner.pos
@@ -69,13 +69,13 @@ predicate isAssertHelper(name: String) {
     return false
 }
 mapper genAssertHelper(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
-    let name = gtext(toks, pos)
+    let name = toks.textAt(pos)
     let line = int_to_string(tokenArrGet(toks, pos).line)
     let loc = ", xc_src_file, " + line + "LL);\n"
     let a = genExpr(toks, pos + 2, ctx)        // pos+1 is '(', pos+2 first arg
     if name == "assertOk" or name == "assertErr" {
         let endp = a.pos
-        if gkind(toks, endp) == 101 { endp = endp + 1 }
+        if toks.kindAt(endp) == 101 { endp = endp + 1 }
         let want = "1"
         if name == "assertErr" { want = "0" }
         let code = "    xc_assert_ok((" + a.code + ").ok, (" + a.code + ").err, " + want + loc
@@ -83,14 +83,14 @@ mapper genAssertHelper(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     }
     // two-or-three operand forms: parse the rest
     let q = a.pos
-    if gkind(toks, q) == 106 { q = q + 1 }     // ','
+    if toks.kindAt(q) == 106 { q = q + 1 }     // ','
     let b = genExpr(toks, q, ctx)
     if name == "assertClose" {
         let r = b.pos
-        if gkind(toks, r) == 106 { r = r + 1 }
+        if toks.kindAt(r) == 106 { r = r + 1 }
         let eps = genExpr(toks, r, ctx)
         let endp = eps.pos
-        if gkind(toks, endp) == 101 { endp = endp + 1 }
+        if toks.kindAt(endp) == 101 { endp = endp + 1 }
         let ok = "((((" + a.code + ") - (" + b.code + ")) <= (" + eps.code + ")) && (((" + b.code
                + ") - (" + a.code + ")) <= (" + eps.code + ")))"
         let code = "    xc_assert_close(" + ok + ", " + toStrC(a.code, "Number") + ", "
@@ -99,7 +99,7 @@ mapper genAssertHelper(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     }
     // assertEq / assertNe
     let endp = b.pos
-    if gkind(toks, endp) == 101 { endp = endp + 1 }
+    if toks.kindAt(endp) == 101 { endp = endp + 1 }
     let eq = "((" + a.code + ") == (" + b.code + "))"
     if a.xtyp == "String" { eq = "(xc_str_cmp((" + a.code + "), (" + b.code + ")) == 0)" }
     let neg = "0"
@@ -110,22 +110,22 @@ mapper genAssertHelper(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
 }
 
 mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
-    let k = gkind(toks, pos)
+    let k = toks.kindAt(pos)
     if k == 220 {
-        let name = gtext(toks, pos + 1)
+        let name = toks.textAt(pos + 1)
         let p = pos + 2
         let declCtype = ""
-        if gkind(toks, p) == 108 {
+        if toks.kindAt(p) == 108 {
             declCtype = typeCtypeOf(toks, p + 1)
-            while gkind(toks, p) != 111 and gkind(toks, p) != 0 { p = p + 1 }
+            while toks.kindAt(p) != 111 and toks.kindAt(p) != 0 { p = p + 1 }
         }
-        if gkind(toks, p) == 111 { p = p + 1 }
+        if toks.kindAt(p) == 111 { p = p + 1 }
         let e = genExpr(toks, p, ctx)
         let cdecl = "__auto_type"
         if string_len(declCtype) > 0 { cdecl = declCtype }
         // `let x = expr?` — Result error-propagation: bail out with the Err,
         // otherwise bind x to the unwrapped Ok value.
-        if gkind(toks, e.pos) == 127 {
+        if toks.kindAt(e.pos) == 127 {
             let tmp = "_r" + int_to_string(pos)
             let line = "    __auto_type " + tmp + " = " + e.code + ";\n"
                      + "    if (!" + tmp + ".ok) return (" + ctx.retCtype + "){ .ok = false, .err = " + tmp + ".err };\n"
@@ -136,7 +136,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         return StmtRes { code: line, ctx: ctx.addSym(name, e.xtyp), pos: e.pos }
     }
     if k == 221 {
-        let nk = gkind(toks, pos + 1)
+        let nk = toks.kindAt(pos + 1)
         if nk == 0 or nk == 103 {
             return StmtRes { code: "    return;\n", ctx: ctx, pos: pos + 1 }
         }
@@ -174,9 +174,9 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     if k == 249 { return StmtRes { code: "    break;\n", ctx: ctx, pos: pos + 1 } }
     if k == 250 { return StmtRes { code: "    continue;\n", ctx: ctx, pos: pos + 1 } }
     if k == 246 {
-        let varName = gtext(toks, pos + 1)
+        let varName = toks.textAt(pos + 1)
         let p = pos + 2
-        if gkind(toks, p) == 229 { p = p + 1 }
+        if toks.kindAt(p) == 229 { p = p + 1 }
         let it = genExpr(toks, p, ctx)
         let close = matchBrace(toks, it.pos)
         let idv = "_i" + int_to_string(pos)
@@ -240,7 +240,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     if k == 286 { return StmtRes { code: "    return 0;\n", ctx: ctx, pos: pos + 1 } }  // skip
     if k == 285 { return StmtRes { code: "    return 1;\n", ctx: ctx, pos: pos + 1 } }  // recover (resolution)
     // assert-family helpers (value-showing): assertEq/assertNe/assertClose/assertOk/assertErr
-    if k == 1 and gkind(toks, pos + 1) == 100 and isAssertHelper(gtext(toks, pos)) {
+    if k == 1 and toks.kindAt(pos + 1) == 100 and isAssertHelper(toks.textAt(pos)) {
         return genAssertHelper(toks, pos, ctx)
     }
     if k == 300 {   // assert <bool-expr> [ : "message" ]
@@ -249,13 +249,13 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let j = pos + 1
         while j < e.pos {
             if j > pos + 1 { txt = txt + " " }
-            txt = txt + gtext(toks, j)
+            txt = txt + toks.textAt(j)
             j = j + 1
         }
         let line = int_to_string(tokenArrGet(toks, pos).line)
         let p = e.pos
-        if gkind(toks, p) == 108 {                       // `:` — custom message
-            let msg = gtext(toks, p + 1)
+        if toks.kindAt(p) == 108 {                       // `:` — custom message
+            let msg = toks.textAt(p + 1)
             let code = "    xc_assert_msg((" + e.code + "), \"" + cEscape(txt) + "\", \"" + cEscape(msg)
                      + "\", xc_src_file, " + line + "LL);\n"
             return StmtRes { code: code, ctx: ctx, pos: p + 2 }
@@ -266,7 +266,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     }
     let e = genExpr(toks, pos, ctx)
     let p = e.pos
-    let ak = gkind(toks, p)
+    let ak = toks.kindAt(p)
     if ak == 111 or ak == 130 or ak == 131 or ak == 132 or ak == 133 {
         let op = " = "
         if ak == 130 { op = " += " }
@@ -294,10 +294,10 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     let p = e.pos
     let subj = "_m" + int_to_string(pos)
     let out = "    __auto_type " + subj + " = " + e.code + ";\n"
-    if gkind(toks, p) == 102 { p = p + 1 }   // {
+    if toks.kindAt(p) == 102 { p = p + 1 }   // {
     let first = true
     let cont = true
-    while cont and gkind(toks, p) != 103 and gkind(toks, p) != 0 {
+    while cont and toks.kindAt(p) != 103 and toks.kindAt(p) != 0 {
         let pt = tokenArrGet(toks, p)
         let isWild = false
         let cond = ""
@@ -312,7 +312,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             // multi-key selector: (lit, lit, ...) -> matches any listed literal
             p = p + 1
             let parts = ""
-            while gkind(toks, p) != 101 and gkind(toks, p) != 0 {
+            while toks.kindAt(p) != 101 and toks.kindAt(p) != 0 {
                 let lt = tokenArrGet(toks, p)
                 let c1 = ""
                 if lt.kind == 2 { c1 = subj + " == " + lt.text + "LL" } else {
@@ -324,9 +324,9 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
                     parts = parts + c1
                 }
                 p = p + 1
-                if gkind(toks, p) == 106 { p = p + 1 }   // ,
+                if toks.kindAt(p) == 106 { p = p + 1 }   // ,
             }
-            if gkind(toks, p) == 101 { p = p + 1 }       // )
+            if toks.kindAt(p) == 101 { p = p + 1 }       // )
             cond = "(" + parts + ")"
         } else {
         if pt.kind == 1 and (ctx.prog).isVariantNameC(pt.text) {
@@ -335,8 +335,8 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             cond = subj + ".tag == xc_" + sumN + "_" + pt.text
             bindExpr = subj + ".u." + pt.text
             p = p + 1
-            if gkind(toks, p) == 1 and gtext(toks, p) != "_" {
-                bindName = gtext(toks, p)
+            if toks.kindAt(p) == 1 and toks.textAt(p) != "_" {
+                bindName = toks.textAt(p)
                 p = p + 1
             }
         } else {
@@ -366,7 +366,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             }
             p = p + 1
         } } } } } } } }
-        if gkind(toks, p) == 109 { p = p + 1 }   // ->
+        if toks.kindAt(p) == 109 { p = p + 1 }   // ->
         let bctx = ctx
         if string_len(bindName) > 0 { bctx = ctx.addSym(bindName, "") }
         let bindLine = ""
@@ -374,7 +374,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             bindLine = "        __auto_type " + bindName + " = " + bindExpr + ";\n"
         }
         let bodyCode = ""
-        if gkind(toks, p) == 102 {
+        if toks.kindAt(p) == 102 {
             let close = matchBrace(toks, p)
             bodyCode = genStmts(toks, p + 1, close, bctx)
             p = close + 1
@@ -384,7 +384,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             // (e.g. a following `(a, b) -> ...` would otherwise parse as a call).
             let ln0 = tokenArrGet(toks, p).line
             let q = p
-            while gkind(toks, q) != 0 and gkind(toks, q) != 103 and tokenArrGet(toks, q).line == ln0 {
+            while toks.kindAt(q) != 0 and toks.kindAt(q) != 103 and tokenArrGet(toks, q).line == ln0 {
                 q = q + 1
             }
             let sub: Token[] = []
@@ -397,7 +397,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             bodyCode = "        return " + rc + ";\n"
             p = q
         }
-        if gkind(toks, p) == 106 { p = p + 1 }   // ,
+        if toks.kindAt(p) == 106 { p = p + 1 }   // ,
         if isWild {
             if first {
                 out = out + "    {\n" + bindLine + bodyCode + "    }\n"
@@ -414,7 +414,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         }
         first = false
     }
-    if gkind(toks, p) == 103 { p = p + 1 }   // }
+    if toks.kindAt(p) == 103 { p = p + 1 }   // }
     return StmtRes { code: out, ctx: ctx, pos: p }
 }
 
@@ -422,7 +422,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
 // Find the nearest handler for T (still on the stack), call it to get a
 // resolution; recover -> run the inline block and continue; skip -> longjmp.
 mapper genSignal(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
-    let typeName = gtext(toks, pos + 1)
+    let typeName = toks.textAt(pos + 1)
     let e = genExpr(toks, pos + 1, ctx)         // parses `T { ... }` (type literal)
     let recOpen = e.pos + 1                      // after `recover`
     let recClose = matchBrace(toks, recOpen)
@@ -449,7 +449,7 @@ mapper genTry(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     let bodyClose = matchBrace(toks, bodyOpen)
     let body = genStmts(toks, bodyOpen + 1, bodyClose, ctx)
     let cp = bodyClose + 1                       // `catch`
-    let typeName = gtext(toks, cp + 3)           // catch e : T
+    let typeName = toks.textAt(cp + 3)           // catch e : T
     let catchOpen = cp + 4
     let catchClose = matchBrace(toks, catchOpen)
     let hname = "xc_catch_" + ctx.fnTag + "_" + int_to_string(cp)
@@ -475,12 +475,12 @@ mapper hoistCatches(prog: Program, toks: Token[], tag: String) -> String {
     let n = tokenArrLen(toks)
     let i = 0
     while i < n {
-        if gkind(toks, i) == 283 {              // try
+        if toks.kindAt(i) == 283 {              // try
             let bodyClose = matchBrace(toks, i + 1)
             let cp = bodyClose + 1               // catch
-            if gkind(toks, cp) == 284 {
-                let varName = gtext(toks, cp + 1)
-                let typeName = gtext(toks, cp + 3)
+            if toks.kindAt(cp) == 284 {
+                let varName = toks.textAt(cp + 1)
+                let typeName = toks.textAt(cp + 3)
                 let catchOpen = cp + 4
                 let catchClose = matchBrace(toks, catchOpen)
                 let bctx = ((mkGCtx(prog)).addSym(varName, typeName)).withTag(tag)
@@ -509,13 +509,13 @@ type ParallelParse = { caps: String[], bodyStart: Integer, bodyEnd: Integer, end
 mapper parseParallelAt(toks: Token[], pos: Integer) -> ParallelParse {
     let caps: String[] = []
     let p = pos + 1                       // past `parallel`
-    if gkind(toks, p) == 100 {            // optional ( cap, ... )
+    if toks.kindAt(p) == 100 {            // optional ( cap, ... )
         p = p + 1
-        while gkind(toks, p) != 101 and gkind(toks, p) != 0 {
-            if gkind(toks, p) == 1 { caps = appendString(caps, gtext(toks, p)) }
+        while toks.kindAt(p) != 101 and toks.kindAt(p) != 0 {
+            if toks.kindAt(p) == 1 { caps = appendString(caps, toks.textAt(p)) }
             p = p + 1
         }
-        if gkind(toks, p) == 101 { p = p + 1 }   // )
+        if toks.kindAt(p) == 101 { p = p + 1 }   // )
     }
     // p is now at the body `{`
     let close = matchBrace(toks, p)
@@ -524,9 +524,9 @@ mapper parseParallelAt(toks: Token[], pos: Integer) -> ParallelParse {
 
 // Does `pos` start a `parallel` construct (ident "parallel" followed by ( or {)?
 predicate isParallelAt(toks: Token[], pos: Integer) {
-    if gkind(toks, pos) != 1 { return false }
-    if gtext(toks, pos) != "parallel" { return false }
-    let nk = gkind(toks, pos + 1)
+    if toks.kindAt(pos) != 1 { return false }
+    if toks.textAt(pos) != "parallel" { return false }
+    let nk = toks.kindAt(pos + 1)
     return nk == 100 or nk == 102
 }
 

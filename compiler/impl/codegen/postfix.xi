@@ -9,14 +9,14 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let p = base.pos
     let cont = true
     while cont {
-        let k = gkind(toks, p)
+        let k = toks.kindAt(p)
         // extension function call: recv.method(args) -> xc_<key>__<method>(recv, args).
         // `key` is the receiver xtype, normalizing an array literal's `X[]` form to
         // the `arr_X` form array params/returns carry (and that the parser keys on).
         let extKey = typ
         if endsWith2(typ, "[]") { extKey = "arr_" + string_slice(typ, 0, string_len(typ) - 2) }
-        if (k == 107 or k == 129) and gkind(toks, p + 2) == 100 and (ctx.prog).isFuncNameC(extKey + "__" + gtext(toks, p + 1)) {
-            let ext = extKey + "__" + gtext(toks, p + 1)
+        if (k == 107 or k == 129) and toks.kindAt(p + 2) == 100 and (ctx.prog).isFuncNameC(extKey + "__" + toks.textAt(p + 1)) {
+            let ext = extKey + "__" + toks.textAt(p + 1)
             let al = genArgs(toks, p + 2, ctx)
             let callArgs = code
             if string_len(al.code) > 0 { callArgs = code + ", " + al.code }
@@ -26,7 +26,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             continue
         }
         if k == 107 or k == 129 {
-            let fld = gtext(toks, p + 1)
+            let fld = toks.textAt(p + 1)
             if isListXType(typ) and fld == "asSequence" {
                 let fr = genSequenceChain(toks, p, code, listElemXName(typ), ctx, false, "", "", "")
                 code = fr.code
@@ -39,7 +39,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 typ = fr.xtyp
                 p = fr.pos
             } else {
-            if gkind(toks, p + 2) == 100 {
+            if toks.kindAt(p + 2) == 100 {
                 if typ == "events:" {
                     // Built-in event facility (over the type-erased envelope).
                     let al = genArgs(toks, p + 2, ctx)
@@ -77,21 +77,21 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = "xstd_chan_send(" + recv + ", " + payload + ")"
                         typ = ""
                         p = dtoE.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }   // )
+                        if toks.kindAt(p) == 101 { p = p + 1 }   // )
                     } else {
                     if fld == "recv" {
-                        if gkind(toks, p + 3) == 101 {
+                        if toks.kindAt(p + 3) == 101 {
                             // ch.recv() -> raw String
                             code = "xstd_chan_recv(" + recv + ")"
                             typ = "String"
                             p = p + 4
                         } else {
                             // ch.recv(T) -> deserialize a structured T from JSON
-                            let tn = gtext(toks, p + 3)
+                            let tn = toks.textAt(p + 3)
                             code = "xc_fromjson_" + tn + "(xstd_json_parse(xstd_chan_recv(" + recv + ")))"
                             typ = tn
                             p = p + 4
-                            if gkind(toks, p) == 101 { p = p + 1 }   // )
+                            if toks.kindAt(p) == 101 { p = p + 1 }   // )
                         }
                     } else {
                         let al = genArgs(toks, p + 2, ctx)
@@ -114,7 +114,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = "xstd_list_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
                         typ = ""
                         p = ae.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                     if fld == "get" {
                         let al = genArgs(toks, p + 2, ctx)
@@ -125,14 +125,14 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "set" or fld == "insert" {
                         let ie = genExpr(toks, p + 3, ctx)
                         let q = ie.pos
-                        if gkind(toks, q) == 106 { q = q + 1 }   // ,
+                        if toks.kindAt(q) == 106 { q = q + 1 }   // ,
                         let ve = genExpr(toks, q, ctx)
                         let op = "xstd_list_set"
                         if fld == "insert" { op = "xstd_list_insert" }
                         code = op + "(" + recv + ", " + ie.code + ", (" + elem + "[]){ " + ve.code + " })"
                         typ = ""
                         p = ve.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                         let al = genArgs(toks, p + 2, ctx)
                         if fld == "len"      { code = "xstd_list_len(" + recv + ")"  typ = "Integer" }
@@ -151,21 +151,21 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = "xstd_set_add(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
                         typ = ""
                         p = ae.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                     if fld == "contains" {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_set_contains(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
                         typ = "Bool"
                         p = ae.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                     if fld == "remove" {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_set_remove(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
                         typ = ""
                         p = ae.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                         let al = genArgs(toks, p + 2, ctx)
                         if fld == "len"     { code = "xstd_set_len(" + recv + ")"  typ = "Integer" }
@@ -182,43 +182,43 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "put" {
                         let ke = genExpr(toks, p + 3, ctx)
                         let q = ke.pos
-                        if gkind(toks, q) == 106 { q = q + 1 }   // ,
+                        if toks.kindAt(q) == 106 { q = q + 1 }   // ,
                         let ve = genExpr(toks, q, ctx)
                         code = "xstd_map_put(" + recv + ", (" + kc + "[]){ " + ke.code + " }, (" + vc + "[]){ " + ve.code + " })"
                         typ = ""
                         p = ve.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                     if fld == "get" {
                         let ke = genExpr(toks, p + 3, ctx)
                         code = "(*(" + vc + "*)xstd_map_get(" + recv + ", (" + kc + "[]){ " + ke.code + " }))"
                         typ = mapValXName(typ)
                         p = ke.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                     if fld == "getOr" {
                         let ke = genExpr(toks, p + 3, ctx)
                         let q = ke.pos
-                        if gkind(toks, q) == 106 { q = q + 1 }   // ,
+                        if toks.kindAt(q) == 106 { q = q + 1 }   // ,
                         let de = genExpr(toks, q, ctx)
                         code = "(*(" + vc + "*)xstd_map_getor(" + recv + ", (" + kc + "[]){ " + ke.code + " }, (" + vc + "[]){ " + de.code + " }))"
                         typ = mapValXName(typ)
                         p = de.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                     if fld == "has" {
                         let ke = genExpr(toks, p + 3, ctx)
                         code = "xstd_map_has(" + recv + ", (" + kc + "[]){ " + ke.code + " })"
                         typ = "Bool"
                         p = ke.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                     if fld == "remove" {
                         let ke = genExpr(toks, p + 3, ctx)
                         code = "xstd_map_remove(" + recv + ", (" + kc + "[]){ " + ke.code + " })"
                         typ = ""
                         p = ke.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                         let al = genArgs(toks, p + 2, ctx)
                         if fld == "len"     { code = "xstd_map_len(" + recv + ")"  typ = "Integer" }
@@ -237,7 +237,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_stack_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
                         typ = ""  p = ae.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                         let al = genArgs(toks, p + 2, ctx)
                         if fld == "pop"     { code = "({ " + elem + " _pv" + int_to_string(p) + "; xstd_stack_pop(" + recv + ", &_pv" + int_to_string(p) + "); _pv" + int_to_string(p) + "; })"  typ = elemX }
@@ -256,7 +256,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_queue_enqueue(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
                         typ = ""  p = ae.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                         let al = genArgs(toks, p + 2, ctx)
                         if fld == "dequeue" { code = "({ " + elem + " _qv" + int_to_string(p) + "; xstd_queue_dequeue(" + recv + ", &_qv" + int_to_string(p) + "); _qv" + int_to_string(p) + "; })"  typ = elemX }
@@ -276,7 +276,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_pqueue_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
                         typ = ""  p = ae.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }
+                        if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
                         let al = genArgs(toks, p + 2, ctx)
                         if fld == "pop"     { code = "({ " + elem + " _hv" + int_to_string(p) + "; xstd_pqueue_pop(" + recv + ", &_hv" + int_to_string(p) + "); _hv" + int_to_string(p) + "; })"  typ = elemX }
@@ -295,7 +295,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         let dtoE = genExpr(toks, p + 3, ctx)
                         code = "xstd_resp_set(" + recv + ", 200, xc_resolve_WebTransport().vtable->serialize(xc_resolve_WebTransport().self, xc_tojson_" + dtoE.xtyp + "(" + dtoE.code + ")), xc_string_from_cstr(\"application/json\"))"
                         p = dtoE.pos
-                        if gkind(toks, p) == 101 { p = p + 1 }   // ')'
+                        if toks.kindAt(p) == 101 { p = p + 1 }   // ')'
                     } else {
                         let al = genArgs(toks, p + 2, ctx)
                         code = "xstd_resp_set(" + recv + ", " + al.code + ", xc_string_from_cstr(\"text/plain; charset=utf-8\"))"
@@ -306,11 +306,11 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 if typ == "HttpRequest" {
                     if fld == "parse" {
                         // req.parse(T): deserialize the body via WebTransport into a T.
-                        let tn = gtext(toks, p + 3)
+                        let tn = toks.textAt(p + 3)
                         code = "xc_fromjson_" + tn + "(xc_resolve_WebTransport().vtable->deserialize(xc_resolve_WebTransport().self, xstd_req_body(" + code + ")))"
                         typ = tn
                         p = p + 4
-                        if gkind(toks, p) == 101 { p = p + 1 }   // ')'
+                        if toks.kindAt(p) == 101 { p = p + 1 }   // ')'
                     } else {
                         let al = genArgs(toks, p + 2, ctx)
                         let recv = code
@@ -328,13 +328,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     let recv = code
                     let topicE = genExpr(toks, p + 3, ctx)
                     let q = topicE.pos
-                    if gkind(toks, q) == 106 { q = q + 1 }   // ','
+                    if toks.kindAt(q) == 106 { q = q + 1 }   // ','
                     let dtoE = genExpr(toks, q, ctx)
                     code = recv + ".vtable->publish(" + recv + ".self, xc_wrap_" + dtoE.xtyp
                          + "(" + topicE.code + ", " + dtoE.code + "))"
                     typ = ""
                     p = dtoE.pos
-                    if gkind(toks, p) == 101 { p = p + 1 }   // ')'
+                    if toks.kindAt(p) == 101 { p = p + 1 }   // ')'
                 } else {
                 let al = genArgs(toks, p + 2, ctx)
                 if startsWith2(typ, "atom:") {
@@ -365,18 +365,18 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "can" {
                         // m.can(transition, args?) -> xc_M__can_<transition>(value, args?)
                         // first arg is the transition NAME (a bare identifier).
-                        let tname = gtext(toks, p + 3)
+                        let tname = toks.textAt(p + 3)
                         let q = p + 4
-                        if gkind(toks, q) == 106 { q = q + 1 }   // skip ',' after name
+                        if toks.kindAt(q) == 106 { q = q + 1 }   // skip ',' after name
                         let restargs = ""
                         let firstA = true
-                        while gkind(toks, q) != 101 and gkind(toks, q) != 0 {
+                        while toks.kindAt(q) != 101 and toks.kindAt(q) != 0 {
                             let a = genExpr(toks, q, ctx)
                             q = a.pos
                             if not firstA { restargs = restargs + ", " }
                             restargs = restargs + a.code
                             firstA = false
-                            if gkind(toks, q) == 106 { q = q + 1 }
+                            if toks.kindAt(q) == 106 { q = q + 1 }
                         }
                         let csep = ""
                         if string_len(restargs) > 0 { csep = ", " }
@@ -555,7 +555,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 if k == 104 {
                     let ie = genExpr(toks, p + 1, ctx)
                     let p2 = ie.pos
-                    if gkind(toks, p2) == 105 { p2 = p2 + 1 }
+                    if toks.kindAt(p2) == 105 { p2 = p2 + 1 }
                     if startsWith2(typ, "ptr:") {
                         // already a raw pointer (e.g. arr.data) — index directly
                         code = code + "[" + ie.code + "]"
@@ -582,18 +582,18 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = "(" + code + ".has_value ? " + code + ".value : " + r.code + ")"
                         p = r.pos
                     } else {
-                    if k == 209 and gkind(toks, p + 1) == 1 and (ctx.prog).isTypeNameC(gtext(toks, p + 1)) {
+                    if k == 209 and toks.kindAt(p + 1) == 1 and (ctx.prog).isTypeNameC(toks.textAt(p + 1)) {
                         // `<json> as T` — decode a Json value into a typed T (lenient
                         // coercion of string scalars). Reuses the derived JSON codec.
-                        let tn = gtext(toks, p + 1)
+                        let tn = toks.textAt(p + 1)
                         code = "xc_fromjson_" + tn + "(" + code + ")"
                         typ = tn
                         p = p + 2
                     } else {
-                    if k == 1 and gtext(toks, p) == "capture" and gkind(toks, p + 1) == 1 and gkind(toks, p + 2) == 108 {
+                    if k == 1 and toks.textAt(p) == "capture" and toks.kindAt(p + 1) == 1 and toks.kindAt(p + 2) == 108 {
                         // `<expr> capture name: Type` — bind the value to `name` (declared
                         // at the function top by the capture pre-scan) and yield it.
-                        let nm = gtext(toks, p + 1)
+                        let nm = toks.textAt(p + 1)
                         code = "(" + nm + " = (" + code + "))"
                         p = p + 4                         // capture name : Type
                     } else {

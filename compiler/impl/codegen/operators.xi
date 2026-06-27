@@ -3,7 +3,7 @@
 
 // ── unary ─────────────────────────────────────────────────────────
 mapper genUnary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
-    let k = gkind(toks, pos)
+    let k = toks.kindAt(pos)
     if k == 119 {
         let r = genUnary(toks, pos + 1, ctx)
         return ExprRes { code: "(-" + r.code + ")", pos: r.pos, xtyp: r.xtyp , owned: false }
@@ -14,7 +14,7 @@ mapper genUnary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     }
     if k == 231 {
         // `await all <list>` — join every Future in a List<Future<T>>, return List<T>.
-        if gkind(toks, pos + 1) == 1 and gtext(toks, pos + 1) == "all" {
+        if toks.kindAt(pos + 1) == 1 and toks.textAt(pos + 1) == "all" {
             let r = genUnary(toks, pos + 2, ctx)
             let elemX = listElemXName(r.xtyp)
             if isFutureXType(elemX) {
@@ -55,7 +55,7 @@ mapper genMul(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let p = left.pos
     let cont = true
     while cont {
-        let k = gkind(toks, p)
+        let k = toks.kindAt(p)
         if k == 120 or k == 121 or k == 122 {
             let op = " * "
             if k == 121 { op = " / " }
@@ -80,7 +80,7 @@ mapper genAdd(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let resOwned = left.owned     // ARC: a concat result is freshly owned
     let cont = true
     while cont {
-        let k = gkind(toks, p)
+        let k = toks.kindAt(p)
         if k == 118 {
             let right = genMul(toks, p + 1, ctx)
             if typ == "String" or right.xtyp == "String" {
@@ -111,9 +111,9 @@ mapper genAdd(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
 mapper genRange(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let left = genAdd(toks, pos, ctx)
     let p = left.pos
-    let k = gkind(toks, p)
-    let isUntil  = (k == 1 and gtext(toks, p) == "until")
-    let isDownTo = (k == 1 and gtext(toks, p) == "downTo")
+    let k = toks.kindAt(p)
+    let isUntil  = (k == 1 and toks.textAt(p) == "until")
+    let isDownTo = (k == 1 and toks.textAt(p) == "downTo")
     if k == 134 or isUntil or isDownTo {
         let right = genAdd(toks, p + 1, ctx)
         let endExpr = "(" + right.code + ") + 1"   // `..` inclusive
@@ -121,7 +121,7 @@ mapper genRange(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if isUntil  { endExpr = "(" + right.code + ")" }
         if isDownTo { endExpr = "(" + right.code + ") - 1"  stepC = "-1" }
         let q = right.pos
-        if gkind(toks, q) == 1 and gtext(toks, q) == "step" {   // optional `step n`
+        if toks.kindAt(q) == 1 and toks.textAt(q) == "step" {   // optional `step n`
             let se = genAdd(toks, q + 1, ctx)
             if isDownTo { stepC = "-(" + se.code + ")" } else { stepC = "(" + se.code + ")" }
             q = se.pos
@@ -142,7 +142,7 @@ mapper genCmp(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let p = left.pos
     let cont = true
     while cont {
-        let k = gkind(toks, p)
+        let k = toks.kindAt(p)
         if k == 112 or k == 113 {
             let right = genAdd(toks, p + 1, ctx)
             if typ == "String" or right.xtyp == "String" {
@@ -195,7 +195,7 @@ mapper genAnd(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let p = left.pos
     let cont = true
     while cont {
-        if gkind(toks, p) == 225 {
+        if toks.kindAt(p) == 225 {
             let right = genCmp(toks, p + 1, ctx)
             code = "(" + code + " && " + right.code + ")"
             typ = "Bool"
@@ -214,7 +214,7 @@ mapper genExpr(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let p = left.pos
     let cont = true
     while cont {
-        if gkind(toks, p) == 226 {
+        if toks.kindAt(p) == 226 {
             let right = genAnd(toks, p + 1, ctx)
             code = "(" + code + " || " + right.code + ")"
             typ = "Bool"
@@ -227,8 +227,8 @@ mapper genExpr(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     // right operand at genAnd level so arithmetic binds tighter). Chains: a f b g c.
     let icont = true
     while icont {
-        if gkind(toks, p) == 1 and isInfixFnC(ctx.prog, gtext(toks, p)) {
-            let fname = gtext(toks, p)
+        if toks.kindAt(p) == 1 and isInfixFnC(ctx.prog, toks.textAt(p)) {
+            let fname = toks.textAt(p)
             let right = genAnd(toks, p + 1, ctx)
             code = "xc_" + fname + "(" + code + ", " + right.code + ")"
             typ = (ctx.prog).funcRetXType(fname)
@@ -239,7 +239,7 @@ mapper genExpr(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     }
     // `a to b` — build a Pair<A,B> (low precedence, right of `||`). Bind both
     // sides to addressable temporaries (works for struct and scalar types alike).
-    if gkind(toks, p) == 1 and gtext(toks, p) == "to" {
+    if toks.kindAt(p) == 1 and toks.textAt(p) == "to" {
         let right = genExpr(toks, p + 1, ctx)
         let lc = xnameToCtype(typ)
         let rc = xnameToCtype(right.xtyp)

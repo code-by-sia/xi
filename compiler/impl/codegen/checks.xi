@@ -172,18 +172,18 @@ consumer scanPureBody(kind: String, fname: String, toks: Token[], impure: String
     let n = tokenArrLen(toks)
     let i = 0
     while i < n {
-        let k = gkind(toks, i)
+        let k = toks.kindAt(i)
         // direct I/O:  system . (stdout|stderr|stdin)
-        if k == 1 and gtext(toks, i) == "system" and i + 2 < n and gkind(toks, i + 1) == 107 {
-            let f2 = gtext(toks, i + 2)
+        if k == 1 and toks.textAt(i) == "system" and i + 2 < n and toks.kindAt(i + 1) == 107 {
+            let f2 = toks.textAt(i + 2)
             if f2 == "stdout" or f2 == "stderr" or f2 == "stdin" {
                 diag_purity(tokenArrGet(toks, i).line,
                     "pure " + kind + " '" + fname + "' must not perform I/O (system." + f2 + "); use a producer/consumer/action")
             }
         }
         // impure call:  IDENT (
-        if k == 1 and i + 1 < n and gkind(toks, i + 1) == 100 {
-            let callee = gtext(toks, i)
+        if k == 1 and i + 1 < n and toks.kindAt(i + 1) == 100 {
+            let callee = toks.textAt(i)
             if callee != fname and strArrContains(impure, callee) {
                 diag_purity(tokenArrGet(toks, i).line,
                     "pure " + kind + " '" + fname + "' must not call impure '" + callee + "'; make it a producer/consumer/action")

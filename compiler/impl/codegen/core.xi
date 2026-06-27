@@ -28,8 +28,8 @@ type GCtx = {
 type StmtRes = { code: String, ctx: GCtx, pos: Integer }
 
 // ── token access helpers ─────────────────────────────────────────
-mapper gkind(toks: Token[], i: Integer) -> Integer => tokenArrGet(toks, i).kind
-mapper gtext(toks: Token[], i: Integer) -> String => tokenArrGet(toks, i).text
+mapper Token[].kindAt(i: Integer) -> Integer => tokenArrGet(this, i).kind
+mapper Token[].textAt(i: Integer) -> String => tokenArrGet(this, i).text
 
 // Escape a string for embedding in a C string literal (backslash and quote).
 mapper cEscape(s: String) -> String {
@@ -60,7 +60,7 @@ mapper matchBrace(toks: Token[], openIdx: Integer) -> Integer {
     let result = openIdx
     let cont = true
     while cont and p < n {
-        let k = gkind(toks, p)
+        let k = toks.kindAt(p)
         if k == 102 {
             depth = depth + 1
         } else {

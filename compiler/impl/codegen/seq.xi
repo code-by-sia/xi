@@ -10,7 +10,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
     let iv = "_qi" + u
     let gv = "_gv" + u
     let q = p + 2
-    if gkind(toks, q) == 100 { q = q + 1  if gkind(toks, q) == 101 { q = q + 1 } }   // ()
+    if toks.kindAt(q) == 100 { q = q + 1  if toks.kindAt(q) == 101 { q = q + 1 } }   // ()
     let curVar = "_e" + u + "_0"
     let curX = elemX0
     let curC = xnameToCtype(curX)
@@ -25,15 +25,15 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
     }
     let step = 0
     let going = true
-    while going and gkind(toks, q) == 107 {
-        let fld = gtext(toks, q + 1)
+    while going and toks.kindAt(q) == 107 {
+        let fld = toks.textAt(q + 1)
         if fld == "map" or fld == "filter" or fld == "filterNot" or fld == "takeWhile" or fld == "dropWhile" {
             let bo = q + 2
             let close = matchBrace(toks, bo)
             let arrow = lambdaArrow(toks, bo + 1, close)
             let param = "it"
             let bstart = bo + 1
-            if arrow >= 0 { param = gtext(toks, bo + 1)  bstart = arrow + 1 }
+            if arrow >= 0 { param = toks.textAt(bo + 1)  bstart = arrow + 1 }
             let body = genExpr(toks, bstart, ctx.addSym(param, curX))
             // each op binds its param in its own block so reused names (e.g. `it`) don't clash
             if fld == "map" {
@@ -59,7 +59,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
             let ae = genExpr(toks, q + 3, ctx)
             let nstr = ae.code
             q = ae.pos
-            if gkind(toks, q) == 101 { q = q + 1 }
+            if toks.kindAt(q) == 101 { q = q + 1 }
             let cv = "_c" + int_to_string(step) + u
             pre = pre + "xc_integer_t " + cv + " = 0; "
             if fld == "take" { inner = inner + "        if (" + cv + " >= (" + nstr + ")) break; " + cv + " = " + cv + " + 1;\n" }
@@ -76,7 +76,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         head = "({ " + genC + " " + gv + " = " + seedC + "; " + pre + "\n"   // seed the recurrence
         loopHdr = "      for (;;) {\n"                                       // infinite; a take/takeWhile/first bounds it
     }
-    let tf = gtext(toks, q + 1)
+    let tf = toks.textAt(q + 1)
     if tf == "toList" or tf == "toSet" {
         let add = "xstd_list_push"
         let tx = "List_" + arrSuffixOf(curX)
@@ -90,7 +90,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         let bo = q + 2  let close = matchBrace(toks, bo)
         let arrow = lambdaArrow(toks, bo + 1, close)
         let param = "it"  let bstart = bo + 1
-        if arrow >= 0 { param = gtext(toks, bo + 1)  bstart = arrow + 1 }
+        if arrow >= 0 { param = toks.textAt(bo + 1)  bstart = arrow + 1 }
         let body = genExpr(toks, bstart, ctx.addSym(param, curX))
         let code = head + loopHdr + inner + "        " + curC + " " + param + " = " + curVar + "; (void)(" + body.code + "); } (void)0; })"
         return ExprRes { code: code, pos: close + 1, xtyp: "" , owned: false }
@@ -98,13 +98,13 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
     if tf == "fold" {
         let ae = genExpr(toks, q + 3, ctx)  let seed = ae.code  let accX = ae.xtyp
         let qq = ae.pos
-        if gkind(toks, qq) == 101 { qq = qq + 1 }
+        if toks.kindAt(qq) == 101 { qq = qq + 1 }
         let bo = qq  let close = matchBrace(toks, bo)
         let arrow = lambdaArrow(toks, bo + 1, close)
         let pa = "acc"  let px = "x"  let bstart = bo + 1
         if arrow >= 0 {
             let pi = bo + 1  let firstP = true
-            while pi < arrow { if gkind(toks, pi) == 1 { if firstP { pa = gtext(toks, pi)  firstP = false } else { px = gtext(toks, pi) } } pi = pi + 1 }
+            while pi < arrow { if toks.kindAt(pi) == 1 { if firstP { pa = toks.textAt(pi)  firstP = false } else { px = toks.textAt(pi) } } pi = pi + 1 }
             bstart = arrow + 1
         }
         let body = genExpr(toks, bstart, (ctx.addSym(pa, accX)).addSym(px, curX))
@@ -125,7 +125,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         let bo = q + 2  let close = matchBrace(toks, bo)
         let arrow = lambdaArrow(toks, bo + 1, close)
         let param = "it"  let bstart = bo + 1
-        if arrow >= 0 { param = gtext(toks, bo + 1)  bstart = arrow + 1 }
+        if arrow >= 0 { param = toks.textAt(bo + 1)  bstart = arrow + 1 }
         let body = genExpr(toks, bstart, ctx.addSym(param, curX))
         let init = "0"  let setv = "1"  let cond = "(" + body.code + ")"
         if tf == "all" { init = "1"  setv = "0"  cond = "!(" + body.code + ")" }
@@ -190,15 +190,15 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     // optional leading (arg): take/drop count, fold seed, joinToString separator
     let argCode = ""
     let argX = ""
-    if gkind(toks, q) == 100 {
-        if gkind(toks, q + 1) == 101 {
+    if toks.kindAt(q) == 100 {
+        if toks.kindAt(q + 1) == 101 {
             q = q + 2                                  // empty ()
         } else {
             let ae = genExpr(toks, q + 1, ctx)
             argCode = ae.code
             argX = ae.xtyp
             q = ae.pos
-            if gkind(toks, q) == 101 { q = q + 1 }
+            if toks.kindAt(q) == 101 { q = q + 1 }
         }
     }
 
@@ -398,8 +398,8 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         let pi = q + 1
         let firstP = true
         while pi < arrow {
-            if gkind(toks, pi) == 1 {
-                if firstP { p0 = gtext(toks, pi)  firstP = false } else { p1 = gtext(toks, pi) }
+            if toks.kindAt(pi) == 1 {
+                if firstP { p0 = toks.textAt(pi)  firstP = false } else { p1 = toks.textAt(pi) }
             }
             pi = pi + 1
         }
@@ -641,10 +641,10 @@ mapper captureDecls(toks: Token[]) -> String {
     let n = tokenArrLen(toks)
     let i = 0
     while i < n {
-        if gkind(toks, i) == 1 and gtext(toks, i) == "capture"
-           and gkind(toks, i + 1) == 1 and gkind(toks, i + 2) == 108 {
-            let nm = gtext(toks, i + 1)
-            let ty = gtext(toks, i + 3)               // type name (ident or primitive keyword)
+        if toks.kindAt(i) == 1 and toks.textAt(i) == "capture"
+           and toks.kindAt(i + 1) == 1 and toks.kindAt(i + 2) == 108 {
+            let nm = toks.textAt(i + 1)
+            let ty = toks.textAt(i + 3)               // type name (ident or primitive keyword)
             if not strArrContains(seen, nm) {
                 seen = appendString(seen, nm)
                 out = out + "    " + cTy(xnameToCtype(ty)) + " " + nm + " = {0};\n"
@@ -662,9 +662,9 @@ mapper seedCaptures(ctx: GCtx, toks: Token[]) -> GCtx {
     let n = tokenArrLen(toks)
     let i = 0
     while i < n {
-        if gkind(toks, i) == 1 and gtext(toks, i) == "capture"
-           and gkind(toks, i + 1) == 1 and gkind(toks, i + 2) == 108 {
-            result = result.addSym(gtext(toks, i + 1), gtext(toks, i + 3))
+        if toks.kindAt(i) == 1 and toks.textAt(i) == "capture"
+           and toks.kindAt(i + 1) == 1 and toks.kindAt(i + 2) == 108 {
+            result = result.addSym(toks.textAt(i + 1), toks.textAt(i + 3))
         }
         i = i + 1
     }

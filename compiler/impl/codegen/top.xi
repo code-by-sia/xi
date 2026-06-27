@@ -326,14 +326,14 @@ mapper genMachineDefs(prog: Program) -> String {
             let di = m.dataInit
             let dp = 0
             let ictx = mkGCtx(prog)
-            while gkind(di, dp) != 0 {
-                let fname = gtext(di, dp)
+            while di.kindAt(dp) != 0 {
+                let fname = di.textAt(dp)
                 dp = dp + 1
-                if gkind(di, dp) == 111 { dp = dp + 1 }   // =
+                if di.kindAt(dp) == 111 { dp = dp + 1 }   // =
                 let e = genExpr(di, dp, ictx)
                 dp = e.pos
                 out = out + "    __r.data." + fname + " = " + castEmptyArr(m, fname, e) + ";\n"
-                if gkind(di, dp) == 106 { dp = dp + 1 }   // ,
+                if di.kindAt(dp) == 106 { dp = dp + 1 }   // ,
             }
         }
         out = out + "    return __r;\n}\n"
@@ -375,14 +375,14 @@ mapper genMachineDefs(prog: Program) -> String {
                 let up = 0
                 let uctx = seedParams(mkGCtx(prog), tr.params)
                 if m.hasData { uctx = uctx.addSym("data", mn + "Data") }
-                while gkind(ut, up) != 0 {
-                    let fname = gtext(ut, up)
+                while ut.kindAt(up) != 0 {
+                    let fname = ut.textAt(up)
                     up = up + 1
-                    if gkind(ut, up) == 108 { up = up + 1 }   // :
+                    if ut.kindAt(up) == 108 { up = up + 1 }   // :
                     let e = genExpr(ut, up, uctx)
                     up = e.pos
                     upd = upd + "        __r.data." + fname + " = " + castEmptyArr(m, fname, e) + ";\n"
-                    if gkind(ut, up) == 106 { up = up + 1 }   // ,
+                    if ut.kindAt(up) == 106 { up = up + 1 }   // ,
                 }
             }
             // the mover

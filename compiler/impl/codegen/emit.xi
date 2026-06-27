@@ -262,7 +262,7 @@ mapper decRowValue(prog: Program, t: DecisionTable, outs: Token[], ctx: GCtx) ->
         let d = 0
         let go = true
         while go {
-            let k = gkind(outs, pos)
+            let k = outs.kindAt(pos)
             if k == 0 { go = false }
             else {
                 if d == 0 and k == 125 { go = false }
@@ -274,7 +274,7 @@ mapper decRowValue(prog: Program, t: DecisionTable, outs: Token[], ctx: GCtx) ->
                 }
             }
         }
-        if gkind(outs, pos) == 125 { pos = pos + 1 }
+        if outs.kindAt(pos) == 125 { pos = pos + 1 }
         if seg > 0 { code = code + ", " }
         code = code + "." + stringArrGet(t.outNames, seg) + " = " + genExpr(sub, 0, ctx).code
         seg = seg + 1

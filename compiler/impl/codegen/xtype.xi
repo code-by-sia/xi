@@ -344,8 +344,8 @@ mapper buildCapXTypes(params: String, dlist: DepSpec[]) -> String[] {
 predicate identUsedIn(toks: Token[], a: Integer, b: Integer, name: String) {
     let i = a
     while i < b {
-        if gkind(toks, i) == 1 and gtext(toks, i) == name {
-            if i == a or gkind(toks, i - 1) != 107 { return true }   // 107 = '.'
+        if toks.kindAt(i) == 1 and toks.textAt(i) == name {
+            if i == a or toks.kindAt(i - 1) != 107 { return true }   // 107 = '.'
         }
         i = i + 1
     }
@@ -372,9 +372,9 @@ mapper capturesIn(toks: Token[], a: Integer, b: Integer, capNames: String[], cap
 // Parse `runWithDelay ( <ms> ) { body }` starting at the `runWithDelay` token.
 type DelayParse = { msStart: Integer, msEnd: Integer, bodyStart: Integer, bodyEnd: Integer, endPos: Integer }
 predicate isRunWithDelayAt(toks: Token[], pos: Integer) {
-    if gkind(toks, pos) != 1 { return false }
-    if gtext(toks, pos) != "runWithDelay" { return false }
-    return gkind(toks, pos + 1) == 100
+    if toks.kindAt(pos) != 1 { return false }
+    if toks.textAt(pos) != "runWithDelay" { return false }
+    return toks.kindAt(pos + 1) == 100
 }
 mapper parseDelayAt(toks: Token[], pos: Integer) -> DelayParse {
     let msStart = pos + 2                       // past `runWithDelay` `(`
@@ -382,7 +382,7 @@ mapper parseDelayAt(toks: Token[], pos: Integer) -> DelayParse {
     let depth = 1
     let p = msStart
     while p < tokenArrLen(toks) and depth > 0 {
-        let kk = gkind(toks, p)
+        let kk = toks.kindAt(p)
         if kk == 100 { depth = depth + 1 }
         if kk == 101 { depth = depth - 1 }
         if depth > 0 { p = p + 1 }
@@ -501,7 +501,7 @@ mapper primCtypeK(k: Integer) -> String {
 
 // Read a type expression from a token stream and return its C type string.
 mapper typeCtypeOf(toks: Token[], start: Integer) -> String {
-    let k = gkind(toks, start)
+    let k = toks.kindAt(start)
     let base = ""
     let p = start
     let pc = primCtypeK(k)
@@ -510,7 +510,7 @@ mapper typeCtypeOf(toks: Token[], start: Integer) -> String {
         p = start + 1
     } else {
         if k == 1 {
-            base = "xc_" + gtext(toks, start) + "_t"
+            base = "xc_" + toks.textAt(start) + "_t"
             p = start + 1
         } else {
             return "void*"
@@ -520,7 +520,7 @@ mapper typeCtypeOf(toks: Token[], start: Integer) -> String {
     let result = base
     let cont = true
     while cont {
-        let pk = gkind(toks, p)
+        let pk = toks.kindAt(p)
         if pk == 127 {
             result = "xc_opt_" + suf + "_t"
             p = p + 1
@@ -529,7 +529,7 @@ mapper typeCtypeOf(toks: Token[], start: Integer) -> String {
                 result = "xc_res_" + suf + "_t"
                 p = p + 1
             } else {
-            if pk == 104 and gkind(toks, p + 1) == 105 {
+            if pk == 104 and toks.kindAt(p + 1) == 105 {
                 result = "xc_arr_" + suf + "_t"
                 p = p + 2
             } else {
