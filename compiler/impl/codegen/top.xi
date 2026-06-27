@@ -433,7 +433,7 @@ mapper genBuildMeta(prog: Program) -> String {
     return out
 }
 
-mapper genAll(prog: Program, srcPath: String) -> String {
+mapper genAll(prog: Program, srcPath: String, codecs: Codecs) -> String {
     let tail = genEntry(prog, srcPath)
     if inTestMode() and funcSpecLen(prog.tests) > 0 { tail = genTestRunner(prog, srcPath) }
     return genHeader()
@@ -446,7 +446,7 @@ mapper genAll(prog: Program, srcPath: String) -> String {
          + genCompoundBodies(prog)
          + genOptTypedefs(prog)
          + genResTypedefs(prog)
-         + genEventCodecs(prog)
+         + codecs.genEventCodecs(prog)
          + genExternDecls(prog)
          + genIfaceDecls(prog)
          + genClassStructs(prog)
@@ -460,7 +460,7 @@ mapper genAll(prog: Program, srcPath: String) -> String {
          + genResolvers(prog)
          + genSingletonInit(prog)
          + genFuncForwardDecls(prog)
-         + genEventFwd(prog)
+         + codecs.genEventFwd(prog)
          + genAtomDecls(prog)
          + genMachineDecls(prog)
          + genFreeFunctions(prog)
@@ -468,8 +468,8 @@ mapper genAll(prog: Program, srcPath: String) -> String {
          + genAtomDefs(prog)
          + genMachineDefs(prog)
          + genClassMethods(prog)
-         + genEventDispatch(prog)
-         + genWebDispatch(prog)
+         + codecs.genEventDispatch(prog)
+         + codecs.genWebDispatch(prog)
          + tail
 }
 

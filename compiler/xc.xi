@@ -24,6 +24,7 @@ import "contracts/diagnostics.xi"
 import "contracts/lexer.xi"
 import "contracts/parser.xi"
 import "contracts/codegen.xi"
+import "contracts/codecs.xi"
 import "contracts/compiler.xi"
 import "contracts/module_loader.xi"
 
@@ -93,6 +94,7 @@ module Compile {
     bind Diagnostics  -> Diag           as singleton
     bind Lexer        -> XiLexer        as singleton
     bind Parser       -> XiParser       as singleton
+    bind Codecs       -> JsonCodecs     as singleton
     bind Codegen      -> XiCodegen      as singleton
     bind ModuleLoader -> XiModuleLoader as singleton
     bind Compiler     -> XcCompiler     as singleton
