@@ -249,7 +249,7 @@ mapper Program.fieldTypeNameC(typeName: String, field: String) -> String {
     // Result<T> fields: .ok is Bool, .err is String, .value is T.
     if field == "ok"  { return "Bool" }
     if field == "err" { return "String" }
-    if startsWith2(typeName, "res_") and field == "value" {
+    if typeName.startsWith2("res_") and field == "value" {
         let elem = string_slice(typeName, 4, string_len(typeName))
         return this.resolveX(xnameFromArrSuffix(elem))
     }

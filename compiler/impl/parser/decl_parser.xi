@@ -411,8 +411,8 @@ mapper parseDep(ps: PState) -> DepResult {
     ps2 = tr.ps
 
     let form = "single"
-    if startsWith2(tr.ctype, "xc_arr_") { form = "list" }
-    if startsWith2(tr.ctype, "xc_opt_") { form = "opt" }
+    if tr.ctype.startsWith2("xc_arr_") { form = "list" }
+    if tr.ctype.startsWith2("xc_opt_") { form = "opt" }
 
     let orAlt = ""
     let whereToks: Token[] = []

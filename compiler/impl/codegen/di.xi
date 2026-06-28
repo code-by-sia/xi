@@ -193,7 +193,7 @@ mapper genResolvers(prog: Program) -> String {
         if string_len(cfgp) > 0 {
             // config-backed: parse the file once, return a fat ptr over the tree
             let parse = "xstd_yaml_parse(_src" + ifn + ")"
-            if endsWith2(cfgp, ".json") { parse = "xstd_json_parse(_src" + ifn + ")" }
+            if cfgp.endsWith2(".json") { parse = "xstd_json_parse(_src" + ifn + ")" }
             out = out + "static xc_" + ifn + "_t xc_resolve_" + ifn + "(void) {\n"
             out = out + "    static xc_Json_t _cfg" + ifn + "; static bool _ci" + ifn + " = false;\n"
             out = out + "    if (!_ci" + ifn + ") { xc_string_t _src" + ifn + " = file_read_all(xc_string_from_cstr(\"" + cfgp + "\")); _cfg" + ifn + " = " + parse + "; _ci" + ifn + " = true; }\n"

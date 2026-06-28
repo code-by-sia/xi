@@ -30,7 +30,7 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let close = toks.matchBrace(pe)
         // infer the unwrapped element's xtype from an "opt_<suffix>" optional
         let nmType = ""
-        if startsWith2(e.xtyp, "opt_") { nmType = xnameFromArrSuffix(string_slice(e.xtyp, 4, string_len(e.xtyp))) }
+        if e.xtyp.startsWith2("opt_") { nmType = xnameFromArrSuffix(string_slice(e.xtyp, 4, string_len(e.xtyp))) }
         let bctx = ctx.addSym(nm, nmType)
         let body = "        __auto_type " + nm + " = (" + e.code + ").value;\n" + genStmts(toks, pe + 1, close, bctx)
         let code = "    if ((" + e.code + ").has_value) {\n" + body + "    }\n"

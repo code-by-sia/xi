@@ -72,7 +72,7 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
         let s = 0
         while s < sn {
             let job = funcSpecGet(prog.scheduled, s)
-            if startsWith2(job.topic, "every:") {
+            if job.topic.startsWith2("every:") {
                 let everyMs = string_slice(job.topic, 6, string_len(job.topic))
                 out = out + "    xstd_sched_register_interval((void(*)(void))xc_" + job.name + ", " + everyMs + ");\n"
             } else {

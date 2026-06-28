@@ -7,7 +7,7 @@
 // (see genAliasTypedefs); they are skipped by the array/opt/result/refined passes.
 predicate isCompositeAlias(ts: TypeSpec) {
     if ts.isCompound { return false }
-    return startsWith2(ts.baseCtype, "xc_arr_")
+    return ts.baseCtype.startsWith2("xc_arr_")
 }
 
 mapper genRefinedTypedefs(prog: Program) -> String {

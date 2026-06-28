@@ -294,18 +294,18 @@ mapper baseNameOf(p: String) -> String {
 // `*.ext` = by extension; otherwise an exact path or basename.
 predicate globMatch(pat: String, rel: String) {
     let p = pat
-    if startsWith2(p, "./") { p = string_slice(p, 2, string_len(p)) }
+    if p.startsWith2("./") { p = string_slice(p, 2, string_len(p)) }
     if p == "**" or p == "*" or string_len(p) == 0 { return true }
-    if endsWith2(p, "/**") {
+    if p.endsWith2("/**") {
         let pre = string_slice(p, 0, string_len(p) - 3)
         if rel == pre { return true }
-        return startsWith2(rel, pre + "/")
+        return rel.startsWith2(pre + "/")
     }
-    if endsWith2(p, "/*") {
-        return startsWith2(rel, string_slice(p, 0, string_len(p) - 1))
+    if p.endsWith2("/*") {
+        return rel.startsWith2(string_slice(p, 0, string_len(p) - 1))
     }
-    if startsWith2(p, "*.") {
-        return endsWith2(rel, string_slice(p, 1, string_len(p)))
+    if p.startsWith2("*.") {
+        return rel.endsWith2(string_slice(p, 1, string_len(p)))
     }
     if p == rel { return true }
     if baseNameOf(rel) == p { return true }
@@ -349,8 +349,8 @@ mapper splitLines(s: String) -> String[] {
 }
 mapper relPath(base: String, path: String) -> String {
     let pre = base + "/"
-    if startsWith2(path, pre) { return string_slice(path, string_len(pre), string_len(path)) }
-    if startsWith2(path, "./") { return string_slice(path, 2, string_len(path)) }
+    if path.startsWith2(pre) { return string_slice(path, string_len(pre), string_len(path)) }
+    if path.startsWith2("./") { return string_slice(path, 2, string_len(path)) }
     return path
 }
 // Union of includes / excludes declared by the program's (non-Test) modules.
@@ -456,7 +456,7 @@ producer findLibraryFile() -> String {
 }
 // name.xi -> name  (drop a trailing .xi for the default library id)
 mapper stripXiExt(s: String) -> String {
-    if endsWith2(s, ".xi") { return string_slice(s, 0, string_len(s) - 3) }
+    if s.endsWith2(".xi") { return string_slice(s, 0, string_len(s) - 3) }
     return s
 }
 // Gather the library's source per its includes/excludes and tar it into
@@ -496,7 +496,7 @@ producer packLibrary(srcPath: String) -> Integer {
     while i < n {
         let f = stringArrGet(files, i)
         let rel = relPath(base, f)
-        if string_len(rel) > 0 and not startsWith2(rel, "modules/") and not startsWith2(rel, "dist/") and not startsWith2(rel, "build/") and matchesAny(inc, rel) and not matchesAny(exc, rel) {
+        if string_len(rel) > 0 and not rel.startsWith2("modules/") and not rel.startsWith2("dist/") and not rel.startsWith2("build/") and matchesAny(inc, rel) and not matchesAny(exc, rel) {
             list = list + rel + "\n"
             count = count + 1
         }
@@ -526,7 +526,7 @@ mapper argTarget(args: String[]) -> String {
     while i < args.len {
         let a = args.data[i]
         if a == "--target" and i + 1 < args.len { return args.data[i + 1] }
-        if startsWith2(a, "--target=") { return string_slice(a, 9, string_len(a)) }
+        if a.startsWith2("--target=") { return string_slice(a, 9, string_len(a)) }
         i = i + 1
     }
     return ""
@@ -541,7 +541,7 @@ mapper cliSource(args: String[]) -> String {
         if a == "--target" {
             i = i + 2
         } else {
-            if startsWith2(a, "--target=") {
+            if a.startsWith2("--target=") {
                 i = i + 1
             } else {
                 return a

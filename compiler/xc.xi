@@ -35,6 +35,9 @@ import "impl/ffi/arrays/spec_arrays.xi"
 import "impl/ffi/host/posix_host.xi"
 import "impl/ffi/diag/diagnostics.xi"
 
+// ── implementation layer: shared utilities ────────────────────────
+import "impl/strings.xi"
+
 // ── implementation layer: lexer ───────────────────────────────────
 import "impl/lexer/scanner.xi"
 import "impl/lexer/xi_lexer.xi"

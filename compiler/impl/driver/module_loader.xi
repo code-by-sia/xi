@@ -121,11 +121,11 @@ class XiModuleLoader implements ModuleLoader {
 
     // A gathered ./modules file that is NOT library source (example/test/app).
     predicate isDepNonLib(path: String, rel: String) {
-        if not startsWith2(rel, "modules/") { return false }
+        if not rel.startsWith2("modules/") { return false }
         if containsSub(rel, "/examples/") or containsSub(rel, "/example/") { return true }
         if containsSub(rel, "/tests/") or containsSub(rel, "/test/") { return true }
         if containsSub(rel, "/.claude/") or containsSub(rel, "/build/") { return true }
-        if endsWith2(baseNameOf(rel), "_test.xi") { return true }
+        if baseNameOf(rel).endsWith2("_test.xi") { return true }
         if declaresEntryOrModule(path) { return true }
         return false
     }

@@ -32,13 +32,13 @@ mapper xnameToCtype(xname: String) -> String {
 // "Pair(" + aXtype + ")(" + bXtype + ")". Balanced parens let nested element
 // types (e.g. Pair<List_integer, List_integer> from partition/unzip) parse
 // unambiguously; the C representation is always the uniform xc_pair_t.
-predicate isPairXType(t: String) { return startsWith2(t, "Pair(") }
+predicate isPairXType(t: String) { return t.startsWith2("Pair(") }
 mapper pairXtype(a: String, b: String) -> String => "Pair(" + a + ")(" + b + ")"
 
 // Closure type encoding: "Fn(" + csv-of-param-xtypes + ")(" + ret-xtype + ")".
 // Balanced parens (group 0 = params, group 1 = return) reuse the Pair extractor,
 // so nested function/Pair types parse unambiguously; the C type is always xc_fn_t.
-predicate isFnXType(t: String) { return startsWith2(t, "Fn(") }
+predicate isFnXType(t: String) { return t.startsWith2("Fn(") }
 mapper fnXtype(paramsCsv: String, ret: String) -> String => "Fn(" + paramsCsv + ")(" + ret + ")"
 mapper fnParamsX(t: String) -> String => pairElem(t, 0)
 mapper fnRetX(t: String) -> String => pairElem(t, 1)
@@ -94,7 +94,7 @@ mapper xnameFromArrSuffix(suf: String) -> String {
 }
 
 // ── List<T> element-type helpers (xtype "List_<suffix>") ──────────
-predicate isListXType(typ: String) { return startsWith2(typ, "List_") }
+predicate isListXType(typ: String) { return typ.startsWith2("List_") }
 mapper listElemCtype(typ: String) -> String {
     return xnameToCtype(xnameFromArrSuffix(string_slice(typ, 5, string_len(typ))))
 }
@@ -103,7 +103,7 @@ mapper listElemXName(typ: String) -> String {
 }
 
 // ── Set<T> element-type helpers (xtype "Set_<suffix>") ──────────
-predicate isSetXType(typ: String) { return startsWith2(typ, "Set_") }
+predicate isSetXType(typ: String) { return typ.startsWith2("Set_") }
 mapper setElemCtype(typ: String) -> String {
     return xnameToCtype(xnameFromArrSuffix(string_slice(typ, 4, string_len(typ))))
 }
@@ -121,17 +121,17 @@ mapper strFlagFor(ctype: String) -> String {
 
 // ── Stack<T> / Queue<T> / SortedQueue<T> element helpers ──────────────────────
 // xtypes "Stack_<suf>" (6), "Queue_<suf>" (6), "SortedQueue_<suf>" (12).
-predicate isStackXType(typ: String) { return startsWith2(typ, "Stack_") }
+predicate isStackXType(typ: String) { return typ.startsWith2("Stack_") }
 mapper stackElemSuffix(typ: String) -> String { return string_slice(typ, 6, string_len(typ)) }
 mapper stackElemCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuffix(stackElemSuffix(typ))) }
 mapper stackElemXName(typ: String) -> String { return xnameFromArrSuffix(stackElemSuffix(typ)) }
 
-predicate isQueueXType(typ: String) { return startsWith2(typ, "Queue_") }
+predicate isQueueXType(typ: String) { return typ.startsWith2("Queue_") }
 mapper queueElemSuffix(typ: String) -> String { return string_slice(typ, 6, string_len(typ)) }
 mapper queueElemCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuffix(queueElemSuffix(typ))) }
 mapper queueElemXName(typ: String) -> String { return xnameFromArrSuffix(queueElemSuffix(typ)) }
 
-predicate isSortedQueueXType(typ: String) { return startsWith2(typ, "SortedQueue_") }
+predicate isSortedQueueXType(typ: String) { return typ.startsWith2("SortedQueue_") }
 mapper sqElemSuffix(typ: String) -> String { return string_slice(typ, 12, string_len(typ)) }
 mapper sqElemCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuffix(sqElemSuffix(typ))) }
 mapper sqElemXName(typ: String) -> String { return xnameFromArrSuffix(sqElemSuffix(typ)) }
@@ -146,12 +146,12 @@ mapper pqCmpKind(ec: String) -> String {
 
 // ── Future<T> helpers (async / await) ────────────────────────────────────────
 // xtype "Future_<suf>"; C type xc_Future_<suf>_t (== xc_Future_t).
-predicate isFutureXType(typ: String) { return startsWith2(typ, "Future_") }
+predicate isFutureXType(typ: String) { return typ.startsWith2("Future_") }
 mapper futureInnerSuffix(typ: String) -> String { return string_slice(typ, 7, string_len(typ)) }
 mapper futureInnerXName(typ: String) -> String { return xnameFromArrSuffix(futureInnerSuffix(typ)) }
 mapper futureInnerCtype(typ: String) -> String { return xnameToCtype(futureInnerXName(typ)) }
 // Is a C return type a Future (`xc_Future_<suf>_t`)?
-predicate isFutureCtype(ct: String) { return startsWith2(ct, "xc_Future_") }
+predicate isFutureCtype(ct: String) { return ct.startsWith2("xc_Future_") }
 // Inner C type of a Future C type: xc_Future_integer_t -> xc_integer_t.
 mapper futureCtypeInner(ct: String) -> String {
     let mid = string_slice(ct, 10, string_len(ct) - 2)   // strip "xc_Future_" .. "_t"
@@ -450,14 +450,14 @@ mapper hoistDelays(prog: Program, toks: Token[], tag: String, capNames: String[]
 
 // ── Map<K,V> key/value helpers (xtype "Map_<ksuf>_<vsuf>") ──────────
 // The key is always a primitive/String suffix, so its boundary is unambiguous.
-predicate isMapXType(typ: String) { return startsWith2(typ, "Map_") }
+predicate isMapXType(typ: String) { return typ.startsWith2("Map_") }
 mapper mapKeySuffix(typ: String) -> String {
     let rest = string_slice(typ, 4, string_len(typ))   // "<ksuf>_<vsuf>"
-    if startsWith2(rest, "integer_") { return "integer" }
-    if startsWith2(rest, "number_")  { return "number" }
-    if startsWith2(rest, "bool_")    { return "bool" }
-    if startsWith2(rest, "string_")  { return "string" }
-    if startsWith2(rest, "char_")    { return "char" }
+    if rest.startsWith2("integer_") { return "integer" }
+    if rest.startsWith2("number_")  { return "number" }
+    if rest.startsWith2("bool_")    { return "bool" }
+    if rest.startsWith2("string_")  { return "string" }
+    if rest.startsWith2("char_")    { return "char" }
     return ""
 }
 mapper mapValSuffix(typ: String) -> String {
@@ -469,19 +469,6 @@ mapper mapKeyCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuff
 mapper mapValCtype(typ: String) -> String { return xnameToCtype(xnameFromArrSuffix(mapValSuffix(typ))) }
 mapper mapValXName(typ: String) -> String { return xnameFromArrSuffix(mapValSuffix(typ)) }
 mapper mapKeyXName(typ: String) -> String { return xnameFromArrSuffix(mapKeySuffix(typ)) }
-
-predicate endsWith2(s: String, suffix: String) {
-    let sl = string_len(suffix)
-    let n = string_len(s)
-    if n < sl { return false }
-    return string_slice(s, n - sl, n) == suffix
-}
-
-predicate startsWith2(s: String, prefix: String) {
-    let pl = string_len(prefix)
-    if string_len(s) < pl { return false }
-    return string_slice(s, 0, pl) == prefix
-}
 
 // Primitive token kind -> C type (for type annotations in let statements)
 mapper primCtypeK(k: Integer) -> String {

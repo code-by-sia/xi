@@ -109,7 +109,7 @@ class JsonCodecs implements Codecs {
             let fname = string_slice(entry, 0, colon)
             let fct = string_slice(entry, colon + 1, string_len(entry))
             let key = "xc_string_from_cstr(\"" + fname + "\")"
-            if startsWith2(fct, "xc_arr_") {
+            if fct.startsWith2("xc_arr_") {
                 // array field -> a JSON array, element by element
                 let ec = arrElemCtype(fct)
                 let sx = int_to_string(i)

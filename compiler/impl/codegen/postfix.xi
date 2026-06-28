@@ -14,7 +14,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         // `key` is the receiver xtype, normalizing an array literal's `X[]` form to
         // the `arr_X` form array params/returns carry (and that the parser keys on).
         let extKey = typ
-        if endsWith2(typ, "[]") { extKey = "arr_" + string_slice(typ, 0, string_len(typ) - 2) }
+        if typ.endsWith2("[]") { extKey = "arr_" + string_slice(typ, 0, string_len(typ) - 2) }
         if (k == 107 or k == 129) and toks.kindAt(p + 2) == 100 and (ctx.prog).isFuncNameC(extKey + "__" + toks.textAt(p + 1)) {
             let ext = extKey + "__" + toks.textAt(p + 1)
             let al = genArgs(toks, p + 2, ctx)
@@ -337,7 +337,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if toks.kindAt(p) == 101 { p = p + 1 }   // ')'
                 } else {
                 let al = genArgs(toks, p + 2, ctx)
-                if startsWith2(typ, "atom:") {
+                if typ.startsWith2("atom:") {
                     let an = string_slice(typ, 5, string_len(typ))
                     if fld == "undo" {
                         // atom.undo(): revert to the previous state (no-op if none)
@@ -355,7 +355,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         typ = (ctx.prog).atomStateTypeName(an)
                     } }
                 } else {
-                if startsWith2(typ, "machinetype:") {
+                if typ.startsWith2("machinetype:") {
                     // Machine.start(...) -> xc_Machine__start(...)
                     let mmn = string_slice(typ, 12, string_len(typ))
                     code = "xc_" + mmn + "__" + fld + "(" + al.code + ")"
@@ -390,12 +390,12 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         if fld == "isTerminal" { typ = "Bool" }
                     }
                 } else {
-                if startsWith2(typ, "module:") and fld == "resolve" {
+                if typ.startsWith2("module:") and fld == "resolve" {
                     // Module.resolve(I) -> automatic interface resolver
                     code = "xc_resolve_" + al.firstRaw + "()"
                     typ = al.firstRaw
                 } else {
-                    if startsWith2(typ, "ns:") {
+                    if typ.startsWith2("ns:") {
                         let path = string_slice(typ, 3, string_len(typ)) + "." + fld
                         code = builtinForPath(path) + "(" + al.code + ")"
                         typ = ""
@@ -442,7 +442,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "body"   { code = "xstd_req_body("   + code + ")" }
                     typ = "String"
                 } else {
-                if startsWith2(typ, "atom:") {
+                if typ.startsWith2("atom:") {
                     // atom.current (or any field) -> the holder value
                     let an = string_slice(typ, 5, string_len(typ))
                     code = "__atom_" + an
@@ -452,10 +452,10 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     code = "xc_" + typ + "__state(" + code + ")"
                     typ = "String"
                 } else {
-                if startsWith2(typ, "ns:") {
+                if typ.startsWith2("ns:") {
                     typ = "ns:" + string_slice(typ, 3, string_len(typ)) + "." + fld
                 } else {
-                    if fld == "data" and startsWith2(typ, "arr_") {
+                    if fld == "data" and typ.startsWith2("arr_") {
                         // raw element pointer of an array fat pointer
                         code = code + ".data"
                         typ = "ptr:" + xnameFromArrSuffix(string_slice(typ, 4, string_len(typ)))
@@ -556,16 +556,16 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     let ie = genExpr(toks, p + 1, ctx)
                     let p2 = ie.pos
                     if toks.kindAt(p2) == 105 { p2 = p2 + 1 }
-                    if startsWith2(typ, "ptr:") {
+                    if typ.startsWith2("ptr:") {
                         // already a raw pointer (e.g. arr.data) — index directly
                         code = code + "[" + ie.code + "]"
                         typ = string_slice(typ, 4, string_len(typ))
                     } else {
-                        if startsWith2(typ, "arr_") {
+                        if typ.startsWith2("arr_") {
                             code = code + ".data[" + ie.code + "]"
                             typ = xnameFromArrSuffix(string_slice(typ, 4, string_len(typ)))
                         } else {
-                            if endsWith2(typ, "[]") {
+                            if typ.endsWith2("[]") {
                                 code = code + ".data[" + ie.code + "]"
                                 typ = string_slice(typ, 0, string_len(typ) - 2)
                             } else {
