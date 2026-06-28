@@ -304,7 +304,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
                  + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
                  + "        xc_pair_t* _pp" + u + " = (xc_pair_t*)xstd_list_at(" + sv + ", " + iv + "); xstd_list_push(" + la + ", _pp" + u + "->first); xstd_list_push(" + lb + ", _pp" + u + "->second); }\n"
                  + "      xc_pair_make(&" + la + ", sizeof(xc_List_t), &" + lb + ", sizeof(xc_List_t)); })"
-        return ExprRes { code: code, pos: q, xtyp: "List_" + aX.arrSuffixOf().pairXtype("List_" + bX.arrSuffixOf()) , owned: true }
+        return ExprRes { code: code, pos: q, xtyp: ("List_" + aX.arrSuffixOf()).pairXtype("List_" + bX.arrSuffixOf()) , owned: true }
     }
 
     if fld == "sum" {

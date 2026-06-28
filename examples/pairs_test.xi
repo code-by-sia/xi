@@ -16,3 +16,10 @@ test "partition by predicate" {
     assertEq(split.first.len(), 3)    // evens
     assertEq(split.second.len(), 3)   // odds
 }
+test "unzip recovers two columns as Pair<List,List>" {
+    // unzip yields a Pair of two Lists; `.first`/`.second` must resolve as
+    // Lists (regression: a precedence slip once typed the result as a List).
+    let cols = listOf("a", "b", "c").zip(listOf(1, 2, 3)).unzip
+    assertEq(cols.first.len(), 3)
+    assertEq(cols.second.len(), 3)
+}
