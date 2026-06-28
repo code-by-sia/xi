@@ -238,9 +238,12 @@ module.exports = grammar({
       /0x[0-9a-fA-F_]+/, /0b[01_]+/,
       /[0-9][0-9_]*(\.[0-9][0-9_]*)?([eE][+-]?[0-9]+)?/,
     )),
+    // A leading `$` marks an interpolated string ($"...${expr}..."); both the
+    // single- and triple-quoted forms accept it. Triple-quoted strings span
+    // multiple lines.
     string: _ => token(choice(
-      /"""[\s\S]*?"""/,
-      seq('"', repeat(choice(/[^"\\]/, /\\./)), '"'),
+      /\$?"""[\s\S]*?"""/,
+      seq(optional('$'), '"', repeat(choice(/[^"\\]/, /\\./)), '"'),
     )),
     char: _ => token(seq("'", choice(/[^'\\]/, /\\./), "'")),
     boolean: _ => choice('true', 'false'),

@@ -44,6 +44,12 @@ syn match xNumber "\<0b[01]\+\>"
 syn match xNumber "\<\d\+\(\.\d\+\)\=\([eE][+-]\=\d\+\)\=\>"
 
 syn match  xEscape "\\." contained
+" interpolation hole ${ expr } — highlighted inside $"..." / $"""..."""
+syn region xInterp matchgroup=xInterpDelim start="${" end="}" contained contains=xNumber,xBoolean,xConstant,xOperator,xFunction,xType,xKeyword,xBuiltin,xString
+" interpolated strings (opt-in `$` prefix)
+syn region xString start=+\$"""+ end=+"""+ keepend contains=xInterp
+syn region xString start=+\$"+ skip=+\\"+ end=+"+ keepend contains=xEscape,xInterp
+" plain strings (never interpolated)
 syn region xString start=+"""+ end=+"""+ keepend
 syn region xString start=+"+ skip=+\\"+ end=+"+ contains=xEscape
 syn match  xChar   "'\(\\.\|[^']\)'"
@@ -67,6 +73,7 @@ hi def link xFunction     Function
 hi def link xNumber       Number
 hi def link xString       String
 hi def link xEscape       SpecialChar
+hi def link xInterpDelim  PreProc
 hi def link xChar         Character
 hi def link xLineComment  Comment
 hi def link xBlockComment Comment

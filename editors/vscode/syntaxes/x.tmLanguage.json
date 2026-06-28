@@ -25,9 +25,28 @@
     "strings": {
       "patterns": [
         {
+          "comment": "Interpolated triple-quoted string: $\"\"\" ... ${expr} ... \"\"\"",
+          "name": "string.quoted.triple.interpolated.x",
+          "begin": "\\$\"\"\"",
+          "end": "\"\"\"",
+          "patterns": [
+            { "include": "#interpolation" }
+          ]
+        },
+        {
           "name": "string.quoted.triple.x",
           "begin": "\"\"\"",
           "end": "\"\"\""
+        },
+        {
+          "comment": "Interpolated string: $\" ... ${expr} ... \"",
+          "name": "string.quoted.double.interpolated.x",
+          "begin": "\\$\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.x", "match": "\\\\." },
+            { "include": "#interpolation" }
+          ]
         },
         {
           "name": "string.quoted.double.x",
@@ -35,6 +54,25 @@
           "end": "\"",
           "patterns": [
             { "name": "constant.character.escape.x", "match": "\\\\." }
+          ]
+        }
+      ]
+    },
+    "interpolation": {
+      "patterns": [
+        {
+          "comment": "${ expr } hole — the expression is highlighted as code",
+          "name": "meta.interpolation.x",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.template-expression.begin.x" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.template-expression.end.x" }
+          },
+          "patterns": [
+            { "include": "$self" }
           ]
         }
       ]
@@ -50,8 +88,8 @@
     "declarations": {
       "patterns": [
         {
-          "comment": "Function kinds, optionally async, capturing the name",
-          "match": "\\b(async\\s+)?(mapper|projector|predicate|consumer|producer|reducer|creator|decision|entry)\\b\\s*(?:\\{[^}]*\\}\\s*)?([A-Za-z_][A-Za-z0-9_]*)?",
+          "comment": "Function kinds, optionally async, capturing the name (incl. extension receiver, e.g. Type.method and Type[].method)",
+          "match": "\\b(async\\s+)?(mapper|projector|predicate|consumer|producer|reducer|creator|decision|entry)\\b\\s*(?:\\{[^}]*\\}\\s*)?([A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?(?:\\.[A-Za-z_][A-Za-z0-9_]*)?)?",
           "captures": {
             "1": { "name": "storage.modifier.x" },
             "2": { "name": "storage.type.function.x" },

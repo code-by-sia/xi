@@ -1,4 +1,5 @@
 {
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json",
   "name": "x",
   "word": "identifier",
   "rules": {
@@ -955,6 +956,18 @@
         {
           "type": "STRING",
           "value": "reducer"
+        },
+        {
+          "type": "STRING",
+          "value": "action"
+        },
+        {
+          "type": "STRING",
+          "value": "decision"
+        },
+        {
+          "type": "STRING",
+          "value": "listener"
         }
       ]
     },
@@ -3123,11 +3136,23 @@
         "members": [
           {
             "type": "PATTERN",
-            "value": "\"\"\"[\\s\\S]*?\"\"\""
+            "value": "\\$?\"\"\"[\\s\\S]*?\"\"\""
           },
           {
             "type": "SEQ",
             "members": [
+              {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": "$"
+                  },
+                  {
+                    "type": "BLANK"
+                  }
+                ]
+              },
               {
                 "type": "STRING",
                 "value": "\""
@@ -3271,5 +3296,6 @@
   "precedences": [],
   "externals": [],
   "inline": [],
-  "supertypes": []
+  "supertypes": [],
+  "reserved": {}
 }
