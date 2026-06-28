@@ -17,3 +17,14 @@ predicate String.endsWith2(suffix: String) {
     if n < sl { return false }
     return string_slice(this, n - sl, n) == suffix
 }
+
+// Membership test over a String[] — `names.includes(x)`. Lets a long run of
+// `if x == "a" { return true } ...` collapse to a single set-style query.
+predicate String[].includes(s: String) {
+    let i = 0
+    while i < this.len {
+        if this.data[i] == s { return true }
+        i = i + 1
+    }
+    return false
+}

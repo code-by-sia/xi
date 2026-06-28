@@ -61,12 +61,8 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
 
 // Value-showing assertion helpers usable in `test` bodies (and anywhere).
 predicate isAssertHelper(name: String) {
-    if name == "assertEq"    { return true }
-    if name == "assertNe"    { return true }
-    if name == "assertClose" { return true }
-    if name == "assertOk"    { return true }
-    if name == "assertErr"   { return true }
-    return false
+    let names = ["assertEq", "assertNe", "assertClose", "assertOk", "assertErr"]
+    return names.includes(name)
 }
 mapper genAssertHelper(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     let name = toks.textAt(pos)

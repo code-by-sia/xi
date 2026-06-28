@@ -10,6 +10,7 @@
 //   repl/xi_repl.xi   the XiRepl implementation
 // =============================================================
 
+import "impl/strings.xi"
 import "repl/runner.xi"
 import "repl/repl.xi"
 import "repl/xi_repl.xi"

@@ -512,65 +512,19 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
 // ── functional API on List<T> (lambdas inlined as generated loops) ─────────
 // Method names that take a `{ lambda }` (and maybe a leading `(arg)`).
 predicate isListFunc(fld: String) {
-    if fld == "map"      { return true }
-    if fld == "filter"   { return true }
-    if fld == "filterNot"{ return true }
-    if fld == "partition"{ return true }
-    if fld == "zip"      { return true }
-    if fld == "unzip"    { return true }
-    if fld == "forEach"  { return true }
-    if fld == "fold"     { return true }
-    if fld == "reduce"   { return true }
-    if fld == "count"    { return true }
-    if fld == "any"      { return true }
-    if fld == "all"      { return true }
-    if fld == "none"     { return true }
-    if fld == "sumOf"    { return true }
-    if fld == "joinToString" { return true }
-    if fld == "mapIndexed" { return true }
-    if fld == "takeWhile" { return true }
-    if fld == "dropWhile" { return true }
-    if fld == "flatMap"  { return true }
-    if fld == "take"     { return true }
-    if fld == "drop"     { return true }
-    if fld == "reversed" { return true }
-    if fld == "distinct" { return true }
-    if fld == "first"    { return true }
-    if fld == "last"     { return true }
-    if fld == "toSet"    { return true }
-    if fld == "find"     { return true }
-    if fld == "firstOrNone" { return true }
-    if fld == "lastOrNone"  { return true }
-    if fld == "maxByOrNone" { return true }
-    if fld == "minByOrNone" { return true }
-    if fld == "average"  { return true }
-    if fld == "sorted"   { return true }
-    if fld == "sortedDescending" { return true }
-    if fld == "sortedBy" { return true }
-    if fld == "sortedByDescending" { return true }
-    if fld == "groupBy"  { return true }
-    if fld == "associateBy" { return true }
-    if fld == "associateWith" { return true }
-    if fld == "chunked"  { return true }
-    if fld == "windowed" { return true }
-    if fld == "sum"      { return true }
-    if fld == "min"      { return true }
-    if fld == "max"      { return true }
-    if fld == "minOrNone" { return true }
-    if fld == "maxOrNone" { return true }
-    if fld == "contains" { return true }
-    if fld == "indexOf"  { return true }
-    if fld == "toList"   { return true }
-    if fld == "withIndex" { return true }
-    if fld == "flatten"  { return true }
-    if fld == "single"   { return true }
-    if fld == "singleOrNone" { return true }
-    if fld == "onEach"   { return true }
-    if fld == "maxOf"    { return true }
-    if fld == "minOf"    { return true }
-    if fld == "scan"     { return true }
-    if fld == "runningFold" { return true }
-    return false
+    let names = [
+        "map", "filter", "filterNot", "partition", "zip", "unzip", "forEach",
+        "fold", "reduce", "count", "any", "all", "none", "sumOf", "joinToString",
+        "mapIndexed", "takeWhile", "dropWhile", "flatMap", "take", "drop",
+        "reversed", "distinct", "first", "last", "toSet", "find", "firstOrNone",
+        "lastOrNone", "maxByOrNone", "minByOrNone", "average", "sorted",
+        "sortedDescending", "sortedBy", "sortedByDescending", "groupBy",
+        "associateBy", "associateWith", "chunked", "windowed", "sum", "min",
+        "max", "minOrNone", "maxOrNone", "contains", "indexOf", "toList",
+        "withIndex", "flatten", "single", "singleOrNone", "onEach", "maxOf",
+        "minOf", "scan", "runningFold"
+    ]
+    return names.includes(fld)
 }
 // index of the top-level `=>` (kind 110) within (start, close), or -1.
 mapper lambdaArrow(toks: Token[], start: Integer, close: Integer) -> Integer {

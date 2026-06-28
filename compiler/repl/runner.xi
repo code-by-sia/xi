@@ -53,22 +53,12 @@ predicate isBlank(s: String) {
 }
 
 predicate isDeclLine(s: String) {
-    let w = firstWord(s)
-    if w == "type"       { return true }
-    if w == "interface"  { return true }
-    if w == "class"      { return true }
-    if w == "mapper"     { return true }
-    if w == "projector"  { return true }
-    if w == "predicate"  { return true }
-    if w == "consumer"   { return true }
-    if w == "producer"   { return true }
-    if w == "reducer"    { return true }
-    if w == "creator"    { return true }
-    if w == "module"     { return true }
-    if w == "extern"     { return true }
-    if w == "import"     { return true }
-    if w == "namespace"  { return true }
-    return false
+    let kws = [
+        "type", "interface", "class", "mapper", "projector", "predicate",
+        "consumer", "producer", "reducer", "creator", "module", "extern",
+        "import", "namespace"
+    ]
+    return kws.includes(firstWord(s))
 }
 
 mapper stripExt(path: String) -> String {
