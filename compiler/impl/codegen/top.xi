@@ -1,6 +1,6 @@
 // The source file path, so `assert` failures can report file:line.
 mapper genSrcFileDef(srcPath: String) -> String {
-    return "const char* xc_src_file = \"" + cEscape(srcPath) + "\";\n"
+    return "const char* xc_src_file = \"" + srcPath.cEscape() + "\";\n"
 }
 
 // `xi test` (XC_TEST=1) replaces the entry with a runner over the `test` cases:
@@ -17,7 +17,7 @@ mapper genTestRunner(prog: Program, srcPath: String) -> String {
         out = out + hoistLambdas(prog, t.bodyTokens, "test" + int_to_string(i))
         out = out + "static void xc_test_body_" + int_to_string(i) + "(void) {\n"
         out = out + funcDepPrologue(prog, t.fnDeps)
-        let ctx = (seedFuncDeps(mkGCtx(prog), t.fnDeps)).withTag("test" + int_to_string(i))
+        let ctx = (seedFuncDeps(prog.newCtx(), t.fnDeps)).withTag("test" + int_to_string(i))
         out = out + genBody2(t.bodyTokens, ctx)
         out = out + "}\n"
         i = i + 1
@@ -29,7 +29,7 @@ mapper genTestRunner(prog: Program, srcPath: String) -> String {
     let j = 0
     while j < n {
         let t = funcSpecGet(prog.tests, j)
-        out = out + "    xc_test_run(\"" + cEscape(t.name) + "\", xc_test_body_" + int_to_string(j) + ");\n"
+        out = out + "    xc_test_run(\"" + t.name.cEscape() + "\", xc_test_body_" + int_to_string(j) + ");\n"
         j = j + 1
     }
     out = out + "    return xc_test_summary();\n"
@@ -57,7 +57,7 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
     out = out + "    xc_args.data = (xc_string_t*)malloc(argc * sizeof(xc_string_t));\n"
     out = out + "    for (int i = 0; i < argc; i++) xc_args.data[i] = xc_string_from_cstr(argv[i]);\n"
     out = out + funcDepPrologue(prog, es.fnDeps)
-    let ctx = ((seedFuncDeps(mkGCtx(prog), es.fnDeps)).withTag("entry")).withCaps(capN, capX)
+    let ctx = ((seedFuncDeps(prog.newCtx(), es.fnDeps)).withTag("entry")).withCaps(capN, capX)
     if string_len(es.params) > 0 {
         let pname = lastWord(es.params)
         out = out + "    xc_arr_string_t " + pname + " = xc_args;\n"
@@ -76,7 +76,7 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
                 let everyMs = string_slice(job.topic, 6, string_len(job.topic))
                 out = out + "    xstd_sched_register_interval((void(*)(void))xc_" + job.name + ", " + everyMs + ");\n"
             } else {
-                out = out + "    xstd_sched_register((void(*)(void))xc_" + job.name + ", \"" + cEscape(job.topic) + "\");\n"
+                out = out + "    xstd_sched_register((void(*)(void))xc_" + job.name + ", \"" + job.topic.cEscape() + "\");\n"
             }
             s = s + 1
         }
@@ -260,7 +260,7 @@ mapper genAtomDefs(prog: Program) -> String {
     let k = 0
     while k < n {
         let a = atomSpecGet(prog.atoms, k)
-        let e = genExpr(a.initToks, 0, mkGCtx(prog))
+        let e = genExpr(a.initToks, 0, prog.newCtx())
         out = out + "    __atom_" + a.name + " = " + e.code + ";\n"
         k = k + 1
     }
@@ -275,9 +275,9 @@ mapper machineSig(params: String) -> String {
 
 // The legality condition for a transition: source-state match (&& guard).
 mapper machineCond(prog: Program, m: MachineSpec, tr: MachineTransition) -> String {
-    let cond = machineStateCond(m, tr.froms)
+    let cond = m.stateCond(tr.froms)
     if tr.hasGuard {
-        let gctx = seedParams(mkGCtx(prog), tr.params)
+        let gctx = seedParams(prog.newCtx(), tr.params)
         if m.hasData { gctx = gctx.addSym("data", m.name + "Data") }
         cond = "(" + cond + ") && (" + genExpr(tr.guardTokens, 0, gctx).code + ")"
     }
@@ -321,18 +321,18 @@ mapper genMachineDefs(prog: Program) -> String {
         let mn = m.name
         // start(): initial state + data initial values
         out = out + "static xc_" + mn + "_t xc_" + mn + "__start(void) {\n"
-            + "    xc_" + mn + "_t __r; __r.__state = " + int_to_string(machineStateIndex(m, m.initial)) + ";\n"
+            + "    xc_" + mn + "_t __r; __r.__state = " + int_to_string(m.stateIndex(m.initial)) + ";\n"
         if m.hasData {
             let di = m.dataInit
             let dp = 0
-            let ictx = mkGCtx(prog)
+            let ictx = prog.newCtx()
             while di.kindAt(dp) != 0 {
                 let fname = di.textAt(dp)
                 dp = dp + 1
                 if di.kindAt(dp) == 111 { dp = dp + 1 }   // =
                 let e = genExpr(di, dp, ictx)
                 dp = e.pos
-                out = out + "    __r.data." + fname + " = " + castEmptyArr(m, fname, e) + ";\n"
+                out = out + "    __r.data." + fname + " = " + m.castEmptyArr(fname, e) + ";\n"
                 if di.kindAt(dp) == 106 { dp = dp + 1 }   // ,
             }
         }
@@ -356,7 +356,7 @@ mapper genMachineDefs(prog: Program) -> String {
             ti = ti + 1
         }
         let tcond = "0"
-        if string_len(tcsv) > 0 { tcond = machineStateCond(m, tcsv) }
+        if string_len(tcsv) > 0 { tcond = m.stateCond(tcsv) }
         out = out + "static xc_bool_t xc_" + mn + "__isTerminal(xc_" + mn + "_t self) { return " + tcond + "; }\n"
         // a data-local declaration reused by guard/update bodies
         let dataLocal = ""
@@ -367,13 +367,13 @@ mapper genMachineDefs(prog: Program) -> String {
             let tr = machineTransGet(m.transitions, j)
             let sig = machineSig(tr.params)
             let cond = machineCond(prog, m, tr)
-            let toIdx = int_to_string(machineStateIndex(m, tr.toState))
+            let toIdx = int_to_string(m.stateIndex(tr.toState))
             // update assignments (over the OLD data local; written to __r.data)
             let upd = ""
             if tr.hasUpdate {
                 let ut = tr.updateTokens
                 let up = 0
-                let uctx = seedParams(mkGCtx(prog), tr.params)
+                let uctx = seedParams(prog.newCtx(), tr.params)
                 if m.hasData { uctx = uctx.addSym("data", mn + "Data") }
                 while ut.kindAt(up) != 0 {
                     let fname = ut.textAt(up)
@@ -381,7 +381,7 @@ mapper genMachineDefs(prog: Program) -> String {
                     if ut.kindAt(up) == 108 { up = up + 1 }   // :
                     let e = genExpr(ut, up, uctx)
                     up = e.pos
-                    upd = upd + "        __r.data." + fname + " = " + castEmptyArr(m, fname, e) + ";\n"
+                    upd = upd + "        __r.data." + fname + " = " + m.castEmptyArr(fname, e) + ";\n"
                     if ut.kindAt(up) == 106 { up = up + 1 }   // ,
                 }
             }
@@ -435,7 +435,7 @@ mapper genBuildMeta(prog: Program) -> String {
 
 mapper genAll(prog: Program, srcPath: String, codecs: Codecs) -> String {
     let tail = genEntry(prog, srcPath)
-    if inTestMode() and funcSpecLen(prog.tests) > 0 { tail = genTestRunner(prog, srcPath) }
+    if prog.inTestMode() and funcSpecLen(prog.tests) > 0 { tail = genTestRunner(prog, srcPath) }
     return genHeader()
          + genBuildMeta(prog)
          + genInterruptDefs(prog)

@@ -10,13 +10,13 @@ consumer checkMachines(prog: Program) {
     while mi < mn {
         let m = machineSpecGet(prog.machines, mi)
         let trn = machineTransLen(m.transitions)
-        if machineStateIndex(m, m.initial) < 0 {
+        if m.stateIndex(m.initial) < 0 {
             diag_error(0, "machine " + m.name + ": initial state '" + m.initial + "' is not declared")
         }
         let ti = 0
         while ti < stringArrLen(m.terminals) {
             let tnm = stringArrGet(m.terminals, ti)
-            if machineStateIndex(m, tnm) < 0 {
+            if m.stateIndex(tnm) < 0 {
                 diag_error(0, "machine " + m.name + ": terminal '" + tnm + "' is not declared")
             }
             ti = ti + 1
@@ -25,7 +25,7 @@ consumer checkMachines(prog: Program) {
         let k = 0
         while k < trn {
             let tr = machineTransGet(m.transitions, k)
-            if machineStateIndex(m, tr.toState) < 0 {
+            if m.stateIndex(tr.toState) < 0 {
                 diag_error(0, "machine " + m.name + ": transition '" + tr.name + "' targets unknown state '" + tr.toState + "'")
             }
             let fcsv = tr.froms
@@ -37,7 +37,7 @@ consumer checkMachines(prog: Program) {
                 if not isSep { if string_char_at(fcsv, i) == 44 { isSep = true } }
                 if isSep {
                     let nm = string_slice(fcsv, start, i)
-                    if string_len(nm) > 0 and machineStateIndex(m, nm) < 0 {
+                    if string_len(nm) > 0 and m.stateIndex(nm) < 0 {
                         diag_error(0, "machine " + m.name + ": transition '" + tr.name + "' from unknown state '" + nm + "'")
                     }
                     start = i + 1
@@ -88,7 +88,7 @@ consumer checkMachines(prog: Program) {
                 let hasOut = false
                 let t2 = 0
                 while t2 < trn {
-                    if csvHasState(machineTransGet(m.transitions, t2).froms, st) { hasOut = true }
+                    if machineTransGet(m.transitions, t2).froms.csvHasState(st) { hasOut = true }
                     t2 = t2 + 1
                 }
                 if not hasOut {

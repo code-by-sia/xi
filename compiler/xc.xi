@@ -52,6 +52,11 @@ import "impl/parser/xi_parser.xi"
 
 // ── implementation layer: codegen ─────────────────────────────────
 import "impl/codegen/core.xi"
+import "impl/codegen/gen_context.xi"
+import "impl/codegen/program_query.xi"
+import "impl/codegen/sumtypes.xi"
+import "impl/codegen/machines.xi"
+import "impl/codegen/feature_detect.xi"
 import "impl/codegen/checks.xi"
 import "impl/codegen/xtype.xi"
 import "impl/codegen/expr.xi"

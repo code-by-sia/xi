@@ -501,7 +501,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     let cargs = "(" + bname + ").env"
                     if string_len(al.code) > 0 { cargs = cargs + ", " + al.code }
                     code = "((" + sig + ")(" + bname + ").fn)(" + cargs + ")"
-                    typ = ctypeToXName(rc)
+                    typ = rc.ctypeToXName()
                 } else {
                 if bname == "ok" {
                     // ok(x) -> build the enclosing function's Result with .ok=true

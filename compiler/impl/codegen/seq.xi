@@ -29,7 +29,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         let fld = toks.textAt(q + 1)
         if fld == "map" or fld == "filter" or fld == "filterNot" or fld == "takeWhile" or fld == "dropWhile" {
             let bo = q + 2
-            let close = matchBrace(toks, bo)
+            let close = toks.matchBrace(bo)
             let arrow = lambdaArrow(toks, bo + 1, close)
             let param = "it"
             let bstart = bo + 1
@@ -87,7 +87,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         return ExprRes { code: code, pos: q + 4, xtyp: tx , owned: false }
     }
     if tf == "forEach" {
-        let bo = q + 2  let close = matchBrace(toks, bo)
+        let bo = q + 2  let close = toks.matchBrace(bo)
         let arrow = lambdaArrow(toks, bo + 1, close)
         let param = "it"  let bstart = bo + 1
         if arrow >= 0 { param = toks.textAt(bo + 1)  bstart = arrow + 1 }
@@ -99,7 +99,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         let ae = genExpr(toks, q + 3, ctx)  let seed = ae.code  let accX = ae.xtyp
         let qq = ae.pos
         if toks.kindAt(qq) == 101 { qq = qq + 1 }
-        let bo = qq  let close = matchBrace(toks, bo)
+        let bo = qq  let close = toks.matchBrace(bo)
         let arrow = lambdaArrow(toks, bo + 1, close)
         let pa = "acc"  let px = "x"  let bstart = bo + 1
         if arrow >= 0 {
@@ -122,7 +122,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         return ExprRes { code: code, pos: q + 4, xtyp: curX , owned: false }
     }
     if tf == "any" or tf == "all" {
-        let bo = q + 2  let close = matchBrace(toks, bo)
+        let bo = q + 2  let close = toks.matchBrace(bo)
         let arrow = lambdaArrow(toks, bo + 1, close)
         let param = "it"  let bstart = bo + 1
         if arrow >= 0 { param = toks.textAt(bo + 1)  bstart = arrow + 1 }
@@ -389,7 +389,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     }
 
     // ── lambda methods:  { [params =>] body } ──
-    let close = matchBrace(toks, q)
+    let close = toks.matchBrace(q)
     let arrow = lambdaArrow(toks, q + 1, close)
     let p0 = "it"
     let p1 = ""

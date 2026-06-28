@@ -27,7 +27,7 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         if toks.kindAt(p2) == 111 { p2 = p2 + 1 }
         let e = genExpr(toks, p2, ctx)
         let pe = e.pos
-        let close = matchBrace(toks, pe)
+        let close = toks.matchBrace(pe)
         // infer the unwrapped element's xtype from an "opt_<suffix>" optional
         let nmType = ""
         if startsWith2(e.xtyp, "opt_") { nmType = xnameFromArrSuffix(string_slice(e.xtyp, 4, string_len(e.xtyp))) }
@@ -38,7 +38,7 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     }
     let c = genExpr(toks, p, ctx)
     let pc = c.pos
-    let close = matchBrace(toks, pc)
+    let close = toks.matchBrace(pc)
     let body = genStmts(toks, pc + 1, close, ctx)
     let code = "    if (" + c.code + ") {\n" + body + "    }"
     let np = close + 1
@@ -48,7 +48,7 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             code = code + " else " + inner.code
             np = inner.pos
         } else {
-            let eclose = matchBrace(toks, np + 1)
+            let eclose = toks.matchBrace(np + 1)
             let ebody = genStmts(toks, np + 2, eclose, ctx)
             code = code + " else {\n" + ebody + "    }\n"
             np = eclose + 1
@@ -152,12 +152,12 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     }
     if k == 247 {
         let c = genExpr(toks, pos + 1, ctx)
-        let close = matchBrace(toks, c.pos)
+        let close = toks.matchBrace(c.pos)
         let body = genStmts(toks, c.pos + 1, close, ctx)
         return StmtRes { code: "    while (" + c.code + ") {\n" + body + "    }\n", ctx: ctx, pos: close + 1 }
     }
     if k == 248 {
-        let close = matchBrace(toks, pos + 1)
+        let close = toks.matchBrace(pos + 1)
         let body = genStmts(toks, pos + 2, close, ctx)
         return StmtRes { code: "    for(;;) {\n" + body + "    }\n", ctx: ctx, pos: close + 1 }
     }
@@ -166,7 +166,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     // out of a scope block (it would skip the arena restore); values that must
     // outlive the scope must be copied out.
     if k == 211 {
-        let close = matchBrace(toks, pos + 1)
+        let close = toks.matchBrace(pos + 1)
         let body = genStmts(toks, pos + 2, close, ctx)
         let code = "    { void* _sc = xc_scope_enter();\n" + body + "      xc_scope_leave(_sc); }\n"
         return StmtRes { code: code, ctx: ctx, pos: close + 1 }
@@ -178,7 +178,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let p = pos + 2
         if toks.kindAt(p) == 229 { p = p + 1 }
         let it = genExpr(toks, p, ctx)
-        let close = matchBrace(toks, it.pos)
+        let close = toks.matchBrace(it.pos)
         let idv = "_i" + int_to_string(pos)
         let itv = "_it" + int_to_string(pos)
         if isListXType(it.xtyp) {
@@ -223,12 +223,12 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         return StmtRes { code: code, ctx: ctx, pos: close + 1 }
     }
     if k == 211 {
-        let close = matchBrace(toks, pos + 2)
+        let close = toks.matchBrace(pos + 2)
         let body = genStmts(toks, pos + 3, close, ctx)
         return StmtRes { code: "    {\n" + body + "    }\n", ctx: ctx, pos: close + 1 }
     }
     if k == 234 {
-        let close = matchBrace(toks, pos + 1)
+        let close = toks.matchBrace(pos + 1)
         let body = genStmts(toks, pos + 2, close, ctx)
         return StmtRes { code: "    {\n" + body + "    }\n", ctx: ctx, pos: close + 1 }
     }
@@ -256,11 +256,11 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let p = e.pos
         if toks.kindAt(p) == 108 {                       // `:` — custom message
             let msg = toks.textAt(p + 1)
-            let code = "    xc_assert_msg((" + e.code + "), \"" + cEscape(txt) + "\", \"" + cEscape(msg)
+            let code = "    xc_assert_msg((" + e.code + "), \"" + txt.cEscape() + "\", \"" + msg.cEscape()
                      + "\", xc_src_file, " + line + "LL);\n"
             return StmtRes { code: code, ctx: ctx, pos: p + 2 }
         }
-        let code = "    xc_assert((" + e.code + "), \"" + cEscape(txt) + "\", xc_src_file, "
+        let code = "    xc_assert((" + e.code + "), \"" + txt.cEscape() + "\", xc_src_file, "
                  + line + "LL);\n"
         return StmtRes { code: code, ctx: ctx, pos: e.pos }
     }
@@ -375,7 +375,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         }
         let bodyCode = ""
         if toks.kindAt(p) == 102 {
-            let close = matchBrace(toks, p)
+            let close = toks.matchBrace(p)
             bodyCode = genStmts(toks, p + 1, close, bctx)
             p = close + 1
         } else {
@@ -425,7 +425,7 @@ mapper genSignal(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     let typeName = toks.textAt(pos + 1)
     let e = genExpr(toks, pos + 1, ctx)         // parses `T { ... }` (type literal)
     let recOpen = e.pos + 1                      // after `recover`
-    let recClose = matchBrace(toks, recOpen)
+    let recClose = toks.matchBrace(recOpen)
     let recBody = genStmts(toks, recOpen + 1, recClose, ctx)
     let pl = "__pl" + int_to_string(pos)
     let hh = "__hh" + int_to_string(pos)
@@ -446,12 +446,12 @@ mapper genSignal(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
 // run the body; the catch body is compiled separately (see hoistCatches).
 mapper genTry(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
     let bodyOpen = pos + 1
-    let bodyClose = matchBrace(toks, bodyOpen)
+    let bodyClose = toks.matchBrace(bodyOpen)
     let body = genStmts(toks, bodyOpen + 1, bodyClose, ctx)
     let cp = bodyClose + 1                       // `catch`
     let typeName = toks.textAt(cp + 3)           // catch e : T
     let catchOpen = cp + 4
-    let catchClose = matchBrace(toks, catchOpen)
+    let catchClose = toks.matchBrace(catchOpen)
     let hname = "xc_catch_" + ctx.fnTag + "_" + int_to_string(cp)
     let hv = "__h" + int_to_string(pos)
     let code = "    {\n"
@@ -476,14 +476,14 @@ mapper hoistCatches(prog: Program, toks: Token[], tag: String) -> String {
     let i = 0
     while i < n {
         if toks.kindAt(i) == 283 {              // try
-            let bodyClose = matchBrace(toks, i + 1)
+            let bodyClose = toks.matchBrace(i + 1)
             let cp = bodyClose + 1               // catch
             if toks.kindAt(cp) == 284 {
                 let varName = toks.textAt(cp + 1)
                 let typeName = toks.textAt(cp + 3)
                 let catchOpen = cp + 4
-                let catchClose = matchBrace(toks, catchOpen)
-                let bctx = ((mkGCtx(prog)).addSym(varName, typeName)).withTag(tag)
+                let catchClose = toks.matchBrace(catchOpen)
+                let bctx = ((prog.newCtx()).addSym(varName, typeName)).withTag(tag)
                 let cbody = genStmts(toks, catchOpen + 1, catchClose, bctx)
                 let hname = "xc_catch_" + tag + "_" + int_to_string(cp)
                 out = out + "static int " + hname + "(void* __pp) {\n"
@@ -518,7 +518,7 @@ mapper parseParallelAt(toks: Token[], pos: Integer) -> ParallelParse {
         if toks.kindAt(p) == 101 { p = p + 1 }   // )
     }
     // p is now at the body `{`
-    let close = matchBrace(toks, p)
+    let close = toks.matchBrace(p)
     return ParallelParse { caps: caps, bodyStart: p + 1, bodyEnd: close, endPos: close + 1 }
 }
 
@@ -550,7 +550,7 @@ mapper hoistParallel(prog: Program, toks: Token[], tag: String) -> String {
             }
             // thread body
             out = out + "static void* xc_par_" + id + "(void* __a) {\n"
-            let bctx = ((mkGCtx(prog)).withRet("void")).withTag(id)
+            let bctx = ((prog.newCtx()).withRet("void")).withTag(id)
             if nc > 0 {
                 out = out + "    xc_parenv_" + id + "_t* __e = (xc_parenv_" + id + "_t*)__a;\n"
                 let c = 0

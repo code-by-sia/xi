@@ -328,7 +328,7 @@ mapper buildCapXTypes(params: String, dlist: DepSpec[]) -> String[] {
             let seg = string_slice(params, start, i)
             if string_len(seg) > 0 {
                 let ct = segCtypeSpace(seg)
-                out = appendString(out, ctypeToXName(string_slice(ct, 0, string_len(ct) - 1)))
+                out = appendString(out, string_slice(ct, 0, string_len(ct) - 1).ctypeToXName())
             }
             start = i + 1
         }
@@ -389,7 +389,7 @@ mapper parseDelayAt(toks: Token[], pos: Integer) -> DelayParse {
     }
     let msEnd = p                                // the `)`
     let bo = p + 1                               // the body `{`
-    let close = matchBrace(toks, bo)
+    let close = toks.matchBrace(bo)
     return DelayParse { msStart: msStart, msEnd: msEnd, bodyStart: bo + 1, bodyEnd: close, endPos: close + 1 }
 }
 
@@ -416,7 +416,7 @@ mapper hoistDelays(prog: Program, toks: Token[], tag: String, capNames: String[]
             out = out + "static void* xc_delaythunk_" + id + "(void* __a) {\n"
             out = out + "    xc_delayenv_" + id + "_t* __e = (xc_delayenv_" + id + "_t*)__a;\n"
             out = out + "    xstd_sleep_ms(__e->__ms);\n"
-            let bctx = ((mkGCtx(prog)).withRet("void")).withTag(id)
+            let bctx = ((prog.newCtx()).withRet("void")).withTag(id)
             c = 0
             while c < nc {
                 let nm = stringArrGet(caps.names, c)
@@ -555,7 +555,7 @@ mapper addParamSym(ctx: GCtx, seg: String) -> GCtx {
     if lastSp < 0 { return ctx }
     let ctype = string_slice(seg, s, lastSp)
     let name  = string_slice(seg, lastSp + 1, n)
-    return ctx.addSym(name, (ctx.prog).resolveX(ctypeToXName(ctype)))
+    return ctx.addSym(name, (ctx.prog).resolveX(ctype.ctypeToXName()))
 }
 
 mapper seedParams(ctx: GCtx, cparams: String) -> GCtx {

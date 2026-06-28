@@ -97,7 +97,7 @@ mapper sumBody(ts: TypeSpec) -> String {
             let vname = string_slice(v, 0, bar)
             let fstr = string_slice(v, bar + 1, string_len(v))
             if string_len(fstr) > 0 {
-                out = out + "        struct { " + sumFieldsToC(fstr) + "} " + vname + ";\n"
+                out = out + "        struct { " + fstr.sumFieldsToC() + "} " + vname + ";\n"
             }
             vi = vi + 1
         }
@@ -188,7 +188,7 @@ mapper genIfaceDefaults(prog: Program) -> String {
                 out = out + "static " + ms.retCtype + " xc_" + is2.name + "_" + ms.name + "_default_impl(void* self_ptr" + pstr + ") {\n"
                 out = out + "    (void)self_ptr;\n"
                 out = out + captureDecls(ms.bodyTokens)
-                let ctx = seedCaptures(((seedParams(mkGCtx(prog), ms.params)).withRet(ms.retCtype)).withTag(tag), ms.bodyTokens)
+                let ctx = seedCaptures(((seedParams(prog.newCtx(), ms.params)).withRet(ms.retCtype)).withTag(tag), ms.bodyTokens)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
             }
@@ -301,7 +301,7 @@ mapper ifaceMethodRet(prog: Program, iface: String, method: String) -> String {
                 let ms = methodSpecGet(is2.methList, mi)
                 if ms.name == method {
                     if ms.kind == "predicate" { return "Bool" }
-                    return prog.resolveX(ctypeToXName(ms.retCtype))
+                    return prog.resolveX(ms.retCtype.ctypeToXName())
                 }
                 mi = mi + 1
             }
@@ -339,7 +339,7 @@ mapper implementorsOf(prog: Program, iface: String) -> String[] {
 mapper bindFor(prog: Program, iface: String) -> String {
     // `module Test` bindings are ignored in normal builds and take precedence in
     // test builds (XC_TEST), layered over `module App` (and any other module).
-    let testMode = inTestMode()
+    let testMode = prog.inTestMode()
     let i = 0
     let n = moduleSpecLen(prog.modules)
     let found = ""

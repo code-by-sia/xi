@@ -69,7 +69,7 @@ mapper jsonEncodeExpr(prog: Program, fct: String, expr: String) -> String {
         "xc_bool_t"    -> "xstd_json_bool(" + expr + ")"
         "xc_Json_t"    -> expr
         _ -> {
-            let xn = ctypeToXName(fct)
+            let xn = fct.ctypeToXName()
             if prog.hasCodec(xn) { return "xc_tojson_" + xn + "(" + expr + ")" }
             return ""
         }
@@ -83,7 +83,7 @@ mapper jsonDecodeExpr(prog: Program, fct: String, getexpr: String) -> String {
         "xc_bool_t"    -> "xstd_json_as_bool(" + getexpr + ")"
         "xc_Json_t"    -> getexpr
         _ -> {
-            let xn = ctypeToXName(fct)
+            let xn = fct.ctypeToXName()
             if prog.hasCodec(xn) { return "xc_fromjson_" + xn + "(" + getexpr + ")" }
             return ""
         }
@@ -254,7 +254,7 @@ class JsonCodecs implements Codecs {
             let mn = methodSpecLen(cs.methList)
             while mi < mn {
                 let ms = methodSpecGet(cs.methList, mi)
-                let pt = firstParamXType(ms.params)
+                let pt = ms.params.firstParamXType()
                 if ms.kind == "listener" and string_len(ms.topic) > 0 and prog.isEventTypeC(pt) {
                     let tr = "xc_evtT_" + cs.name + "_" + ms.name
                     out = out + "static void " + tr + "(xc_" + pt + "_t e) {\n"

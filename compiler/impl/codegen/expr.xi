@@ -104,7 +104,7 @@ mapper parseLamParams(toks: Token[], pos: Integer, prog: Program) -> LamParams {
     let p = pos + 1                        // past '('
     let cparams = ""
     let pctypes = ""
-    let pctx = mkGCtx(prog)
+    let pctx = prog.newCtx()
     let first = true
     while toks.kindAt(p) != 101 and toks.kindAt(p) != 0 {
         if toks.kindAt(p) == 106 { p = p + 1 }    // ,
@@ -116,7 +116,7 @@ mapper parseLamParams(toks: Token[], pos: Integer, prog: Program) -> LamParams {
         if not first { cparams = cparams + ", "  pctypes = pctypes + "," }
         cparams = cparams + pc + " " + nm
         pctypes = pctypes + pc
-        pctx = pctx.addSym(nm, ctypeToXName(pc))
+        pctx = pctx.addSym(nm, pc.ctypeToXName())
         first = false
     }
     let bs = p
@@ -274,7 +274,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         let aq = se.pos
         if toks.kindAt(aq) == 101 { aq = aq + 1 }                 // ')'
         let bo = aq                                               // '{'
-        let close = matchBrace(toks, bo)
+        let close = toks.matchBrace(bo)
         let arrow = lambdaArrow(toks, bo + 1, close)
         let gp = "it"
         let bstart = bo + 1

@@ -135,7 +135,7 @@ mapper emitOneFunc(prog: Program, fs: FuncSpec) -> String {
     out = out + "static " + cTy(retC) + " xc_" + fs.name + "(" + cSig(fs.params) + ") {\n"
     out = out + funcDepPrologue(prog, fs.fnDeps)
     out = out + captureDecls(fs.bodyTokens)
-    let ctx = seedCaptures(((seedFuncDeps((seedParams(mkGCtx(prog), fs.params)).withRet(retC), fs.fnDeps)).withTag(tag)).withCaps(capN, capX), fs.bodyTokens)
+    let ctx = seedCaptures(((seedFuncDeps((seedParams(prog.newCtx(), fs.params)).withRet(retC), fs.fnDeps)).withTag(tag)).withCaps(capN, capX), fs.bodyTokens)
     out = out + genBody2(fs.bodyTokens, ctx)
     out = out + "}\n\n"
     if isAsync { out = out + emitAsyncWrapper(prog, fs) }
@@ -167,12 +167,12 @@ mapper emitOverloadSet(prog: Program, name: String) -> String {
             }
             let implName = name + "__ovl" + int_to_string(k)
             out = out + "static " + fs.retCtype + " xc_" + implName + "(" + fs.params + ") {\n"
-            let bctx = (seedParams(mkGCtx(prog), fs.params)).withRet(fs.retCtype)
+            let bctx = (seedParams(prog.newCtx(), fs.params)).withRet(fs.retCtype)
             out = out + genBody2(fs.bodyTokens, bctx)
             out = out + "}\n\n"
             let call = "xc_" + implName + "(" + argList + ")"
             if fs.hasWhere {
-                let gctx = (seedParams(mkGCtx(prog), fs.params)).withRet(fs.retCtype)
+                let gctx = (seedParams(prog.newCtx(), fs.params)).withRet(fs.retCtype)
                 let g = genExpr(fs.whereTokens, 0, gctx)
                 if firstRet == "void" {
                     dispatcher = dispatcher + "    if (" + g.code + ") { " + call + "; return; }\n"
@@ -289,7 +289,7 @@ mapper genDecisionTables(prog: Program) -> String {
     let tn = decisionTableLen(prog.tables)
     while ti < tn {
         let t = decisionTableGet(prog.tables, ti)
-        let ctx = seedParams(mkGCtx(prog), t.params)
+        let ctx = seedParams(prog.newCtx(), t.params)
         out = out + "static " + t.retCtype + " xc_" + t.name + "(" + t.params + ") {\n"
         let nr = decisionRowLen(t.rows)
         if t.policy == "first" {
@@ -478,7 +478,7 @@ mapper genMethodDispatcher(prog: Program, cs: ClassSpec, name: String, ret: Stri
         if ms.kind != "creator" and ms.name == name {
             let k = methodOrdinal(cs, mi)
             if ms.hasWhere {
-                let ctx = ((seedParams(seedDeps(mkGCtx(prog), cs), params)).withRet(ret)).withTag(cs.name + "_" + name)
+                let ctx = ((seedParams(seedDeps(prog.newCtx(), cs), params)).withRet(ret)).withTag(cs.name + "_" + name)
                 let g = genExpr(ms.whereTokens, 0, ctx)
                 out = out + "    if (" + g.code + ") { return xc_" + cs.name + "_" + name + "_ovl" + int_to_string(k) + "_impl(" + argfwd + "); }\n"
             } else {
@@ -517,7 +517,7 @@ mapper genClassMethods(prog: Program) -> String {
                 out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "(" + ms.params + ") {\n"
                 out = out + funcDepPrologue(prog, ms.fnDeps)
                 out = out + captureDecls(ms.bodyTokens)
-                let ctx = seedCaptures(((seedFuncDeps(seedParams(mkGCtx(prog), ms.params), ms.fnDeps)).withRet(ms.retCtype)).withTag(tag), ms.bodyTokens)
+                let ctx = seedCaptures(((seedFuncDeps(seedParams(prog.newCtx(), ms.params), ms.fnDeps)).withRet(ms.retCtype)).withTag(tag), ms.bodyTokens)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
             } else {
@@ -537,7 +537,7 @@ mapper genClassMethods(prog: Program) -> String {
                 out = out + "    xc_" + cs.name + "_t* self = (xc_" + cs.name + "_t*)self_ptr;\n"
                 out = out + funcDepPrologue(prog, ms.fnDeps)
                 out = out + captureDecls(ms.bodyTokens)
-                let ctx = seedCaptures((((seedFuncDeps(seedParams(seedDeps(mkGCtx(prog), cs), ms.params), ms.fnDeps)).withRet(ms.retCtype)).withTag(tag)).withSelfClass(cs.name), ms.bodyTokens)
+                let ctx = seedCaptures((((seedFuncDeps(seedParams(seedDeps(prog.newCtx(), cs), ms.params), ms.fnDeps)).withRet(ms.retCtype)).withTag(tag)).withSelfClass(cs.name), ms.bodyTokens)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
                 if overloaded and isLastOfName(cs, mi) {
