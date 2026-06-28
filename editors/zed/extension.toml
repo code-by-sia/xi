@@ -1,6 +1,6 @@
 id = "x"
 name = "X"
-version = "0.0.6"
+version = "0.0.7"
 schema_version = 1
 authors = ["The X programming language"]
 description = "Syntax highlighting and language support for the X programming language."
@@ -11,5 +11,5 @@ repository = "https://github.com/code-by-sia/xi"
 # whenever the grammar changes (and re-install the extension).
 [grammars.x]
 repository = "https://github.com/code-by-sia/xi"
-commit = "60661b15b186654470983d249c8886d770b8364f"  # <- set to `git rev-parse HEAD`
+commit = "3438291defdd939e6198f087de1d7b5ed85a2b77"  # <- set to `git rev-parse HEAD`
 path = "editors/tree-sitter-x"
