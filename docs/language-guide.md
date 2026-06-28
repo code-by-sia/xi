@@ -5,6 +5,44 @@
 `Number` (f64), `Integer` (i64), `Bool`, `String`, `Char`, `Timestamp`, `Size`,
 `Void`.
 
+## Strings
+
+A plain string is double-quoted and carries the usual escapes (`\n`, `\t`, `\"`,
+`\\`):
+
+```x
+let s = "tab\tand\nnewline"
+```
+
+A **triple-quoted** string spans multiple lines. A single leading newline (right
+after the opening `"""`) is dropped, and the common leading indentation shared by
+all non-blank lines is stripped — so the block can sit at the indentation of the
+surrounding code without that indentation leaking into the value:
+
+```x
+let msg = """
+    Dear user,
+      thanks for trying Ξ.
+    — the team"""
+// == "Dear user,\n  thanks for trying Ξ.\n— the team"
+```
+
+**Interpolation** is opt-in: prefix a string with `$` and `${expr}` holes are
+evaluated and concatenated (scalars coerce to text). It works on both single-line
+and triple-quoted strings. A plain string is never interpolated, so `${...}` stays
+literal — handy for shell commands and other text that uses that syntax.
+
+```x
+let name = "Ada"
+let age  = 36
+let one  = $"Hello ${name}, you are ${age}"      // "Hello Ada, you are 36"
+let calc = $"next year: ${age + 1}"              // "next year: 37"
+let card = $"""
+    Name: ${name}
+    Age:  ${age}"""                              // indent-stripped + filled
+let raw  = "path is ${HOME}/bin"                 // literal — not interpolated
+```
+
 ## Refined types
 
 A refined type narrows a base type with a `where` constraint; `value` refers to

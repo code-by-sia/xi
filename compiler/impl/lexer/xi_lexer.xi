@@ -5,7 +5,10 @@
 class XiLexer implements Lexer {
     deps {}
 
-    mapper lex(src: String) -> Token[] {
+    // Public entry: scan tokens, then expand `$"..."` interpolation.
+    mapper lex(src: String) -> Token[] { return desugarInterp(scanTokens(src)) }
+
+    mapper scanTokens(src: String) -> Token[] {
         let slen = string_len(src)
         let tokens: Token[] = []
         let p = 0
@@ -28,6 +31,80 @@ class XiLexer implements Lexer {
         // Append EOF
         tokens = appendToken(tokens, Token { kind: 0, text: "", line: ln })
         return tokens
+    }
+
+    // Expand interpolated-string tokens into concatenations:
+    //   $"a ${x} b"  ->  ( "" + "a " + (x) + " b" )
+    // kind 7 = single-line (literal parts as-is); kind 8 = triple (literal parts
+    // escaped for C). The `""` seed forces a String result and coercion.
+    mapper desugarInterp(toks: Token[]) -> Token[] {
+        let out: Token[] = []
+        let n = tokenArrLen(toks)
+        let i = 0
+        while i < n {
+            let t = tokenArrGet(toks, i)
+            if t.kind == 7 {
+                out = appendInterp(out, t.text, t.line, false)
+            } else {
+            if t.kind == 8 {
+                out = appendInterp(out, t.text, t.line, true)
+            } else {
+                out = appendToken(out, t)
+            } }
+            i = i + 1
+        }
+        return out
+    }
+
+    mapper appendInterp(out0: Token[], content: String, line: Integer, esc: Bool) -> Token[] {
+        let out = appendToken(out0, Token { kind: 100, text: "(", line: line })
+        out = appendToken(out, Token { kind: 4, text: "", line: line })   // "" seed
+        let n = string_len(content)
+        let i = 0
+        let litStart = 0
+        while i < n {
+            if string_char_at(content, i) == 36 and i + 1 < n and string_char_at(content, i + 1) == 123 {  // ${
+                if i > litStart {
+                    let lit = string_slice(content, litStart, i)
+                    if esc { lit = escRawC(lit) }
+                    out = appendToken(out, Token { kind: 118, text: "+", line: line })
+                    out = appendToken(out, Token { kind: 4, text: lit, line: line })
+                }
+                i = i + 2
+                let exprStart = i
+                let depth = 1
+                while i < n and depth > 0 {
+                    let c = string_char_at(content, i)
+                    if c == 123 { depth = depth + 1 }
+                    if c == 125 { depth = depth - 1 }
+                    if depth > 0 { i = i + 1 }
+                }
+                let exprStr = string_slice(content, exprStart, i)
+                if i < n { i = i + 1 }   // skip }
+                litStart = i
+                out = appendToken(out, Token { kind: 118, text: "+", line: line })
+                out = appendToken(out, Token { kind: 100, text: "(", line: line })
+                let et = scanTokens(exprStr)
+                let en = tokenArrLen(et)
+                let j = 0
+                while j < en {
+                    let etk = tokenArrGet(et, j)
+                    if etk.kind != 0 { out = appendToken(out, etk) }   // skip EOF
+                    j = j + 1
+                }
+                out = appendToken(out, Token { kind: 101, text: ")", line: line })
+            } else {
+                i = i + 1
+            }
+        }
+        if n > litStart {
+            let lit2 = string_slice(content, litStart, n)
+            if esc { lit2 = escRawC(lit2) }
+            out = appendToken(out, Token { kind: 118, text: "+", line: line })
+            out = appendToken(out, Token { kind: 4, text: lit2, line: line })
+        }
+        out = appendToken(out, Token { kind: 101, text: ")", line: line })
+        return out
     }
 
     // keyword string -> integer kind (default = IDENT)
@@ -215,7 +292,19 @@ class XiLexer implements Lexer {
             }
         }
 
-        // String literals
+        // `$"..."` / `$"""..."""` -> interpolated string: lexed like a string but
+        // marked kind 7 so the interpolation pass expands `${expr}`. Opt-in, so
+        // `${...}` in a plain string (e.g. shell commands) stays literal.
+        let interp = false
+        if ch == 36 and p + 1 < slen and string_char_at(src, p + 1) == 34 {
+            interp = true
+            p = p + 1
+            ch = 34
+        }
+
+        // String literals.  Token kinds: 4 = plain string (content is C-ready);
+        // 7 = interpolated single-line ($"..."), 8 = interpolated triple
+        // ($"""..."""), both carrying RAW content for the interpolation pass.
         if ch == 34 {   // "
             // Triple-quoted?
             if p + 2 < slen and string_char_at(src, p + 1) == 34 and string_char_at(src, p + 2) == 34 {
@@ -223,11 +312,12 @@ class XiLexer implements Lexer {
                 let start = p
                 while p + 2 < slen {
                     if string_char_at(src, p) == 34 and string_char_at(src, p + 1) == 34 and string_char_at(src, p + 2) == 34 {
-                        // strip common indentation, then escape the real newlines/
-                        // tabs/quotes so the content is a valid C string-literal body.
-                        let content = escRawC(stripIndent(string_slice(src, start, p)))
+                        let raw = stripIndent(string_slice(src, start, p))
                         p = p + 3
-                        return LexStep { tok: Token { kind: 4, text: content, line: ln }, pos: p, line: ln }
+                        // interp: keep raw (the pass escapes literal parts); plain:
+                        // escape real newlines/tabs/quotes into a C-literal body now.
+                        if interp { return LexStep { tok: Token { kind: 8, text: raw, line: ln }, pos: p, line: ln } }
+                        return LexStep { tok: Token { kind: 4, text: escRawC(raw), line: ln }, pos: p, line: ln }
                     }
                     if string_char_at(src, p) == 10 { ln = ln + 1 }
                     p = p + 1
@@ -241,7 +331,9 @@ class XiLexer implements Lexer {
                 }
                 let content = string_slice(src, start, p)
                 if p < slen { p = p + 1 }  // skip closing "
-                return LexStep { tok: Token { kind: 4, text: content, line: ln }, pos: p, line: ln }
+                let skind = 4
+                if interp { skind = 7 }
+                return LexStep { tok: Token { kind: skind, text: content, line: ln }, pos: p, line: ln }
             }
         }
 
