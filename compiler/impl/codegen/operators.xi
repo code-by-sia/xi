@@ -16,9 +16,9 @@ mapper genUnary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         // `await all <list>` — join every Future in a List<Future<T>>, return List<T>.
         if toks.kindAt(pos + 1) == 1 and toks.textAt(pos + 1) == "all" {
             let r = genUnary(toks, pos + 2, ctx)
-            let elemX = listElemXName(r.xtyp)
-            if isFutureXType(elemX) {
-                let inC = futureInnerCtype(elemX)
+            let elemX = r.xtyp.listElemXName()
+            if elemX.isFutureXType() {
+                let inC = elemX.futureInnerCtype()
                 let u = int_to_string(pos)
                 let code = "({ xc_List_t _af" + u + " = " + r.code + ";"
                          + " xc_List_t _ar" + u + " = xstd_list_new(sizeof(" + inC + "));"
@@ -26,15 +26,15 @@ mapper genUnary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                          + " xc_Future_t _fu" + u + " = *(xc_Future_t*)xstd_list_at(_af" + u + ", _ai" + u + ");"
                          + " " + inC + " _av" + u + " = *(" + inC + "*)xstd_future_await(_fu" + u + ");"
                          + " xstd_list_push(_ar" + u + ", &_av" + u + "); } _ar" + u + "; })"
-                return ExprRes { code: code, pos: r.pos, xtyp: "List_" + futureInnerSuffix(elemX) , owned: false }
+                return ExprRes { code: code, pos: r.pos, xtyp: "List_" + elemX.futureInnerSuffix() , owned: false }
             }
             return r
         }
         // `await <future>` — block for the worker's result and yield the inner T.
         let r = genUnary(toks, pos + 1, ctx)
-        if isFutureXType(r.xtyp) {
-            let inC = futureInnerCtype(r.xtyp)
-            return ExprRes { code: "(*(" + inC + "*)xstd_future_await(" + r.code + "))", pos: r.pos, xtyp: futureInnerXName(r.xtyp) , owned: false }
+        if r.xtyp.isFutureXType() {
+            let inC = r.xtyp.futureInnerCtype()
+            return ExprRes { code: "(*(" + inC + "*)xstd_future_await(" + r.code + "))", pos: r.pos, xtyp: r.xtyp.futureInnerXName() , owned: false }
         }
         return r   // await on a non-future is a no-op (back-compat)
     }
@@ -241,12 +241,12 @@ mapper genExpr(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     // sides to addressable temporaries (works for struct and scalar types alike).
     if toks.kindAt(p) == 1 and toks.textAt(p) == "to" {
         let right = genExpr(toks, p + 1, ctx)
-        let lc = xnameToCtype(typ)
-        let rc = xnameToCtype(right.xtyp)
+        let lc = typ.xnameToCtype()
+        let rc = right.xtyp.xnameToCtype()
         let u = int_to_string(p)
         let pcode = "({ " + lc + " _pa" + u + " = " + code + "; " + rc + " _pb" + u + " = " + right.code
                   + "; xc_pair_make(&_pa" + u + ", sizeof(" + lc + "), &_pb" + u + ", sizeof(" + rc + ")); })"
-        return ExprRes { code: pcode, pos: right.pos, xtyp: pairXtype(typ, right.xtyp), owned: true }
+        return ExprRes { code: pcode, pos: right.pos, xtyp: typ.pairXtype(right.xtyp), owned: true }
     }
     return ExprRes { code: code, pos: p, xtyp: typ , owned: false }
 }

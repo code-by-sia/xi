@@ -39,13 +39,13 @@ mapper genTestRunner(prog: Program, srcPath: String) -> String {
 
 mapper genEntry(prog: Program, srcPath: String) -> String {
     let es = prog.entrySpec
-    let capN = buildCapNames(es.params, es.fnDeps)
-    let capX = buildCapXTypes(es.params, es.fnDeps)
+    let capN = es.params.buildCapNames(es.fnDeps)
+    let capX = es.params.buildCapXTypes(es.fnDeps)
     let out = genSrcFileDef(srcPath)
     out = out + hoistCatches(prog, es.bodyTokens, "entry")
     out = out + hoistParallel(prog, es.bodyTokens, "entry")
     out = out + hoistLambdas(prog, es.bodyTokens, "entry")
-    out = out + hoistDelays(prog, es.bodyTokens, "entry", capN, capX)
+    out = out + prog.hoistDelays(es.bodyTokens, "entry", capN, capX)
     out = out + "/* === Entry point === */\n"
     out = out + "int main(int argc, char** argv) {\n"
     out = out + "    xc_init_singletons();\n"
@@ -182,7 +182,7 @@ mapper genFuncForwardDecls(prog: Program) -> String {
         let fs = funcSpecGet(prog.functions, i)
         let isAsync = fs.isAsync
         let retC = fs.retCtype
-        if isAsync { retC = asyncInnerCtype(fs) }
+        if isAsync { retC = fs.asyncInnerCtype() }
         out = out + "static " + cTy(retC) + " xc_" + fs.name + "(" + cSig(fs.params) + ");\n"
         if isAsync { out = out + "static xc_Future_t xc_spawn_" + fs.name + "(" + cSig(fs.params) + ");\n" }
         i = i + 1
@@ -277,7 +277,7 @@ mapper machineSig(params: String) -> String {
 mapper machineCond(prog: Program, m: MachineSpec, tr: MachineTransition) -> String {
     let cond = m.stateCond(tr.froms)
     if tr.hasGuard {
-        let gctx = seedParams(prog.newCtx(), tr.params)
+        let gctx = prog.newCtx().seedParams(tr.params)
         if m.hasData { gctx = gctx.addSym("data", m.name + "Data") }
         cond = "(" + cond + ") && (" + genExpr(tr.guardTokens, 0, gctx).code + ")"
     }
@@ -373,7 +373,7 @@ mapper genMachineDefs(prog: Program) -> String {
             if tr.hasUpdate {
                 let ut = tr.updateTokens
                 let up = 0
-                let uctx = seedParams(prog.newCtx(), tr.params)
+                let uctx = prog.newCtx().seedParams(tr.params)
                 if m.hasData { uctx = uctx.addSym("data", mn + "Data") }
                 while ut.kindAt(up) != 0 {
                     let fname = ut.textAt(up)

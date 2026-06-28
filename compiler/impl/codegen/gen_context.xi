@@ -109,3 +109,44 @@ mapper GCtx.depTypeOf(name: String) -> String {
     }
     return ""
 }
+
+// ── parameter seeding (parse the C param string into local symbols) ──
+// Add the symbol for a single C-param segment "ctype name" to the context.
+mapper GCtx.addParamSym(seg: String) -> GCtx {
+    let n = string_len(seg)
+    let s = 0
+    while s < n and string_char_at(seg, s) == 32 { s = s + 1 }
+    let lastSp = 0 - 1
+    let i = s
+    while i < n {
+        if string_char_at(seg, i) == 32 { lastSp = i }
+        i = i + 1
+    }
+    if lastSp < 0 { return this }
+    let ctype = string_slice(seg, s, lastSp)
+    let name  = string_slice(seg, lastSp + 1, n)
+    return this.addSym(name, (this.prog).resolveX(ctype.ctypeToXName()))
+}
+
+// Seed every parameter of a comma-joined C param string as a local symbol.
+mapper GCtx.seedParams(cparams: String) -> GCtx {
+    let result = this
+    let n = string_len(cparams)
+    if n == 0 { return result }
+    let start = 0
+    let i = 0
+    let cont = true
+    while cont {
+        let atEnd = i == n
+        let c = 0
+        if not atEnd { c = string_char_at(cparams, i) }
+        if atEnd or c == 44 {
+            let seg = string_slice(cparams, start, i)
+            result = result.addParamSym(seg)
+            start = i + 1
+        }
+        if atEnd { cont = false }
+        i = i + 1
+    }
+    return result
+}

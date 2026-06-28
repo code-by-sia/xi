@@ -111,7 +111,7 @@ mapper parseLamParams(toks: Token[], pos: Integer, prog: Program) -> LamParams {
         let nm = toks.textAt(p)
         p = p + 1
         if toks.kindAt(p) == 108 { p = p + 1 }    // :
-        let pc = typeCtypeOf(toks, p)
+        let pc = toks.typeCtypeOf(p)
         p = p + 1                                  // single-token param type
         if not first { cparams = cparams + ", "  pctypes = pctypes + "," }
         cparams = cparams + pc + " " + nm
@@ -128,7 +128,7 @@ mapper parseLamParams(toks: Token[], pos: Integer, prog: Program) -> LamParams {
 mapper genLambda(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let lp = parseLamParams(toks, pos, ctx.prog)
     let body = genExpr(toks, lp.bodyStart, lp.ctx)
-    let retC = xnameToCtype(body.xtyp)
+    let retC = body.xtyp.xnameToCtype()
     let id = "xc_lam_" + ctx.fnTag + "_" + int_to_string(pos)
     let fnX = "Fn(" + lp.pctypes + ")(" + retC + ")"
     return ExprRes { code: "(xc_fn_t){ (void*)" + id + ", (void*)0 }", pos: body.pos, xtyp: fnX , owned: false }
@@ -143,7 +143,7 @@ mapper hoistLambdas(prog: Program, toks: Token[], tag: String) -> String {
         if isLambdaAt(toks, i) {
             let lp = parseLamParams(toks, i, prog)
             let body = genExpr(toks, lp.bodyStart, lp.ctx)
-            let retC = xnameToCtype(body.xtyp)
+            let retC = body.xtyp.xnameToCtype()
             let id = "xc_lam_" + tag + "_" + int_to_string(i)
             let sig = "void* __env"
             if string_len(lp.cparams) > 0 { sig = sig + ", " + lp.cparams }
@@ -165,7 +165,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     if k == 1 and txt == "empty" and toks.textAt(pos + 1) == "List" and toks.kindAt(pos + 2) == 114 {
         // `empty List<T>` — a fresh, empty list
         let etk = toks.kindAt(pos + 3)
-        let elemCtype = primCtypeK(etk)
+        let elemCtype = etk.primCtypeK()
         if string_len(elemCtype) == 0 { elemCtype = "xc_" + toks.textAt(pos + 3) + "_t" }
         let endp = pos + 4
         if toks.kindAt(endp) == 115 { endp = endp + 1 }   // `>`
@@ -177,36 +177,36 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     if k == 1 and txt == "empty" and toks.textAt(pos + 1) == "Set" and toks.kindAt(pos + 2) == 114 {
         // `empty Set<T>` — a fresh, empty set
         let etk = toks.kindAt(pos + 3)
-        let elemCtype = primCtypeK(etk)
+        let elemCtype = etk.primCtypeK()
         if string_len(elemCtype) == 0 { elemCtype = "xc_" + toks.textAt(pos + 3) + "_t" }
         let endp = pos + 4
         if toks.kindAt(endp) == 115 { endp = endp + 1 }   // `>`
         return ExprRes {
-            code: "xstd_set_new(sizeof(" + elemCtype + "), " + strFlagFor(elemCtype) + ")",
+            code: "xstd_set_new(sizeof(" + elemCtype + "), " + elemCtype.strFlagFor() + ")",
             pos: endp, xtyp: "Set_" + ctypeSuffix(elemCtype)
         , owned: false }
     }
     if k == 1 and txt == "empty" and toks.textAt(pos + 1) == "Map" and toks.kindAt(pos + 2) == 114 {
         // `empty Map<K, V>` — a fresh, empty map (K is a primitive or String)
         let ktk = toks.kindAt(pos + 3)
-        let kc = primCtypeK(ktk)
+        let kc = ktk.primCtypeK()
         if string_len(kc) == 0 { kc = "xc_" + toks.textAt(pos + 3) + "_t" }
         let q = pos + 4
         if toks.kindAt(q) == 106 { q = q + 1 }            // `,`
         let vtk = toks.kindAt(q)
-        let vc = primCtypeK(vtk)
+        let vc = vtk.primCtypeK()
         if string_len(vc) == 0 { vc = "xc_" + toks.textAt(q) + "_t" }
         let endp = q + 1
         if toks.kindAt(endp) == 115 { endp = endp + 1 }   // `>`
         return ExprRes {
-            code: "xstd_map_new(sizeof(" + kc + "), sizeof(" + vc + "), " + strFlagFor(kc) + ")",
+            code: "xstd_map_new(sizeof(" + kc + "), sizeof(" + vc + "), " + kc.strFlagFor() + ")",
             pos: endp, xtyp: "Map_" + ctypeSuffix(kc) + "_" + ctypeSuffix(vc)
         , owned: false }
     }
     if k == 1 and txt == "empty" and toks.textAt(pos + 1) == "Vec" and toks.kindAt(pos + 2) == 114 {
         // `empty Vec<T>` — a fresh, empty vector (a List under the hood)
         let etk = toks.kindAt(pos + 3)
-        let elemCtype = primCtypeK(etk)
+        let elemCtype = etk.primCtypeK()
         if string_len(elemCtype) == 0 { elemCtype = "xc_" + toks.textAt(pos + 3) + "_t" }
         let endp = pos + 4
         if toks.kindAt(endp) == 115 { endp = endp + 1 }   // `>`
@@ -217,7 +217,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     }
     if k == 1 and txt == "empty" and toks.textAt(pos + 1) == "Stack" and toks.kindAt(pos + 2) == 114 {
         let etk = toks.kindAt(pos + 3)
-        let elemCtype = primCtypeK(etk)
+        let elemCtype = etk.primCtypeK()
         if string_len(elemCtype) == 0 { elemCtype = "xc_" + toks.textAt(pos + 3) + "_t" }
         let endp = pos + 4
         if toks.kindAt(endp) == 115 { endp = endp + 1 }
@@ -228,7 +228,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     }
     if k == 1 and txt == "empty" and toks.textAt(pos + 1) == "Queue" and toks.kindAt(pos + 2) == 114 {
         let etk = toks.kindAt(pos + 3)
-        let elemCtype = primCtypeK(etk)
+        let elemCtype = etk.primCtypeK()
         if string_len(elemCtype) == 0 { elemCtype = "xc_" + toks.textAt(pos + 3) + "_t" }
         let endp = pos + 4
         if toks.kindAt(endp) == 115 { endp = endp + 1 }
@@ -239,12 +239,12 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     }
     if k == 1 and txt == "empty" and toks.textAt(pos + 1) == "SortedQueue" and toks.kindAt(pos + 2) == 114 {
         let etk = toks.kindAt(pos + 3)
-        let elemCtype = primCtypeK(etk)
+        let elemCtype = etk.primCtypeK()
         if string_len(elemCtype) == 0 { elemCtype = "xc_" + toks.textAt(pos + 3) + "_t" }
         let endp = pos + 4
         if toks.kindAt(endp) == 115 { endp = endp + 1 }
         return ExprRes {
-            code: "xstd_pqueue_new(sizeof(" + elemCtype + "), " + pqCmpKind(elemCtype) + ")",
+            code: "xstd_pqueue_new(sizeof(" + elemCtype + "), " + elemCtype.pqCmpKind() + ")",
             pos: endp, xtyp: "SortedQueue_" + ctypeSuffix(elemCtype)
         , owned: false }
     }
@@ -285,7 +285,7 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     }
     if k == 1 and txt == "listOf" and toks.kindAt(pos + 1) == 100 and toks.kindAt(pos + 2) != 101 {
         let first = genExpr(toks, pos + 2, ctx)
-        let ec = xnameToCtype(first.xtyp)
+        let ec = first.xtyp.xnameToCtype()
         let body = "xc_List_t _t = xstd_list_new(sizeof(" + ec + ")); "
                  + "xstd_list_push(_t, (" + ec + "[]){ " + first.code + " }); "
         let p = first.pos
@@ -295,11 +295,11 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             p = a.pos
         }
         if toks.kindAt(p) == 101 { p = p + 1 }
-        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "List_" + arrSuffixOf(first.xtyp) , owned: false }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "List_" + first.xtyp.arrSuffixOf() , owned: false }
     }
     if k == 1 and txt == "vecOf" and toks.kindAt(pos + 1) == 100 and toks.kindAt(pos + 2) != 101 {
         let first = genExpr(toks, pos + 2, ctx)
-        let ec = xnameToCtype(first.xtyp)
+        let ec = first.xtyp.xnameToCtype()
         let body = "xc_List_t _t = xstd_list_new(sizeof(" + ec + ")); "
                  + "xstd_list_push(_t, (" + ec + "[]){ " + first.code + " }); "
         let p = first.pos
@@ -309,11 +309,11 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             p = a.pos
         }
         if toks.kindAt(p) == 101 { p = p + 1 }
-        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "List_" + arrSuffixOf(first.xtyp) , owned: false }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "List_" + first.xtyp.arrSuffixOf() , owned: false }
     }
     if k == 1 and txt == "stackOf" and toks.kindAt(pos + 1) == 100 and toks.kindAt(pos + 2) != 101 {
         let first = genExpr(toks, pos + 2, ctx)
-        let ec = xnameToCtype(first.xtyp)
+        let ec = first.xtyp.xnameToCtype()
         let body = "xc_Stack_t _t = xstd_stack_new(sizeof(" + ec + ")); "
                  + "xstd_stack_push(_t, (" + ec + "[]){ " + first.code + " }); "
         let p = first.pos
@@ -323,11 +323,11 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             p = a.pos
         }
         if toks.kindAt(p) == 101 { p = p + 1 }
-        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "Stack_" + arrSuffixOf(first.xtyp) , owned: false }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "Stack_" + first.xtyp.arrSuffixOf() , owned: false }
     }
     if k == 1 and txt == "queueOf" and toks.kindAt(pos + 1) == 100 and toks.kindAt(pos + 2) != 101 {
         let first = genExpr(toks, pos + 2, ctx)
-        let ec = xnameToCtype(first.xtyp)
+        let ec = first.xtyp.xnameToCtype()
         let body = "xc_Queue_t _t = xstd_queue_new(sizeof(" + ec + ")); "
                  + "xstd_queue_enqueue(_t, (" + ec + "[]){ " + first.code + " }); "
         let p = first.pos
@@ -337,12 +337,12 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             p = a.pos
         }
         if toks.kindAt(p) == 101 { p = p + 1 }
-        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "Queue_" + arrSuffixOf(first.xtyp) , owned: false }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "Queue_" + first.xtyp.arrSuffixOf() , owned: false }
     }
     if k == 1 and txt == "sortedQueueOf" and toks.kindAt(pos + 1) == 100 and toks.kindAt(pos + 2) != 101 {
         let first = genExpr(toks, pos + 2, ctx)
-        let ec = xnameToCtype(first.xtyp)
-        let body = "xc_SortedQueue_t _t = xstd_pqueue_new(sizeof(" + ec + "), " + pqCmpKind(ec) + "); "
+        let ec = first.xtyp.xnameToCtype()
+        let body = "xc_SortedQueue_t _t = xstd_pqueue_new(sizeof(" + ec + "), " + ec.pqCmpKind() + "); "
                  + "xstd_pqueue_push(_t, (" + ec + "[]){ " + first.code + " }); "
         let p = first.pos
         while toks.kindAt(p) == 106 {
@@ -351,12 +351,12 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             p = a.pos
         }
         if toks.kindAt(p) == 101 { p = p + 1 }
-        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "SortedQueue_" + arrSuffixOf(first.xtyp) , owned: false }
+        return ExprRes { code: "({ " + body + "_t; })", pos: p, xtyp: "SortedQueue_" + first.xtyp.arrSuffixOf() , owned: false }
     }
     if k == 1 and txt == "setOf" and toks.kindAt(pos + 1) == 100 and toks.kindAt(pos + 2) != 101 {
         let first = genExpr(toks, pos + 2, ctx)
-        let ec = xnameToCtype(first.xtyp)
-        let body = "xc_Set_t _s = xstd_set_new(sizeof(" + ec + "), " + strFlagFor(ec) + "); "
+        let ec = first.xtyp.xnameToCtype()
+        let body = "xc_Set_t _s = xstd_set_new(sizeof(" + ec + "), " + ec.strFlagFor() + "); "
                  + "xstd_set_add(_s, (" + ec + "[]){ " + first.code + " }); "
         let p = first.pos
         while toks.kindAt(p) == 106 {
@@ -365,16 +365,16 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             p = a.pos
         }
         if toks.kindAt(p) == 101 { p = p + 1 }
-        return ExprRes { code: "({ " + body + "_s; })", pos: p, xtyp: "Set_" + arrSuffixOf(first.xtyp) , owned: false }
+        return ExprRes { code: "({ " + body + "_s; })", pos: p, xtyp: "Set_" + first.xtyp.arrSuffixOf() , owned: false }
     }
     if k == 1 and txt == "mapOf" and toks.kindAt(pos + 1) == 100 and toks.kindAt(pos + 2) != 101 {
         let k1 = genAnd(toks, pos + 2, ctx)   // genAnd, not genExpr, so the `to` stays for us
-        let kc = xnameToCtype(k1.xtyp)
+        let kc = k1.xtyp.xnameToCtype()
         let q = k1.pos
         if toks.kindAt(q) == 1 and toks.textAt(q) == "to" { q = q + 1 }   // `k to v`
         let v1 = genExpr(toks, q, ctx)
-        let vc = xnameToCtype(v1.xtyp)
-        let body = "xc_Map_t _m = xstd_map_new(sizeof(" + kc + "), sizeof(" + vc + "), " + strFlagFor(kc) + "); "
+        let vc = v1.xtyp.xnameToCtype()
+        let body = "xc_Map_t _m = xstd_map_new(sizeof(" + kc + "), sizeof(" + vc + "), " + kc.strFlagFor() + "); "
                  + "xstd_map_put(_m, (" + kc + "[]){ " + k1.code + " }, (" + vc + "[]){ " + v1.code + " }); "
         let p = v1.pos
         while toks.kindAt(p) == 106 {
@@ -386,12 +386,12 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             p = vv.pos
         }
         if toks.kindAt(p) == 101 { p = p + 1 }
-        return ExprRes { code: "({ " + body + "_m; })", pos: p, xtyp: "Map_" + arrSuffixOf(k1.xtyp) + "_" + arrSuffixOf(v1.xtyp) , owned: false }
+        return ExprRes { code: "({ " + body + "_m; })", pos: p, xtyp: "Map_" + k1.xtyp.arrSuffixOf() + "_" + v1.xtyp.arrSuffixOf() , owned: false }
     }
     if k == 1 and txt == "empty" {
         let nk = toks.kindAt(pos + 1)
-        if nk == 1 or string_len(primCtypeK(nk)) > 0 {
-            let ctype = typeCtypeOf(toks, pos + 1)
+        if nk == 1 or string_len(nk.primCtypeK()) > 0 {
+            let ctype = toks.typeCtypeOf(pos + 1)
             let tp = pos + 2                     // after the base type token
             let cont = true
             while cont {
@@ -441,11 +441,11 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if count == 0 {
             return ExprRes { code: "{0}", pos: p, xtyp: "emptyarr" , owned: false }
         }
-        let arrType = "xc_arr_" + arrSuffixOf(firstX) + "_t"
-        let elemCtype = xnameToCtype(firstX)
+        let arrType = "xc_arr_" + firstX.arrSuffixOf() + "_t"
+        let elemCtype = firstX.xnameToCtype()
         let code = "(" + arrType + "){ .data = (" + elemCtype + "[]){ " + out
                  + " }, .len = " + int_to_string(count) + ", .cap = " + int_to_string(count) + " }"
-        return ExprRes { code: code, pos: p, xtyp: arrSuffixOf(firstX) + "[]" , owned: false }
+        return ExprRes { code: code, pos: p, xtyp: firstX.arrSuffixOf() + "[]" , owned: false }
     }
     if k == 1 {
         if isParallelAt(toks, pos) {
@@ -462,12 +462,12 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             }
             return ExprRes { code: "xc_parspawn_" + id + "(" + args + ")", pos: pp.endPos, xtyp: "Thread" , owned: false }
         }
-        if isRunWithDelayAt(toks, pos) {
+        if toks.isRunWithDelayAt(pos) {
             // runWithDelay(ms) { body } -> run body after `ms`, yield Future<Integer>
-            let dp = parseDelayAt(toks, pos)
+            let dp = toks.parseDelayAt(pos)
             let id = ctx.fnTag + "_" + int_to_string(pos)
             let ms = genExpr(toks, dp.msStart, ctx)
-            let caps = capturesIn(toks, dp.bodyStart, dp.bodyEnd, ctx.capNames, ctx.capTypes)
+            let caps = toks.capturesIn(dp.bodyStart, dp.bodyEnd, ctx.capNames, ctx.capTypes)
             let args = ms.code
             let nc = stringArrLen(caps.names)
             let c = 0

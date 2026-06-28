@@ -30,7 +30,7 @@ mapper countFuncs(prog: Program, name: String) -> Integer {
 // closure value type xc_fn_t (its signature lives in the xtype, recovered at the
 // call site). Other ctypes pass through.
 mapper cTy(ct: String) -> String {
-    if isFnXType(ct) { return "xc_fn_t" }
+    if ct.isFnXType() { return "xc_fn_t" }
     return ct
 }
 // Translate one "ctype name" param segment for C emission (Fn(...) -> xc_fn_t).
@@ -43,7 +43,7 @@ mapper cSigSeg(seg: String) -> String {
     while j < n { if string_char_at(seg, j) == 32 { lastSp = j }  j = j + 1 }
     if lastSp < 0 { return seg }
     let ctype = string_slice(seg, s, lastSp)
-    if isFnXType(ctype) { return string_slice(seg, 0, s) + "xc_fn_t" + string_slice(seg, lastSp, n) }
+    if ctype.isFnXType() { return string_slice(seg, 0, s) + "xc_fn_t" + string_slice(seg, lastSp, n) }
     return seg
 }
 // Translate a whole C param list for emission (each Fn(...) param -> xc_fn_t).
@@ -121,24 +121,24 @@ mapper seedFuncDeps(ctx: GCtx, dlist: DepSpec[]) -> GCtx {
 
 mapper emitOneFunc(prog: Program, fs: FuncSpec) -> String {
     let tag = fs.name
-    let capN = buildCapNames(fs.params, fs.fnDeps)
-    let capX = buildCapXTypes(fs.params, fs.fnDeps)
+    let capN = fs.params.buildCapNames(fs.fnDeps)
+    let capX = fs.params.buildCapXTypes(fs.fnDeps)
     let out = hoistCatches(prog, fs.bodyTokens, tag)
     out = out + hoistParallel(prog, fs.bodyTokens, tag)
     out = out + hoistLambdas(prog, fs.bodyTokens, tag)
-    out = out + hoistDelays(prog, fs.bodyTokens, tag, capN, capX)
+    out = out + prog.hoistDelays(fs.bodyTokens, tag, capN, capX)
     // `async` free functions: the body returns the inner T (the Future wrapper is
     // applied at the call site via xc_spawn_<name>).
     let isAsync = fs.isAsync
     let retC = fs.retCtype
-    if isAsync { retC = asyncInnerCtype(fs) }
+    if isAsync { retC = fs.asyncInnerCtype() }
     out = out + "static " + cTy(retC) + " xc_" + fs.name + "(" + cSig(fs.params) + ") {\n"
     out = out + funcDepPrologue(prog, fs.fnDeps)
     out = out + captureDecls(fs.bodyTokens)
-    let ctx = seedCaptures(((seedFuncDeps((seedParams(prog.newCtx(), fs.params)).withRet(retC), fs.fnDeps)).withTag(tag)).withCaps(capN, capX), fs.bodyTokens)
+    let ctx = seedCaptures(((seedFuncDeps((prog.newCtx().seedParams(fs.params)).withRet(retC), fs.fnDeps)).withTag(tag)).withCaps(capN, capX), fs.bodyTokens)
     out = out + genBody2(fs.bodyTokens, ctx)
     out = out + "}\n\n"
-    if isAsync { out = out + emitAsyncWrapper(prog, fs) }
+    if isAsync { out = out + fs.emitAsyncWrapper() }
     return out
 }
 
@@ -167,12 +167,12 @@ mapper emitOverloadSet(prog: Program, name: String) -> String {
             }
             let implName = name + "__ovl" + int_to_string(k)
             out = out + "static " + fs.retCtype + " xc_" + implName + "(" + fs.params + ") {\n"
-            let bctx = (seedParams(prog.newCtx(), fs.params)).withRet(fs.retCtype)
+            let bctx = (prog.newCtx().seedParams(fs.params)).withRet(fs.retCtype)
             out = out + genBody2(fs.bodyTokens, bctx)
             out = out + "}\n\n"
             let call = "xc_" + implName + "(" + argList + ")"
             if fs.hasWhere {
-                let gctx = (seedParams(prog.newCtx(), fs.params)).withRet(fs.retCtype)
+                let gctx = (prog.newCtx().seedParams(fs.params)).withRet(fs.retCtype)
                 let g = genExpr(fs.whereTokens, 0, gctx)
                 if firstRet == "void" {
                     dispatcher = dispatcher + "    if (" + g.code + ") { " + call + "; return; }\n"
@@ -289,7 +289,7 @@ mapper genDecisionTables(prog: Program) -> String {
     let tn = decisionTableLen(prog.tables)
     while ti < tn {
         let t = decisionTableGet(prog.tables, ti)
-        let ctx = seedParams(prog.newCtx(), t.params)
+        let ctx = prog.newCtx().seedParams(t.params)
         out = out + "static " + t.retCtype + " xc_" + t.name + "(" + t.params + ") {\n"
         let nr = decisionRowLen(t.rows)
         if t.policy == "first" {
@@ -478,7 +478,7 @@ mapper genMethodDispatcher(prog: Program, cs: ClassSpec, name: String, ret: Stri
         if ms.kind != "creator" and ms.name == name {
             let k = methodOrdinal(cs, mi)
             if ms.hasWhere {
-                let ctx = ((seedParams(seedDeps(prog.newCtx(), cs), params)).withRet(ret)).withTag(cs.name + "_" + name)
+                let ctx = ((seedDeps(prog.newCtx(), cs).seedParams(params)).withRet(ret)).withTag(cs.name + "_" + name)
                 let g = genExpr(ms.whereTokens, 0, ctx)
                 out = out + "    if (" + g.code + ") { return xc_" + cs.name + "_" + name + "_ovl" + int_to_string(k) + "_impl(" + argfwd + "); }\n"
             } else {
@@ -517,7 +517,7 @@ mapper genClassMethods(prog: Program) -> String {
                 out = out + "static " + ms.retCtype + " xc_" + cs.name + "_" + ms.name + "(" + ms.params + ") {\n"
                 out = out + funcDepPrologue(prog, ms.fnDeps)
                 out = out + captureDecls(ms.bodyTokens)
-                let ctx = seedCaptures(((seedFuncDeps(seedParams(prog.newCtx(), ms.params), ms.fnDeps)).withRet(ms.retCtype)).withTag(tag), ms.bodyTokens)
+                let ctx = seedCaptures(((seedFuncDeps(prog.newCtx().seedParams(ms.params), ms.fnDeps)).withRet(ms.retCtype)).withTag(tag), ms.bodyTokens)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
             } else {
@@ -537,7 +537,7 @@ mapper genClassMethods(prog: Program) -> String {
                 out = out + "    xc_" + cs.name + "_t* self = (xc_" + cs.name + "_t*)self_ptr;\n"
                 out = out + funcDepPrologue(prog, ms.fnDeps)
                 out = out + captureDecls(ms.bodyTokens)
-                let ctx = seedCaptures((((seedFuncDeps(seedParams(seedDeps(prog.newCtx(), cs), ms.params), ms.fnDeps)).withRet(ms.retCtype)).withTag(tag)).withSelfClass(cs.name), ms.bodyTokens)
+                let ctx = seedCaptures((((seedFuncDeps(seedDeps(prog.newCtx(), cs).seedParams(ms.params), ms.fnDeps)).withRet(ms.retCtype)).withTag(tag)).withSelfClass(cs.name), ms.bodyTokens)
                 out = out + genBody2(ms.bodyTokens, ctx)
                 out = out + "}\n\n"
                 if overloaded and isLastOfName(cs, mi) {

@@ -80,8 +80,8 @@ mapper String.cEscape() -> String {
 // Map a C type spelling to its X-type name (the inverse of type lowering). The
 // ctype↔xtype bridge used throughout codegen, hence its place in the foundation.
 mapper String.ctypeToXName() -> String {
-    if isFnXType(this) { return this }    // Fn(...)/Pair(...) carry their own
-    if isPairXType(this) { return this }  // signature; they're already xtypes
+    if this.isFnXType() { return this }    // Fn(...)/Pair(...) carry their own
+    if this.isPairXType() { return this }  // signature; they're already xtypes
     match this {
         "xc_string_t"  -> "String"
         "xc_number_t"  -> "Number"

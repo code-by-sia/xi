@@ -13,7 +13,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
     if toks.kindAt(q) == 100 { q = q + 1  if toks.kindAt(q) == 101 { q = q + 1 } }   // ()
     let curVar = "_e" + u + "_0"
     let curX = elemX0
-    let curC = xnameToCtype(curX)
+    let curC = curX.xnameToCtype()
     let genC = curC                                        // running-value (seed) type for generateSequence
     let pre = ""                                            // decls before the loop (counters)
     // list source: read the i-th element; generate source: read the running value
@@ -39,7 +39,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
             if fld == "map" {
                 step = step + 1
                 let nv = "_e" + u + "_" + int_to_string(step)
-                let nc = xnameToCtype(body.xtyp)
+                let nc = body.xtyp.xnameToCtype()
                 inner = inner + "        " + nc + " " + nv + ";\n"
                 inner = inner + "        { " + curC + " " + param + " = " + curVar + "; " + nv + " = (" + body.code + "); }\n"
                 curVar = nv  curX = body.xtyp  curC = nc
@@ -79,9 +79,9 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
     let tf = toks.textAt(q + 1)
     if tf == "toList" or tf == "toSet" {
         let add = "xstd_list_push"
-        let tx = "List_" + arrSuffixOf(curX)
+        let tx = "List_" + curX.arrSuffixOf()
         let newc = "xstd_list_new(sizeof(" + curC + "))"
-        if tf == "toSet" { add = "xstd_set_add"  tx = "Set_" + arrSuffixOf(curX)  newc = "xstd_set_new(sizeof(" + curC + "), " + strFlagFor(curC) + ")" }
+        if tf == "toSet" { add = "xstd_set_add"  tx = "Set_" + curX.arrSuffixOf()  newc = "xstd_set_new(sizeof(" + curC + "), " + curC.strFlagFor() + ")" }
         let code = head + "      __auto_type _out" + u + " = " + newc + ";\n" + loopHdr + inner
                  + "        " + add + "(_out" + u + ", &" + curVar + "); } _out" + u + "; })"
         return ExprRes { code: code, pos: q + 4, xtyp: tx , owned: false }
@@ -108,7 +108,7 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
             bstart = arrow + 1
         }
         let body = genExpr(toks, bstart, (ctx.addSym(pa, accX)).addSym(px, curX))
-        let accC = xnameToCtype(accX)
+        let accC = accX.xnameToCtype()
         let code = head + "      " + accC + " " + pa + " = " + seed + ";\n" + loopHdr + inner
                  + "        " + curC + " " + px + " = " + curVar + "; " + pa + " = (" + body.code + "); } " + pa + "; })"
         return ExprRes { code: code, pos: close + 1, xtyp: accX , owned: false }
@@ -134,13 +134,13 @@ mapper genSequenceChain(toks: Token[], p: Integer, src: String, elemX0: String, 
         return ExprRes { code: code, pos: close + 1, xtyp: "Bool" , owned: false }
     }
     if tf == "firstOrNone" {
-        let suf = arrSuffixOf(curX)
+        let suf = curX.arrSuffixOf()
         let code = head + "      xc_opt_" + suf + "_t _r" + u + "; _r" + u + ".has_value = 0;\n" + loopHdr + inner
                  + "        _r" + u + ".has_value = 1; _r" + u + ".value = " + curVar + "; break; } _r" + u + "; })"
         return ExprRes { code: code, pos: q + 4, xtyp: "opt_" + suf , owned: false }
     }
     // first() — first surviving element (aborts if none)
-    let fcode = head + "      xc_opt_" + arrSuffixOf(curX) + "_t _r" + u + "; _r" + u + ".has_value = 0;\n" + loopHdr + inner
+    let fcode = head + "      xc_opt_" + curX.arrSuffixOf() + "_t _r" + u + "; _r" + u + ".has_value = 0;\n" + loopHdr + inner
              + "        _r" + u + ".has_value = 1; _r" + u + ".value = " + curVar + "; break; }\n"
              + "      if (!_r" + u + ".has_value) { fprintf(stderr, \"xc: first() on an empty sequence\\n\"); abort(); } _r" + u + ".value; })"
     return ExprRes { code: fcode, pos: q + 4, xtyp: curX , owned: false }
@@ -177,14 +177,14 @@ mapper sortStmtExpr(declSv: String, sv: String, rv: String, iv: String, u: Strin
 
 // recv.<fld>([arg]) { [params =>] body } — emit an inlined loop (statement-expr).
 mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: String, ctx: GCtx) -> ExprRes {
-    let elem = listElemCtype(typ)
-    let elemX = listElemXName(typ)
+    let elem = typ.listElemCtype()
+    let elemX = typ.listElemXName()
     let u = int_to_string(p)
     let sv = "_s" + u
     let iv = "_i" + u
     let rv = "_r" + u
     let suf = string_slice(typ, 5, string_len(typ))   // element arr-suffix (typ = "List_<suf>")
-    let strF = strFlagFor(elem)
+    let strF = elem.strFlagFor()
     let declSv = "xc_List_t " + sv + " = " + recv + ";\n      "
     let q = p + 2
     // optional leading (arg): take/drop count, fold seed, joinToString separator
@@ -279,9 +279,9 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
 
     if fld == "zip" {
         // zip(ys): List<A> x List<B> -> List<Pair<A,B>>, truncated to the shorter.
-        let bX = listElemXName(argX)
-        let bC = xnameToCtype(bX)
-        let pX = pairXtype(elemX, bX)
+        let bX = argX.listElemXName()
+        let bC = bX.xnameToCtype()
+        let pX = elemX.pairXtype(bX)
         let ys = "_ys" + u
         let nn = "_n" + u
         let code = "({ " + declSv + "xc_List_t " + ys + " = (" + argCode + ");\n"
@@ -290,21 +290,21 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
                  + "      for (xc_integer_t " + iv + " = 0; " + iv + " < " + nn + "; " + iv + " = " + iv + " + 1) {\n"
                  + "        xc_pair_t _pp" + u + " = xc_pair_make(xstd_list_at(" + sv + ", " + iv + "), sizeof(" + elem + "), xstd_list_at(" + ys + ", " + iv + "), sizeof(" + bC + "));\n"
                  + "        xstd_list_push(" + rv + ", &_pp" + u + "); } " + rv + "; })"
-        return ExprRes { code: code, pos: q, xtyp: "List_" + arrSuffixOf(pX) , owned: false }
+        return ExprRes { code: code, pos: q, xtyp: "List_" + pX.arrSuffixOf() , owned: false }
     }
     if fld == "unzip" {
         // unzip: List<Pair<A,B>> -> Pair<List<A>, List<B>>.
-        let aX = pairElem(elemX, 0)
-        let bX = pairElem(elemX, 1)
-        let aC = xnameToCtype(aX)
-        let bC = xnameToCtype(bX)
+        let aX = elemX.pairElem(0)
+        let bX = elemX.pairElem(1)
+        let aC = aX.xnameToCtype()
+        let bC = bX.xnameToCtype()
         let la = "_la" + u
         let lb = "_lb" + u
         let code = "({ " + declSv + "xc_List_t " + la + " = xstd_list_new(sizeof(" + aC + ")); xc_List_t " + lb + " = xstd_list_new(sizeof(" + bC + "));\n"
                  + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
                  + "        xc_pair_t* _pp" + u + " = (xc_pair_t*)xstd_list_at(" + sv + ", " + iv + "); xstd_list_push(" + la + ", _pp" + u + "->first); xstd_list_push(" + lb + ", _pp" + u + "->second); }\n"
                  + "      xc_pair_make(&" + la + ", sizeof(xc_List_t), &" + lb + ", sizeof(xc_List_t)); })"
-        return ExprRes { code: code, pos: q, xtyp: pairXtype("List_" + arrSuffixOf(aX), "List_" + arrSuffixOf(bX)) , owned: true }
+        return ExprRes { code: code, pos: q, xtyp: "List_" + aX.arrSuffixOf().pairXtype("List_" + bX.arrSuffixOf()) , owned: true }
     }
 
     if fld == "sum" {
@@ -369,17 +369,17 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     }
     if fld == "withIndex" {
         // List<T> -> List<Pair<Integer, T>>
-        let pX = pairXtype("Integer", elemX)
+        let pX = "Integer".pairXtype(elemX)
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(xc_pair_t));\n"
                  + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
                  + "        xc_integer_t _ix" + u + " = " + iv + ";\n"
                  + "        xc_pair_t _pp" + u + " = xc_pair_make(&_ix" + u + ", sizeof(xc_integer_t), xstd_list_at(" + sv + ", " + iv + "), sizeof(" + elem + "));\n"
                  + "        xstd_list_push(" + rv + ", &_pp" + u + "); } " + rv + "; })"
-        return ExprRes { code: code, pos: q, xtyp: "List_" + arrSuffixOf(pX) , owned: false }
+        return ExprRes { code: code, pos: q, xtyp: "List_" + pX.arrSuffixOf() , owned: false }
     }
     if fld == "flatten" {
         // List<List<T>> -> List<T>
-        let innerC = listElemCtype(elemX)
+        let innerC = elemX.listElemCtype()
         let jv = "_j" + u
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + innerC + "));\n"
                  + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
@@ -415,7 +415,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         let body = genExpr(toks, bstart, bctx)
         let elDecl = "        " + elem + " " + p1 + " = " + elAt + ";\n"
         if fld == "fold" {
-            let accC = xnameToCtype(accX)
+            let accC = accX.xnameToCtype()
             let loop = "({ " + declSv + accC + " " + p0 + " = " + argCode + ";\n"
                      + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
                      + elDecl + "        " + p0 + " = (" + body.code + "); } " + p0 + "; })"
@@ -430,25 +430,25 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         // (init) { acc, x => body } — successive accumulations, including init.
         // Result is List<Acc> of length len+1.
         let accX = argX
-        let accC = xnameToCtype(accX)
+        let accC = accX.xnameToCtype()
         let bctx = (ctx.addSym(p0, accX)).addSym(p1, elemX)
         let body = genExpr(toks, bstart, bctx)
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + accC + ")); " + accC + " " + p0 + " = " + argCode + ";\n"
                  + "      xstd_list_push(" + rv + ", &" + p0 + ");\n"
                  + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
                  + "        " + elem + " " + p1 + " = " + elAt + "; " + p0 + " = (" + body.code + "); xstd_list_push(" + rv + ", &" + p0 + "); } " + rv + "; })"
-        return ExprRes { code: code, pos: close + 1, xtyp: "List_" + arrSuffixOf(accX) , owned: false }
+        return ExprRes { code: code, pos: close + 1, xtyp: "List_" + accX.arrSuffixOf() , owned: false }
     }
     if fld == "mapIndexed" {
         // { i, x => body } — p0 = index (Integer), p1 = element
         let bctx = (ctx.addSym(p0, "Integer")).addSym(p1, elemX)
         let body = genExpr(toks, bstart, bctx)
-        let uc = xnameToCtype(body.xtyp)
+        let uc = body.xtyp.xnameToCtype()
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + uc + "));\n"
                  + "      for (xc_integer_t " + iv + " = 0; " + iv + " < xstd_list_len(" + sv + "); " + iv + " = " + iv + " + 1) {\n"
                  + "        xc_integer_t " + p0 + " = " + iv + "; " + elem + " " + p1 + " = " + elAt + ";\n"
                  + "        " + uc + " _v = (" + body.code + "); xstd_list_push(" + rv + ", &_v); } " + rv + "; })"
-        return ExprRes { code: code, pos: close + 1, xtyp: "List_" + arrSuffixOf(body.xtyp) , owned: false }
+        return ExprRes { code: code, pos: close + 1, xtyp: "List_" + body.xtyp.arrSuffixOf() , owned: false }
     }
 
     // single-param lambdas: p0 binds the element
@@ -478,7 +478,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     }
     if fld == "maxOf" or fld == "minOf" {
         // the max/min projected value (aborts if empty)
-        let keyC = xnameToCtype(body.xtyp)
+        let keyC = body.xtyp.xnameToCtype()
         let bk = "_best" + u
         let kk = "_k" + u
         let cmp = kk + " < " + bk
@@ -493,10 +493,10 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         return ExprRes { code: code, pos: close + 1, xtyp: body.xtyp , owned: false }
     }
     if fld == "map" {
-        let uc = xnameToCtype(body.xtyp)
+        let uc = body.xtyp.xnameToCtype()
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + uc + "));\n      " + loopOpen
                  + "        " + uc + " _v = (" + body.code + "); xstd_list_push(" + rv + ", &_v); } " + rv + "; })"
-        return ExprRes { code: code, pos: close + 1, xtyp: "List_" + arrSuffixOf(body.xtyp) , owned: false }
+        return ExprRes { code: code, pos: close + 1, xtyp: "List_" + body.xtyp.arrSuffixOf() , owned: false }
     }
     if fld == "filter" {
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n      " + loopOpen
@@ -515,7 +515,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         let code = "({ " + declSv + "xc_List_t " + yes + " = xstd_list_new(sizeof(" + elem + ")); xc_List_t " + no + " = xstd_list_new(sizeof(" + elem + "));\n      " + loopOpen
                  + "        if ((" + body.code + ")) xstd_list_push(" + yes + ", &" + p0 + "); else xstd_list_push(" + no + ", &" + p0 + "); }\n"
                  + "      xc_pair_make(&" + yes + ", sizeof(xc_List_t), &" + no + ", sizeof(xc_List_t)); })"
-        return ExprRes { code: code, pos: close + 1, xtyp: pairXtype(typ, typ) , owned: true }
+        return ExprRes { code: code, pos: close + 1, xtyp: typ.pairXtype(typ) , owned: true }
     }
     if fld == "forEach" {
         let code = "({ " + declSv + loopOpen + "        (void)(" + body.code + "); } (void)0; })"
@@ -542,7 +542,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
         return ExprRes { code: code, pos: close + 1, xtyp: "Bool" , owned: false }
     }
     if fld == "sumOf" {
-        let sc = xnameToCtype(body.xtyp)
+        let sc = body.xtyp.xnameToCtype()
         let code = "({ " + declSv + sc + " " + rv + " = 0;\n      " + loopOpen
                  + "        " + rv + " = " + rv + " + (" + body.code + "); } " + rv + "; })"
         return ExprRes { code: code, pos: close + 1, xtyp: body.xtyp , owned: false }
@@ -559,7 +559,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     }
     if fld == "flatMap" {
         // body returns a List<U>; concatenate all sublists
-        let uc = listElemCtype(body.xtyp)
+        let uc = body.xtyp.listElemCtype()
         let jv = "_j" + u
         let code = "({ " + declSv + "xc_List_t " + rv + " = xstd_list_new(sizeof(" + uc + "));\n      " + loopOpen
                  + "        xc_List_t _sub" + u + " = (" + body.code + ");\n"
@@ -574,7 +574,7 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     }
     if fld == "maxByOrNone" or fld == "minByOrNone" {
         // element with the max/min numeric key, as an optional
-        let keyC = xnameToCtype(body.xtyp)
+        let keyC = body.xtyp.xnameToCtype()
         let cmp = " > "
         if fld == "minByOrNone" { cmp = " < " }
         let bk = "_best" + u
@@ -592,34 +592,34 @@ mapper genListFunc(toks: Token[], p: Integer, recv: String, typ: String, fld: St
     }
     if fld == "sortedBy" or fld == "sortedByDescending" {
         // sort by a numeric/String key projection
-        let keyC = xnameToCtype(body.xtyp)
+        let keyC = body.xtyp.xnameToCtype()
         let code = sortStmtExpr(declSv, sv, rv, iv, u, elem, p0, keyC, body.xtyp, body.code, fld == "sortedByDescending")
         return ExprRes { code: code, pos: close + 1, xtyp: typ , owned: false }
     }
     if fld == "groupBy" {
         // Map<K, List<T>> — bucket elements by a key
-        let kc = xnameToCtype(body.xtyp)
-        let kstr = strFlagFor(kc)
+        let kc = body.xtyp.xnameToCtype()
+        let kstr = kc.strFlagFor()
         let code = "({ " + declSv + "xc_Map_t " + rv + " = xstd_map_new(sizeof(" + kc + "), sizeof(xc_List_t), " + kstr + ");\n      " + loopOpen
                  + "        " + kc + " _k" + u + " = (" + body.code + ");\n"
                  + "        if (!xstd_map_has(" + rv + ", &_k" + u + ")) { xc_List_t _nl" + u + " = xstd_list_new(sizeof(" + elem + ")); xstd_map_put(" + rv + ", &_k" + u + ", &_nl" + u + "); }\n"
                  + "        xc_List_t _lst" + u + " = *(xc_List_t*)xstd_map_get(" + rv + ", &_k" + u + "); xstd_list_push(_lst" + u + ", &" + p0 + "); } " + rv + "; })"
-        return ExprRes { code: code, pos: close + 1, xtyp: "Map_" + arrSuffixOf(body.xtyp) + "_List_" + suf , owned: false }
+        return ExprRes { code: code, pos: close + 1, xtyp: "Map_" + body.xtyp.arrSuffixOf() + "_List_" + suf , owned: false }
     }
     if fld == "associateBy" {
         // Map<K, T> — key each element by a projection (last wins)
-        let kc = xnameToCtype(body.xtyp)
-        let kstr = strFlagFor(kc)
+        let kc = body.xtyp.xnameToCtype()
+        let kstr = kc.strFlagFor()
         let code = "({ " + declSv + "xc_Map_t " + rv + " = xstd_map_new(sizeof(" + kc + "), sizeof(" + elem + "), " + kstr + ");\n      " + loopOpen
                  + "        " + kc + " _k" + u + " = (" + body.code + "); xstd_map_put(" + rv + ", &_k" + u + ", &" + p0 + "); } " + rv + "; })"
-        return ExprRes { code: code, pos: close + 1, xtyp: "Map_" + arrSuffixOf(body.xtyp) + "_" + suf , owned: false }
+        return ExprRes { code: code, pos: close + 1, xtyp: "Map_" + body.xtyp.arrSuffixOf() + "_" + suf , owned: false }
     }
     if fld == "associateWith" {
         // Map<T, V> — element is the key, value from a projection
-        let vc = xnameToCtype(body.xtyp)
+        let vc = body.xtyp.xnameToCtype()
         let code = "({ " + declSv + "xc_Map_t " + rv + " = xstd_map_new(sizeof(" + elem + "), sizeof(" + vc + "), " + strF + ");\n      " + loopOpen
                  + "        " + vc + " _v" + u + " = (" + body.code + "); xstd_map_put(" + rv + ", &" + p0 + ", &_v" + u + "); } " + rv + "; })"
-        return ExprRes { code: code, pos: close + 1, xtyp: "Map_" + suf + "_" + arrSuffixOf(body.xtyp) , owned: false }
+        return ExprRes { code: code, pos: close + 1, xtyp: "Map_" + suf + "_" + body.xtyp.arrSuffixOf() , owned: false }
     }
     // joinToString(sep) { it => <string> }
     let sep = argCode
@@ -647,7 +647,7 @@ mapper captureDecls(toks: Token[]) -> String {
             let ty = toks.textAt(i + 3)               // type name (ident or primitive keyword)
             if not strArrContains(seen, nm) {
                 seen = appendString(seen, nm)
-                out = out + "    " + cTy(xnameToCtype(ty)) + " " + nm + " = {0};\n"
+                out = out + "    " + cTy(ty.xnameToCtype()) + " " + nm + " = {0};\n"
             }
         }
         i = i + 1

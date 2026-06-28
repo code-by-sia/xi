@@ -116,7 +116,7 @@ mapper Program.funcRetXType(name: String) -> String {
             // `async` free function: callers receive a Future<T> over the inner T.
             // (A plain `-> Future<T>` already resolves to a Future xtype below.)
             if fs.isAsync {
-                return futureXtypeFor(asyncInnerCtype(fs))
+                return fs.asyncInnerCtype().futureXtypeFor()
             }
             return this.resolveX(fs.retCtype.ctypeToXName())
         }
@@ -251,7 +251,7 @@ mapper Program.fieldTypeNameC(typeName: String, field: String) -> String {
     if field == "err" { return "String" }
     if typeName.startsWith2("res_") and field == "value" {
         let elem = string_slice(typeName, 4, string_len(typeName))
-        return this.resolveX(xnameFromArrSuffix(elem))
+        return this.resolveX(elem.xnameFromArrSuffix())
     }
     let i = 0
     let n = typeSpecLen(this.types)

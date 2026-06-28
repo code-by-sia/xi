@@ -30,7 +30,7 @@ mapper genIf(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let close = toks.matchBrace(pe)
         // infer the unwrapped element's xtype from an "opt_<suffix>" optional
         let nmType = ""
-        if e.xtyp.startsWith2("opt_") { nmType = xnameFromArrSuffix(string_slice(e.xtyp, 4, string_len(e.xtyp))) }
+        if e.xtyp.startsWith2("opt_") { nmType = string_slice(e.xtyp, 4, string_len(e.xtyp)).xnameFromArrSuffix() }
         let bctx = ctx.addSym(nm, nmType)
         let body = "        __auto_type " + nm + " = (" + e.code + ").value;\n" + genStmts(toks, pe + 1, close, bctx)
         let code = "    if ((" + e.code + ").has_value) {\n" + body + "    }\n"
@@ -116,7 +116,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let p = pos + 2
         let declCtype = ""
         if toks.kindAt(p) == 108 {
-            declCtype = typeCtypeOf(toks, p + 1)
+            declCtype = toks.typeCtypeOf(p + 1)
             while toks.kindAt(p) != 111 and toks.kindAt(p) != 0 { p = p + 1 }
         }
         if toks.kindAt(p) == 111 { p = p + 1 }
@@ -181,10 +181,10 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let close = toks.matchBrace(it.pos)
         let idv = "_i" + int_to_string(pos)
         let itv = "_it" + int_to_string(pos)
-        if isListXType(it.xtyp) {
+        if it.xtyp.isListXType() {
             // for x in <List<T>>
-            let elem = listElemCtype(it.xtyp)
-            let bctx = ctx.addSym(varName, listElemXName(it.xtyp))
+            let elem = it.xtyp.listElemCtype()
+            let bctx = ctx.addSym(varName, it.xtyp.listElemXName())
             let body = genStmts(toks, it.pos + 1, close, bctx)
             let code = "    { xc_List_t " + itv + " = " + it.code + ";\n"
                      + "      for (xc_integer_t " + idv + " = 0; " + idv + " < xstd_list_len(" + itv + "); " + idv + " = " + idv + " + 1) {\n"
@@ -192,10 +192,10 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
                      + body + "      } }\n"
             return StmtRes { code: code, ctx: ctx, pos: close + 1 }
         }
-        if isSetXType(it.xtyp) {
+        if it.xtyp.isSetXType() {
             // for x in <Set<T>> — snapshot the live elements into a List, iterate it
-            let elem = setElemCtype(it.xtyp)
-            let bctx = ctx.addSym(varName, setElemXName(it.xtyp))
+            let elem = it.xtyp.setElemCtype()
+            let bctx = ctx.addSym(varName, it.xtyp.setElemXName())
             let body = genStmts(toks, it.pos + 1, close, bctx)
             let code = "    { xc_List_t " + itv + " = xstd_set_items(" + it.code + ");\n"
                      + "      for (xc_integer_t " + idv + " = 0; " + idv + " < xstd_list_len(" + itv + "); " + idv + " = " + idv + " + 1) {\n"

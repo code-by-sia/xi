@@ -27,13 +27,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         }
         if k == 107 or k == 129 {
             let fld = toks.textAt(p + 1)
-            if isListXType(typ) and fld == "asSequence" {
-                let fr = genSequenceChain(toks, p, code, listElemXName(typ), ctx, false, "", "", "")
+            if typ.isListXType() and fld == "asSequence" {
+                let fr = genSequenceChain(toks, p, code, typ.listElemXName(), ctx, false, "", "", "")
                 code = fr.code
                 typ = fr.xtyp
                 p = fr.pos
             } else {
-            if isListXType(typ) and isListFunc(fld) {
+            if typ.isListXType() and isListFunc(fld) {
                 let fr = genListFunc(toks, p, code, typ, fld, ctx)
                 code = fr.code
                 typ = fr.xtyp
@@ -106,9 +106,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "running" { code = "xstd_thread_running(" + code + ")"  typ = "Bool" }
                     p = al.pos
                 } else {
-                if isListXType(typ) {
+                if typ.isListXType() {
                     let recv = code
-                    let elem = listElemCtype(typ)
+                    let elem = typ.listElemCtype()
                     if fld == "push" {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_list_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
@@ -119,7 +119,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "get" {
                         let al = genArgs(toks, p + 2, ctx)
                         code = "(*(" + elem + "*)xstd_list_at(" + recv + ", " + al.code + "))"
-                        typ = listElemXName(typ)
+                        typ = typ.listElemXName()
                         p = al.pos
                     } else {
                     if fld == "set" or fld == "insert" {
@@ -143,9 +143,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         p = al.pos
                     } } }
                 } else {
-                if isSetXType(typ) {
+                if typ.isSetXType() {
                     let recv = code
-                    let elem = setElemCtype(typ)
+                    let elem = typ.setElemCtype()
                     if fld == "add" {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_set_add(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
@@ -171,14 +171,14 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         if fld == "len"     { code = "xstd_set_len(" + recv + ")"  typ = "Integer" }
                         if fld == "isEmpty" { code = "(xstd_set_len(" + recv + ") == 0)"  typ = "Bool" }
                         if fld == "clear"   { code = "xstd_set_clear(" + recv + ")"  typ = "" }
-                        if fld == "items"   { code = "xstd_set_items(" + recv + ")"  typ = "List_" + setElemSuffix(typ) }
+                        if fld == "items"   { code = "xstd_set_items(" + recv + ")"  typ = "List_" + typ.setElemSuffix() }
                         p = al.pos
                     } } }
                 } else {
-                if isMapXType(typ) {
+                if typ.isMapXType() {
                     let recv = code
-                    let kc = mapKeyCtype(typ)
-                    let vc = mapValCtype(typ)
+                    let kc = typ.mapKeyCtype()
+                    let vc = typ.mapValCtype()
                     if fld == "put" {
                         let ke = genExpr(toks, p + 3, ctx)
                         let q = ke.pos
@@ -192,7 +192,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "get" {
                         let ke = genExpr(toks, p + 3, ctx)
                         code = "(*(" + vc + "*)xstd_map_get(" + recv + ", (" + kc + "[]){ " + ke.code + " }))"
-                        typ = mapValXName(typ)
+                        typ = typ.mapValXName()
                         p = ke.pos
                         if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
@@ -202,7 +202,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         if toks.kindAt(q) == 106 { q = q + 1 }   // ,
                         let de = genExpr(toks, q, ctx)
                         code = "(*(" + vc + "*)xstd_map_getor(" + recv + ", (" + kc + "[]){ " + ke.code + " }, (" + vc + "[]){ " + de.code + " }))"
-                        typ = mapValXName(typ)
+                        typ = typ.mapValXName()
                         p = de.pos
                         if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
@@ -224,15 +224,15 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         if fld == "len"     { code = "xstd_map_len(" + recv + ")"  typ = "Integer" }
                         if fld == "isEmpty" { code = "(xstd_map_len(" + recv + ") == 0)"  typ = "Bool" }
                         if fld == "clear"   { code = "xstd_map_clear(" + recv + ")"  typ = "" }
-                        if fld == "keys"    { code = "xstd_map_keys(" + recv + ")"  typ = "List_" + mapKeySuffix(typ) }
-                        if fld == "values"  { code = "xstd_map_values(" + recv + ")"  typ = "List_" + mapValSuffix(typ) }
+                        if fld == "keys"    { code = "xstd_map_keys(" + recv + ")"  typ = "List_" + typ.mapKeySuffix() }
+                        if fld == "values"  { code = "xstd_map_values(" + recv + ")"  typ = "List_" + typ.mapValSuffix() }
                         p = al.pos
                     } } } } }
                 } else {
-                if isStackXType(typ) {
+                if typ.isStackXType() {
                     let recv = code
-                    let elem = stackElemCtype(typ)
-                    let elemX = stackElemXName(typ)
+                    let elem = typ.stackElemCtype()
+                    let elemX = typ.stackElemXName()
                     if fld == "push" {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_stack_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
@@ -248,10 +248,10 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         p = al.pos
                     }
                 } else {
-                if isQueueXType(typ) {
+                if typ.isQueueXType() {
                     let recv = code
-                    let elem = queueElemCtype(typ)
-                    let elemX = queueElemXName(typ)
+                    let elem = typ.queueElemCtype()
+                    let elemX = typ.queueElemXName()
                     if fld == "enqueue" or fld == "push" {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_queue_enqueue(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
@@ -268,10 +268,10 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         p = al.pos
                     }
                 } else {
-                if isSortedQueueXType(typ) {
+                if typ.isSortedQueueXType() {
                     let recv = code
-                    let elem = sqElemCtype(typ)
-                    let elemX = sqElemXName(typ)
+                    let elem = typ.sqElemCtype()
+                    let elemX = typ.sqElemXName()
                     if fld == "push" {
                         let ae = genExpr(toks, p + 3, ctx)
                         code = "xstd_pqueue_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
@@ -397,7 +397,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 } else {
                     if typ.startsWith2("ns:") {
                         let path = string_slice(typ, 3, string_len(typ)) + "." + fld
-                        code = builtinForPath(path) + "(" + al.code + ")"
+                        code = path.builtinForPath() + "(" + al.code + ")"
                         typ = ""
                     } else {
                         if isInterface(ctx.prog, typ) {
@@ -458,13 +458,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "data" and typ.startsWith2("arr_") {
                         // raw element pointer of an array fat pointer
                         code = code + ".data"
-                        typ = "ptr:" + xnameFromArrSuffix(string_slice(typ, 4, string_len(typ)))
+                        typ = "ptr:" + string_slice(typ, 4, string_len(typ)).xnameFromArrSuffix()
                     } else {
-                        if isPairXType(typ) and (fld == "first" or fld == "second") {
+                        if typ.isPairXType() and (fld == "first" or fld == "second") {
                             // Pair<A,B>.first / .second — cast the stored value back to A/B.
-                            let pex = pairElem(typ, 0)
-                            if fld == "second" { pex = pairElem(typ, 1) }
-                            code = "(*(" + xnameToCtype(pex) + "*)((" + code + ")." + fld + "))"
+                            let pex = typ.pairElem(0)
+                            if fld == "second" { pex = typ.pairElem(1) }
+                            code = "(*(" + pex.xnameToCtype() + "*)((" + code + ")." + fld + "))"
                             typ = pex
                         } else {
                         if typ == "String" and fld == "length" {
@@ -490,11 +490,11 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             if k == 100 {
                 let al = genArgs(toks, p, ctx)
                 let _fx = ctx.lookupVar(bname)
-                if isFnXType(_fx) {
+                if _fx.isFnXType() {
                     // Closure call: cast the stored fn pointer to the signature
                     // recovered from the value's Fn(...) xtype and invoke it.
-                    let rc = fnRetX(_fx)
-                    let pcs = fnParamsX(_fx)
+                    let rc = _fx.fnRetX()
+                    let pcs = _fx.fnParamsX()
                     let sig = rc + "(*)(void*"
                     if string_len(pcs) > 0 { sig = sig + ", " + pcs }
                     sig = sig + ")"
@@ -528,7 +528,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     typ = (ctx.prog).selfMethodRetXType(ctx.selfClass, bname)
                 } else {
                 if (ctx.prog).isFuncNameC(bname) {
-                    if isAsyncFuncC(ctx.prog, bname) {
+                    if ctx.prog.isAsyncFuncC(bname) {
                         // async call: spawn a worker, yield a Future immediately
                         code = "xc_spawn_" + bname + "(" + al.code + ")"
                     } else {
@@ -563,7 +563,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     } else {
                         if typ.startsWith2("arr_") {
                             code = code + ".data[" + ie.code + "]"
-                            typ = xnameFromArrSuffix(string_slice(typ, 4, string_len(typ)))
+                            typ = string_slice(typ, 4, string_len(typ)).xnameFromArrSuffix()
                         } else {
                             if typ.endsWith2("[]") {
                                 code = code + ".data[" + ie.code + "]"
