@@ -488,6 +488,45 @@ mapper parseClass(ps: PState) -> ClassResult {
         if peek(ps2).kind == 103 { ps2 = advance(ps2) }  // }
     }
 
+    // optional mutable state block:  state { name: Type = expr, ... }
+    let stateFields: String[] = []
+    let stateInit: Token[] = []
+    if peek(ps2).kind == 289 and peekAt(ps2, 1).kind == 102 {   // state {
+        ps2 = advance(ps2)   // state
+        ps2 = advance(ps2)   // {
+        while peek(ps2).kind != 103 and peek(ps2).kind != 0 {
+            let fname = peek(ps2).text
+            stateInit = appendToken(stateInit, peek(ps2))   // name
+            ps2 = advance(ps2)
+            if peek(ps2).kind == 108 { ps2 = advance(ps2) }   // :
+            let ftr = parseTypeExpr(ps2)
+            ps2 = ftr.ps
+            stateFields = appendString(stateFields, fname + ":" + ftr.ctype)
+            if peek(ps2).kind == 111 {                        // =
+                stateInit = appendToken(stateInit, peek(ps2))
+                ps2 = advance(ps2)
+            }
+            let depth = 0
+            let coll = true
+            while coll {
+                let it = peek(ps2)
+                if it.kind == 0 { coll = false }
+                else { if depth == 0 and (it.kind == 106 or it.kind == 103) { coll = false }
+                else {
+                    if it.kind == 100 or it.kind == 104 or it.kind == 102 { depth = depth + 1 }
+                    if it.kind == 101 or it.kind == 105 or it.kind == 103 { depth = depth - 1 }
+                    stateInit = appendToken(stateInit, it)
+                    ps2 = advance(ps2)
+                } }
+            }
+            if peek(ps2).kind == 106 {                        // ,
+                stateInit = appendToken(stateInit, peek(ps2))
+                ps2 = advance(ps2)
+            }
+        }
+        if peek(ps2).kind == 103 { ps2 = advance(ps2) }       // }
+    }
+
     // methods and creators
     let methList: MethodSpec[] = []
     while peek(ps2).kind != 103 and peek(ps2).kind != 0 {
@@ -528,7 +567,7 @@ mapper parseClass(ps: PState) -> ClassResult {
     }
     if peek(ps2).kind == 103 { ps2 = advance(ps2) }  // }
 
-    let spec = ClassSpec { name: name, implNames: implNames, depList: depList, methList: methList }
+    let spec = ClassSpec { name: name, implNames: implNames, depList: depList, methList: methList, stateFields: stateFields, stateInit: stateInit }
     return ClassResult { spec: spec, ps: ps2 }
 }
 

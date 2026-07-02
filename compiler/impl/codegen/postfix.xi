@@ -442,6 +442,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     if fld == "body"   { code = "xstd_req_body("   + code + ")" }
                     typ = "String"
                 } else {
+                if typ == "self" {
+                    // self.<field> — a mutable state field or injected dep of the
+                    // enclosing class; `self` is a struct pointer, so use `->`.
+                    // (Assignment `self.x = e` reuses this via genExpr on the LHS.)
+                    code = code + "->" + fld
+                    typ = (ctx.prog).classFieldXType(ctx.selfClass, fld)
+                } else {
                 if typ.startsWith2("atom:") {
                     // atom.current (or any field) -> the holder value
                     let an = string_slice(typ, 5, string_len(typ))
@@ -478,6 +485,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         }
                         }
                     }
+                }
                 }
                 }
                 }

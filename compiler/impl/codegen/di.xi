@@ -128,6 +128,19 @@ mapper genConstructors(prog: Program) -> String {
             out = out + wireDep(prog, dep, "o->" + dep.name)
             di = di + 1
         }
+        // mutable state fields: run each `name = expr` initializer into o->name
+        let sinit = cs.stateInit
+        let sp = 0
+        let ictx = prog.newCtx()
+        while sinit.kindAt(sp) != 0 {
+            let fname = sinit.textAt(sp)
+            sp = sp + 1
+            if sinit.kindAt(sp) == 111 { sp = sp + 1 }   // =
+            let e = genExpr(sinit, sp, ictx)
+            sp = e.pos
+            out = out + "    o->" + fname + " = " + e.code + ";\n"
+            if sinit.kindAt(sp) == 106 { sp = sp + 1 }   // ,
+        }
         out = out + "    return o;\n}\n\n"
         i = i + 1
     }

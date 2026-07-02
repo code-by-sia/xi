@@ -276,6 +276,37 @@ mapper Program.fieldTypeNameC(typeName: String, field: String) -> String {
     return ""
 }
 
+// The X type of a class field accessed via `self.<field>` — a mutable state
+// field or an injected dependency of class `cls` (or "" if neither).
+mapper Program.classFieldXType(cls: String, field: String) -> String {
+    let i = 0
+    let n = classSpecLen(this.classes)
+    while i < n {
+        let cs = classSpecGet(this.classes, i)
+        if cs.name == cls {
+            let si = 0
+            let sn = stringArrLen(cs.stateFields)
+            while si < sn {
+                let f = stringArrGet(cs.stateFields, si)
+                let colon = findChar(f, 58)
+                if string_slice(f, 0, colon) == field {
+                    return this.resolveX(string_slice(f, colon + 1, string_len(f)).ctypeToXName())
+                }
+                si = si + 1
+            }
+            let di = 0
+            let dn = depSpecLen(cs.depList)
+            while di < dn {
+                let dep = depSpecGet(cs.depList, di)
+                if dep.name == field { return dep.ifaceName }
+                di = di + 1
+            }
+        }
+        i = i + 1
+    }
+    return ""
+}
+
 // The X type name of a listener method's first parameter (the event it handles),
 // extracted from the C param string "xc_OrderPaid_t e[, ...]".
 mapper String.firstParamXType() -> String {

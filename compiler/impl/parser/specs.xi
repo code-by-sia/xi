@@ -55,10 +55,12 @@ type DepSpec = {
 
 // A class
 type ClassSpec = {
-    name:       String,
-    implNames:  String[],
-    depList:    DepSpec[],
-    methList:   MethodSpec[]
+    name:        String,
+    implNames:   String[],
+    depList:     DepSpec[],
+    methList:    MethodSpec[],
+    stateFields: String[],    // "name:ctype" for mutable instance state
+    stateInit:   Token[]      // tokens inside `state { name: T = expr, ... }`
 }
 
 // A module binding

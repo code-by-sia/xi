@@ -213,6 +213,15 @@ mapper genClassStructs(prog: Program) -> String {
             out = out + "    " + dep.ctype + " " + dep.name + ";\n"
             di = di + 1
         }
+        // mutable instance state: "name:ctype" -> `ctype name;`
+        let si = 0
+        let sn = stringArrLen(cs.stateFields)
+        while si < sn {
+            let f = stringArrGet(cs.stateFields, si)
+            let colon = findChar(f, 58)
+            out = out + "    " + string_slice(f, colon + 1, string_len(f)) + " " + string_slice(f, 0, colon) + ";\n"
+            si = si + 1
+        }
         out = out + "};\n\n"
         i = i + 1
     }
@@ -273,7 +282,7 @@ mapper findClass(prog: Program, name: String) -> ClassSpec {
         }
         i = i + 1
     }
-    return ClassSpec { name: "", implNames: [], depList: [], methList: [] }
+    return ClassSpec { name: "", implNames: [], depList: [], methList: [], stateFields: [], stateInit: [] }
 }
 
 predicate isInterface(prog: Program, name: String) {
