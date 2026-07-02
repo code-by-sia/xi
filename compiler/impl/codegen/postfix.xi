@@ -449,6 +449,12 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     code = code + "->" + fld
                     typ = (ctx.prog).classFieldXType(ctx.selfClass, fld)
                 } else {
+                if typ.startsWith2("module:") and string_len((ctx.prog).moduleConstXType(string_slice(typ, 7, string_len(typ)), fld)) > 0 {
+                    // Module.NAME — a module-scoped const, lowered to its getter.
+                    let mnm = string_slice(typ, 7, string_len(typ))
+                    code = "xc_" + mnm + "_" + fld + "()"
+                    typ = (ctx.prog).moduleConstXType(mnm, fld)
+                } else {
                 if typ.startsWith2("atom:") {
                     // atom.current (or any field) -> the holder value
                     let an = string_slice(typ, 5, string_len(typ))
@@ -485,6 +491,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         }
                         }
                     }
+                }
                 }
                 }
                 }

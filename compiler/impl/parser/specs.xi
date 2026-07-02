@@ -82,7 +82,22 @@ type ModuleSpec = {
     license:     String,
     includes:    String[],  // source globs for this module (default ["./**"])
     excludes:    String[],  // globs to drop (default [])
-    dependencies: String[]  // URLs to source archives, fetched by `xi install`
+    dependencies: String[], // URLs to source archives, fetched by `xi install`
+    constNames:  String[],  // "name:ctype" for module-scoped `const` values
+    constInit:   Token[]    // tokens: `NAME = expr ,` per const (Module.NAME)
+}
+
+// The C type of a module const, or "" if `name` isn't a const of this module.
+mapper ModuleSpec.constCtype(name: String) -> String {
+    let i = 0
+    let n = stringArrLen(this.constNames)
+    while i < n {
+        let f = stringArrGet(this.constNames, i)
+        let colon = findChar(f, 58)
+        if string_slice(f, 0, colon) == name { return string_slice(f, colon + 1, string_len(f)) }
+        i = i + 1
+    }
+    return ""
 }
 
 // A top-level function or creator

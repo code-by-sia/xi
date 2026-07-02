@@ -307,6 +307,21 @@ mapper Program.classFieldXType(cls: String, field: String) -> String {
     return ""
 }
 
+// The X type of module-scoped const `Module.name`, or "" if there's no such const.
+mapper Program.moduleConstXType(moduleName: String, name: String) -> String {
+    let i = 0
+    let n = moduleSpecLen(this.modules)
+    while i < n {
+        let mod = moduleSpecGet(this.modules, i)
+        if mod.name == moduleName {
+            let ct = mod.constCtype(name)
+            if string_len(ct) > 0 { return this.resolveX(ct.ctypeToXName()) }
+        }
+        i = i + 1
+    }
+    return ""
+}
+
 // The X type name of a listener method's first parameter (the event it handles),
 // extracted from the C param string "xc_OrderPaid_t e[, ...]".
 mapper String.firstParamXType() -> String {

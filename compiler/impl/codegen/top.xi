@@ -453,6 +453,7 @@ mapper genAll(prog: Program, srcPath: String, codecs: Codecs) -> String {
          + genIfaceDefaults(prog)
          + genVtablesAndCasters(prog)
          + genCheckFns(prog)
+         + genModuleConsts(prog)
          + genSingletons(prog)
          + genCtorResolverFwd(prog)
          + genConstructors(prog)

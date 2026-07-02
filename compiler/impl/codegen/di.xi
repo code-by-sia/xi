@@ -109,6 +109,43 @@ mapper genCtorResolverFwd(prog: Program) -> String {
     return out + "\n"
 }
 
+// Module-scoped `const NAME: T = expr` -> a getter `xc_<Module>_<NAME>()`.
+// Referenced anywhere as `Module.NAME`. Forward-declared first so consts may
+// reference earlier consts (and each other across modules).
+mapper genModuleConsts(prog: Program) -> String {
+    let fwd = ""
+    let defs = ""
+    let mi = 0
+    let mn = moduleSpecLen(prog.modules)
+    while mi < mn {
+        let mod = moduleSpecGet(prog.modules, mi)
+        let ci = 0
+        let cn = stringArrLen(mod.constNames)
+        while ci < cn {
+            let f = stringArrGet(mod.constNames, ci)
+            let colon = findChar(f, 58)
+            let nm = string_slice(f, 0, colon)
+            let ct = string_slice(f, colon + 1, string_len(f))
+            fwd = fwd + "static " + ct + " xc_" + mod.name + "_" + nm + "(void);\n"
+            ci = ci + 1
+        }
+        let cinit = mod.constInit
+        let cp = 0
+        let ictx = prog.newCtx()
+        while cinit.kindAt(cp) != 0 {
+            let nm = cinit.textAt(cp)
+            cp = cp + 1
+            if cinit.kindAt(cp) == 111 { cp = cp + 1 }   // =
+            let e = genExpr(cinit, cp, ictx)
+            cp = e.pos
+            defs = defs + "static " + mod.constCtype(nm) + " xc_" + mod.name + "_" + nm + "(void) { return " + e.code + "; }\n"
+        }
+        mi = mi + 1
+    }
+    if string_len(fwd) == 0 { return "" }
+    return "/* === Module consts === */\n" + fwd + defs + "\n"
+}
+
 // Per-class heap constructor that auto-wires its dependencies.
 mapper genConstructors(prog: Program) -> String {
     let out = "/* === DI constructors === */\n"

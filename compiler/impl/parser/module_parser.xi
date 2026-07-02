@@ -22,6 +22,8 @@ mapper parseModule(ps: PState) -> ModuleResult {
     let mIncludes: String[] = []    // unset -> file+imports only; set -> glob-gather
     let mExcludes: String[] = []
     let mDeps: String[] = []        // dependency archive URLs (xi install)
+    let constNames: String[] = []   // module-scoped `const` values ("name:ctype")
+    let constInit: Token[] = []     // tokens: `NAME = expr` per const
     let mEntry = FuncSpec {
         isCreator: false, isAsync: false, kind: "entry", name: "main",
         params: "xc_arr_string_t args", retCtype: "xc_integer_t",
@@ -85,8 +87,45 @@ mapper parseModule(ps: PState) -> ModuleResult {
                     }
                 }
             } else {
-                // metadata field:  key = "value"   or   key = ["a", "b"]
+                // metadata field:  key = "value"   or   key = ["a", "b"]  — or a `const`
                 let key = peek(ps2).text
+                if key == "const" {
+                    // const NAME: Type = expr   (referenced anywhere as Module.NAME)
+                    ps2 = advance(ps2)   // const
+                    let cname = peek(ps2).text
+                    constInit = appendToken(constInit, peek(ps2))   // NAME
+                    ps2 = advance(ps2)
+                    if peek(ps2).kind == 108 { ps2 = advance(ps2) }   // :
+                    let ctr = parseTypeExpr(ps2)
+                    ps2 = ctr.ps
+                    constNames = appendString(constNames, cname + ":" + ctr.ctype)
+                    if peek(ps2).kind == 111 {                        // =
+                        constInit = appendToken(constInit, peek(ps2))
+                        ps2 = advance(ps2)
+                    }
+                    // collect the value expression up to the next module-level item
+                    let depth = 0
+                    let coll = true
+                    while coll {
+                        let it = peek(ps2)
+                        if it.kind == 0 { coll = false }
+                        else {
+                            let boundary = false
+                            if depth == 0 {
+                                if it.kind == 103 or it.kind == 208 or it.kind == 219 or it.kind == 230 or it.kind == 244 { boundary = true }
+                                if it.kind == 1 and it.text == "const" { boundary = true }
+                                if it.kind == 1 and peekAt(ps2, 1).kind == 111 { boundary = true }   // next `key =`
+                            }
+                            if boundary { coll = false }
+                            else {
+                                if it.kind == 100 or it.kind == 104 or it.kind == 102 { depth = depth + 1 }
+                                if it.kind == 101 or it.kind == 105 or it.kind == 103 { depth = depth - 1 }
+                                constInit = appendToken(constInit, it)
+                                ps2 = advance(ps2)
+                            }
+                        }
+                    }
+                } else {
                 if peekAt(ps2, 1).kind == 111 and peekAt(ps2, 2).kind == 104 {
                     // list value: includes / excludes
                     let items: String[] = []
@@ -113,6 +152,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
                     ps2 = advance(ps2)
                 }
                 }
+                }
             }
         }
         }
@@ -123,7 +163,8 @@ mapper parseModule(ps: PState) -> ModuleResult {
     let spec = ModuleSpec {
         name: name, bindings: bindings,
         id: mId, title: mTitle, description: mDesc, version: mVer, license: mLic,
-        includes: mIncludes, excludes: mExcludes, dependencies: mDeps
+        includes: mIncludes, excludes: mExcludes, dependencies: mDeps,
+        constNames: constNames, constInit: constInit
     }
     return ModuleResult { spec: spec, ps: ps2, entry: mEntry, hasEntry: mHasEntry }
 }
