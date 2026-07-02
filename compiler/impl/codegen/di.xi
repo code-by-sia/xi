@@ -154,10 +154,12 @@ mapper genConstructors(prog: Program) -> String {
     while i < n {
         let cs = classSpecGet(prog.classes, i)
         let cn = cs.name
-        out = out + "static xc_" + cn + "_t* xc_new_" + cn + "(void) {\n"
-        out = out + "    xc_" + cn + "_t* o = (xc_" + cn + "_t*)xc_obj_alloc(sizeof(xc_" + cn + "_t));\n"
-        out = out + "    if (!o) abort();\n"
-        out = out + "    memset(o, 0, sizeof(xc_" + cn + "_t));\n"
+        out = out + $"""
+            static xc_${cn}_t* xc_new_${cn}(void) {
+                xc_${cn}_t* o = (xc_${cn}_t*)xc_obj_alloc(sizeof(xc_${cn}_t));
+                if (!o) abort();
+                memset(o, 0, sizeof(xc_${cn}_t));
+            """
         let di = 0
         let dn = depSpecLen(cs.depList)
         while di < dn {
@@ -189,14 +191,16 @@ mapper genConstructors(prog: Program) -> String {
 // by method name and decode into each method's return type.
 mapper genConfigImpls(prog: Program) -> String {
     if not prog.usesConfig() { return "" }
-    let out = "/* === Config-backed interface implementors === */\n"
-    out = out + "extern xc_string_t file_read_all(xc_string_t);\n"
-    out = out + "extern xc_Json_t xstd_json_parse(xc_string_t);\n"
-    out = out + "extern xc_Json_t xstd_yaml_parse(xc_string_t);\n"
-    out = out + "extern xc_Json_t xstd_json_get(xc_Json_t, xc_string_t);\n"
-    out = out + "extern xc_string_t xstd_json_as_string(xc_Json_t);\n"
-    out = out + "extern xc_number_t xstd_json_as_number(xc_Json_t);\n"
-    out = out + "extern xc_bool_t xstd_json_as_bool(xc_Json_t);\n"
+    let out = """
+        /* === Config-backed interface implementors === */
+        extern xc_string_t file_read_all(xc_string_t);
+        extern xc_Json_t xstd_json_parse(xc_string_t);
+        extern xc_Json_t xstd_yaml_parse(xc_string_t);
+        extern xc_Json_t xstd_json_get(xc_Json_t, xc_string_t);
+        extern xc_string_t xstd_json_as_string(xc_Json_t);
+        extern xc_number_t xstd_json_as_number(xc_Json_t);
+        extern xc_bool_t xstd_json_as_bool(xc_Json_t);
+        """
     let i = 0
     let n = ifaceSpecLen(prog.ifaces)
     while i < n {
