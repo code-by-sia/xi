@@ -16,7 +16,10 @@ and then to a native binary. Fetch the latest copy with `xi skill`.
 - Output: inject a `Logger` (`import "std/log.xi"`) and call `logger.info(...)`,
   or use `system.stdout.writeln(...)` directly.
 - String concatenation is `+`; scalars (Integer/Number/Bool) auto-coerce to text
-  inside a `+` chain. `int_to_string(n)` also works.
+  inside a `+` chain. `int_to_string(n)` also works. Strings can be triple-quoted
+  `"""…"""` (multiline, common indentation stripped) and, when prefixed with `$`,
+  interpolated: `$"Hi ${name}, ${count} left"` (holes are any expression). A plain
+  `"…"` is never interpolated, so `${…}` stays literal.
 
 ## Recommended practices (how to structure an app)
 
@@ -355,6 +358,30 @@ Use `field` directly for injected `deps`/fields.
 
 Function/method deps use the same `(dep: I)` form:
 `consumer (logger: Logger) report(msg: String) { logger.info(msg) }`.
+
+**Mutable class state.** A class may hold instance data in a `state { … }` block,
+read/written via `self.field`. A `singleton` keeps its state across calls;
+`transient`/`scoped` start fresh. For shared, event-sourced state, prefer an atom.
+
+```x
+class Counter implements Store {
+    deps {}
+    state { n: Integer = 0 }
+    consumer bump()          { self.n = self.n + 1 }
+    projector count() -> Integer => self.n
+}
+```
+
+**Module-scoped constants.** A `module` may declare `const NAME: T = <expr>`
+(compile-time value), referenced anywhere as `Module.NAME`:
+
+```x
+module App {
+    const MAX: Integer    = 50
+    const APP: String     = "xi"
+}
+// App.MAX / App.APP  — usable in free functions, class methods, other modules
+```
 
 ## Module metadata
 

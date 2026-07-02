@@ -464,6 +464,49 @@ module App {
 }
 ```
 
+### Mutable class state
+
+Alongside its injected `deps`, a class may hold **mutable instance data** in a
+`state { … }` block. Fields are read and written through `self.field`, and each
+gets its initial value when the instance is constructed. Lifetime follows the DI
+scope: a `singleton` keeps its state across calls; `transient`/`scoped` start
+fresh.
+
+```x
+interface Store { consumer bump()  projector count() -> Integer }
+
+class Counter implements Store {
+    deps {}
+    state { n: Integer = 0 }                // mutable instance data
+    consumer bump()          { self.n = self.n + 1 }
+    projector count() -> Integer => self.n
+}
+
+module App { bind Store -> Counter as singleton }
+```
+
+Reach for `state` when a service genuinely accumulates (a cache, counter, pool);
+for shared, event-sourced state prefer an [atom](machines.md). `self.field` also
+reads an injected dep (`self.logger`).
+
+### Module-scoped constants
+
+A `module` may declare **`const` values** — immutable named values usable from
+anywhere as `Module.NAME` (free functions, class methods, other modules). The
+initializer is any compile-time expression.
+
+```x
+module App {
+    const MAX_RETRIES: Integer = 3
+    const APP_NAME: String     = "xi"
+}
+
+mapper capped(n: Integer) -> Integer {
+    if n > App.MAX_RETRIES { return App.MAX_RETRIES }
+    return n
+}
+```
+
 ### Disambiguating multiple implementations
 
 When an interface has more than one implementation, a dependency says which one
