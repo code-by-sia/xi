@@ -18,9 +18,12 @@ permissions:
   pages: write
   id-token: write
 
+# Never cancel an in-progress Pages deploy — cancelling one mid-flight leaves the
+# Pages deployment stuck ("Deployment failed, try again later"). This matches
+# GitHub's recommended config for the deploy-pages action.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
