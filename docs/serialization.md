@@ -102,24 +102,35 @@ if json.isObject(v) {
 }
 ```
 
-## Encoding your own types
+## Automatic derive
 
-There is no automatic derive yet (it awaits compile-time reflection), so write a
-small `toJson` / `fromJson` pair per type — a few lines, and explicit:
+Wherever the compiler sees a (de)serialization boundary it **derives the codec
+from the type's fields** — no hand-written mapping, nested types included:
+
+- **`<json> as T`** reconstructs any compound type from a `Json` tree, so reading
+  a value is just `let u = json.parse(text) as User`.
+- **Web** replies and bodies: `res.send(dto)` and `req.parse(T)` — see [web](web.md).
+- **Event** transports and typed **`readConfig`** — see [events](events.md) and
+  [config](config.md).
 
 ```x
-type User = { name: String, age: Integer }
+type Address = { city: String, zip: Integer }
+type User    = { name: String, age: Integer, addr: Address }
 
+let u = json.parse(body) as User      // whole tree -> nested object, auto-derived
+```
+
+## Building a tree by hand
+
+To *produce* a `Json` tree outside those contexts — there is no general
+`obj as Json` operator yet — build it explicitly with `std/json`:
+
+```x
 mapper userToJson(u: User) -> Json {
     let o = json.object()
     o = json.set(o, "name", json.str(u.name))
     o = json.set(o, "age", json.int(u.age))
     return o
-}
-
-mapper userFromJson(v: Json) -> User {
-    return User { name: json.getString(v, "name"),
-                  age: 0 + json.getNumber(v, "age") }
 }
 ```
 
