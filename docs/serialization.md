@@ -105,10 +105,11 @@ if json.isObject(v) {
 ## Automatic derive
 
 Wherever the compiler sees a (de)serialization boundary it **derives the codec
-from the type's fields** — no hand-written mapping, nested types included:
+from the type's fields** — no hand-written mapping, nested types included, in
+**both directions**:
 
-- **`<json> as T`** reconstructs any compound type from a `Json` tree, so reading
-  a value is just `let u = json.parse(text) as User`.
+- **`<obj> as Json`** serializes any compound value into a `Json` tree.
+- **`<json> as T`** reconstructs a compound type from a `Json` tree.
 - **Web** replies and bodies: `res.send(dto)` and `req.parse(T)` — see [web](web.md).
 - **Event** transports and typed **`readConfig`** — see [events](events.md) and
   [config](config.md).
@@ -117,13 +118,16 @@ from the type's fields** — no hand-written mapping, nested types included:
 type Address = { city: String, zip: Integer }
 type User    = { name: String, age: Integer, addr: Address }
 
-let u = json.parse(body) as User      // whole tree -> nested object, auto-derived
+let j    = user as Json               // compound -> Json tree   (derived)
+let text = json.stringify(j)          // -> {"name":…,"age":…,"addr":{…}}
+let back = json.parse(text) as User   // Json tree -> nested compound (derived)
 ```
 
 ## Building a tree by hand
 
-To *produce* a `Json` tree outside those contexts — there is no general
-`obj as Json` operator yet — build it explicitly with `std/json`:
+`obj as Json` covers the common case. Reach for the explicit `std/json`
+constructors only when you need a **different shape** than the type's fields —
+renamed keys, omitted fields, or computed values:
 
 ```x
 mapper userToJson(u: User) -> Json {

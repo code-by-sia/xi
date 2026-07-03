@@ -489,6 +489,19 @@ Reach for `state` when a service genuinely accumulates (a cache, counter, pool);
 for shared, event-sourced state prefer an [atom](machines.md). `self.field` also
 reads an injected dep (`self.logger`).
 
+A state field may hold a [machine](machines.md) value (machines are immutable
+value types), letting a class own and drive a state machine — reassign the field
+with each transition's result:
+
+```x
+class Gate implements ... {
+    deps {}
+    state { t: Turnstile = Turnstile.start() }
+    consumer insertCoin() { self.t = self.t.coin() }   // transition -> new value
+    projector state() -> String => self.t.state
+}
+```
+
 ### Module-scoped constants
 
 A `module` may declare **`const` values** — immutable named values usable from

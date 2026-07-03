@@ -553,8 +553,9 @@ action handle(req: HttpRequest, res: HttpResponse) where web.route(req, "POST", 
 - `web.route(req, method, pattern) -> Bool` (guard; captures `:params`); `web.params`
   / `web.query` / `web.headers` / `web.body` each return a `Json`. Patterns may have
   multiple params: `"/foo/:id/bar/:second"`, adjacent `"/x/:a/:b"`, leading `"/:a/foo/:b"`.
-- `<json> as T` is a **general** decode (any `Json` -> compound type, lenient string
-  coercion) — not web-specific; also `json.parse(s) as T`.
+- Serialization derives from a type's fields, both directions: `<obj> as Json`
+  (compound -> `Json` tree) and `<json> as T` (any `Json` -> compound, lenient
+  string coercion) — general, not web-specific; also `json.parse(s) as T`.
 - `async entry main(...) { web.serve(8080) }`. Capture works in the handler body.
 
 ## Typed configuration (std/config)
