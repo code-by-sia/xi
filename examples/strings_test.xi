@@ -16,8 +16,8 @@ test "triple-quoted strips common indentation + leading newline" {
 }
 
 test "single-line interpolation of a variable" {
-    let name = "Ada"
-    assertEq($"Hello ${name}!", "Hello Ada!")
+    let name = "John Doe"
+    assertEq($"Hello ${name}!", "Hello John Doe!")
 }
 
 test "interpolation coerces scalars and evaluates expressions" {
@@ -33,12 +33,12 @@ test "interpolation with multiple holes" {
 }
 
 test "triple-quoted interpolation strips indent and fills holes" {
-    let name = "Ada"
+    let name = "John Doe"
     let age = 36
     let s = $"""
         Name: ${name}
         Age:  ${age}"""
-    assertEq(s, "Name: Ada\nAge:  36")
+    assertEq(s, "Name: John Doe\nAge:  36")
 }
 
 test "plain string never interpolates (bash-safe)" {

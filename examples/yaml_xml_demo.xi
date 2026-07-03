@@ -11,7 +11,7 @@ mapper sample() -> Json {
     langs = json.push(langs, json.str("X"))
     langs = json.push(langs, json.str("C"))
     let o = json.object()
-    o = json.set(o, "name", json.str("Ada"))
+    o = json.set(o, "name", json.str("John Doe"))
     o = json.set(o, "age", json.int(36))
     o = json.set(o, "admin", json.of(true))
     o = json.set(o, "langs", langs)

@@ -13,8 +13,8 @@ mapper minOrZero(xs: Integer[]) -> Integer {
 }
 
 test "compound type construction + field access" {
-    let p = Person { name: "Ada", age: 36 }
-    assertEq(p.name, "Ada")
+    let p = Person { name: "John Doe", age: 36 }
+    assertEq(p.name, "John Doe")
     assertEq(p.age, 36)
 }
 test "refined type accepts boundary values" {

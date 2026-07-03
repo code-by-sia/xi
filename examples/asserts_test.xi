@@ -21,7 +21,7 @@ test "assertClose tolerates float error" {
 }
 
 test "error paths with assertOk / assertErr" {
-    assertOk(parseAge("42"))
+    assertOk(parseAge("44"))
     assertErr(parseAge(""))
 }
 

@@ -79,7 +79,7 @@ module App {
 // --- entry point ---
 async entry (logger: Logger) main(args: String[]) -> Integer {
     let greeter = App.resolve(Greeter)
-    let user = User { name: "Ada", age: 36, email: "ada@example.com" }
+    let user = User { name: "John Doe", age: 36, email: "ada@example.com" }
     if isAdult(user) {
         logger.log("info", greeter.greet(user))
     }

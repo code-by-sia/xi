@@ -10,7 +10,7 @@ type Team = { lead: Person, members: People }
 
 async entry (logger: Logger) main(args: String[]) -> Integer {
     let team: People = [
-        Person { name: "Ada", age: 36 },
+        Person { name: "John Doe", age: 36 },
         Person { name: "Bo",  age: 29 }
     ]
     logger.print("headcount = " + headcount(team))

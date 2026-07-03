@@ -17,7 +17,7 @@ class Sales implements Report {
         logger.info(header)
         logger.info("5! = " + int_to_string(factorial(5)))   // recursive sibling call
         emit(1)                                    // overloaded sibling, routed by guard
-        emit(42)
+        emit(44)
     }
 
     mapper banner(label: String) -> String => "== " + label + " report =="

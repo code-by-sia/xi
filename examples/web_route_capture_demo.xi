@@ -4,7 +4,7 @@
 //   xc examples/web_route_capture_demo.xi && ./build/web_route_capture_demo
 //
 // Try it:
-//   curl -s localhost:8080/users/1      ->  {"id":1,"name":"Ada"}
+//   curl -s localhost:8080/users/1      ->  {"id":1,"name":"John Doe"}
 //   curl -s localhost:8080/users/2      ->  404 (inactive/missing)
 import "std/log.xi"
 import "std/web.xi"
@@ -15,7 +15,7 @@ event UserView { id: Integer, name: String }
 
 // a tiny demo "store"
 mapper    findUser(id: Integer) -> User {
-    if id == 1 { return User { id: 1, name: "Ada", active: true } }
+    if id == 1 { return User { id: 1, name: "John Doe", active: true } }
     return User { id: id, name: "", active: false }
 }
 predicate isActive(u: User) { return u.active }

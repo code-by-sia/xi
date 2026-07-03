@@ -4,7 +4,7 @@
 //   xc examples/web_capture_demo.xi && ./build/web_capture_demo   # serves until Ctrl-C
 //
 // Try it:
-//   curl -s -X POST localhost:8080/orders/42 \
+//   curl -s -X POST localhost:8080/orders/44 \
 //     -H "Authorization: Bearer k" \
 //     -d '{"item":"book","qty":3,"price":1200}'
 import "std/log.xi"

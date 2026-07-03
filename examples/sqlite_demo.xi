@@ -37,7 +37,7 @@ async entry (logger: Logger) main(args: String[]) {
 
     sqlite3_exec(db, toCString("CREATE TABLE people(id INTEGER, name TEXT)"),
                  empty Ptr, empty Ptr, empty Ptr)
-    sqlite3_exec(db, toCString("INSERT INTO people VALUES (1,'Ada'),(2,'Linus'),(3,'Grace')"),
+    sqlite3_exec(db, toCString("INSERT INTO people VALUES (1,'John Doe'),(2,'Linus'),(3,'Grace')"),
                  empty Ptr, empty Ptr, empty Ptr)
 
     let stmt = empty Ptr

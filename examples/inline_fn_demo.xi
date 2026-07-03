@@ -28,7 +28,7 @@ class Tri implements Tripler { deps {} mapper apply(n: Integer) -> Integer => n 
 async entry (logger: Logger) main(args: String[]) {
     logger.print(int_to_string(square(7)))     // 49
     if isEven(4) { logger.print("4 is even") }
-    logger.print(greet("Ada"))                 // Hi, Ada!
+    logger.print(greet("John Doe"))                 // Hi, John Doe!
     logger.print(tier(500) + " / " + tier(5))  // high / low
     logger.print(int_to_string(App.resolve(Calc).apply(21)))  // 42
     logger.print(int_to_string(App.resolve(Tripler).apply(14)))  // 42

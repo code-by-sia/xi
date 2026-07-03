@@ -13,7 +13,7 @@ class LogGreeter implements Greeter {
 // `entry` can declare deps too — they're DI-resolved before the body runs.
 async entry (logger: Logger, greeter: Greeter) main(args: String[]) -> Integer {
     logger.print("Hello World!")
-    greeter.greet("Ada")
+    greeter.greet("John Doe")
     logger.error("(this line goes to stderr)")
     return 0
 }

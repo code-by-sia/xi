@@ -5,13 +5,13 @@ import "std/log.xi"
 import "std/json.xi"
 
 async entry (logger: Logger) main(args: String[]) -> Integer {
-    // Build an object: { "name": "Ada", "age": 36, "langs": ["X","C"], "admin": true }
+    // Build an object: { "name": "John Doe", "age": 36, "langs": ["X","C"], "admin": true }
     let langs = json.array()
     langs = json.push(langs, json.str("X"))
     langs = json.push(langs, json.str("C"))
 
     let obj = json.object()
-    obj = json.set(obj, "name", json.str("Ada"))
+    obj = json.set(obj, "name", json.str("John Doe"))
     obj = json.set(obj, "age", json.int(36))
     obj = json.set(obj, "langs", langs)
     obj = json.set(obj, "admin", json.of(true))

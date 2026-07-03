@@ -3,7 +3,7 @@
 // `web.route(req, method, pattern)` routes (and captures :params); then each
 // source is its own flat Json — `web.params` / `web.query` / `web.headers` /
 // `web.body` — decoded into a small type with the general `as T` (which coerces
-// string scalars, so a "42" path segment becomes an Integer).
+// string scalars, so a "44" path segment becomes an Integer).
 //
 //   xc examples/web_params_demo.xi && ./build/web_params_demo   # serves until Ctrl-C
 import "std/log.xi"

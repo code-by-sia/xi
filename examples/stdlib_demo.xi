@@ -11,7 +11,7 @@ async entry (logger: Logger) main(args: String[]) -> Integer {
     logger.print("repeat    = " + text.repeat("ab", 3))
     logger.print("indexOf   = " + text.indexOf("hello world", "world"))
 
-    let r = convert.parseInteger("42")
+    let r = convert.parseInteger("44")
     if isOk(r) { logger.print("parsed    = " + r.value) }
     let bad = convert.parseInteger("oops")
     if isErr(bad) { logger.print("error     = " + bad.err) }

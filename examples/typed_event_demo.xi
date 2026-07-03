@@ -20,7 +20,7 @@ interface Store { producer checkout(item: String, total: Number) }
 class Shop implements Store {
     deps { events: PublisherService }
     producer checkout(item: String, total: Number) {
-        events.publish("order.paid", OrderPaid { id: "o-42", item: item, total: total })
+        events.publish("order.paid", OrderPaid { id: "o-44", item: item, total: total })
     }
 }
 

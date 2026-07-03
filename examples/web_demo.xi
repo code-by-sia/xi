@@ -6,7 +6,7 @@
 //
 //   xc examples/web_demo.xi && ./build/web_demo
 //   curl localhost:8080/health
-//   curl 'localhost:8080/user?name=Ada'
+//   curl 'localhost:8080/user?name=John Doe'
 //   curl -X POST -d '{"msg":"hello"}' localhost:8080/echo
 import "std/web.xi"
 
@@ -17,7 +17,7 @@ type  Echo = { msg: String }
 interface Repo { mapper active(name: String) -> Bool }
 class Names implements Repo {
     deps {}
-    mapper active(name: String) -> Bool { return name == "Ada" }
+    mapper active(name: String) -> Bool { return name == "John Doe" }
 }
 
 // A controller per concern — no registration, just implement WebRequestHandler.
