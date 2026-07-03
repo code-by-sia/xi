@@ -597,6 +597,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = "(" + code + ".has_value ? " + code + ".value : " + r.code + ")"
                         p = r.pos
                     } else {
+                    if k == 209 and toks.kindAt(p + 1) == 1 and toks.textAt(p + 1) == "Json" {
+                        // `<obj> as Json` — serialize a compound value into a Json
+                        // tree via its derived codec (the mirror of `<json> as T`).
+                        code = "xc_tojson_" + typ + "(" + code + ")"
+                        typ = "Json"
+                        p = p + 2
+                    } else {
                     if k == 209 and toks.kindAt(p + 1) == 1 and (ctx.prog).isTypeNameC(toks.textAt(p + 1)) {
                         // `<json> as T` — decode a Json value into a typed T (lenient
                         // coercion of string scalars). Reuses the derived JSON codec.
@@ -615,6 +622,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         // NOTE: a lone '?' (kind 127) is left unconsumed here so the
                         // statement layer can lower it as Result error-propagation.
                         cont = false
+                    }
                     }
                     }
                     }
