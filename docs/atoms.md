@@ -49,4 +49,4 @@ A higher-level **state machine** layer (named states, a legal-transition graph,
 machine-wide `data`, and `where` guards) is also available — see
 [Machines](machines.md).
 
-See `examples/atom_demo.xi`.
+See `examples/state/atom_demo.xi`.

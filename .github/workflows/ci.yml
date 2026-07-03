@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # examples/sqlite_demo.xi links libsqlite3 (the FFI demo). macOS ships it
+      # examples/stdlib/sqlite_demo.xi links libsqlite3 (the FFI demo). macOS ships it
       # in the SDK; Ubuntu needs the -dev package for the linker.
       - name: Install example dependencies (Linux)
         if: runner.os == 'Linux'
@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           export XC_RUNTIME="$PWD/runtime"
-          for f in examples/*.xi examples/showcase/main.xi; do
+          for f in $(find examples -name '*.xi' -not -path 'examples/showcase/*' | sort) examples/showcase/main.xi; do
             echo "== $f =="
             case "$(basename "$f")" in
               # *_test.xi files have no entry — they run via `xi test` below.
@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           export XC="$PWD/compiler/xc" XC_RUNTIME="$PWD/runtime"
-          for f in examples/*_test.xi; do
+          for f in $(find examples -name '*_test.xi' | sort); do
             echo "== xi test $f =="
             ./bin/xi test "$f"
           done

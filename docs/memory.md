@@ -68,7 +68,7 @@ loop {
 
 **The one rule** (the same for all three regions): a value must not **escape** its
 region. Copy out anything you need to keep, and don't `return` a region-allocated
-value out of a `scope` block. See `examples/scope_demo.xi`.
+value out of a `scope` block. See `examples/concurrency/scope_demo.xi`.
 
 ## Why purity helps
 

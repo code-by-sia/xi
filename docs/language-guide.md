@@ -211,7 +211,7 @@ boxing, no GC). Current scope:
   parameter it's passed to.
 
 Multi-parameter lambdas, captures, and generics are the next steps (see the
-feature matrix in `FEATURES.md`). See `examples/closures_demo.xi`.
+feature matrix in `FEATURES.md`). See `examples/language/closures_demo.xi`.
 
 ## Concurrency: `async` / `await`
 
@@ -264,7 +264,7 @@ await f                                              // wait for it to finish
 The block **captures** the enclosing function's parameters and dependencies by
 value (here `logger`), so it can use them on the worker. It cannot reference
 locals declared earlier in the same body — pass those in via a wrapping
-function. See `examples/delay_demo.xi`.
+function. See `examples/concurrency/delay_demo.xi`.
 
 ### Notes
 
@@ -276,7 +276,7 @@ function. See `examples/delay_demo.xi`.
   `async producer`/`consumer`/`action` for effectful background work.
 - `async` on an **entry** (`async entry main`) and on interface/class **methods**
   is the established synchronous form and is unchanged — only free `async`
-  functions spawn. See `examples/async_demo.xi`.
+  functions spawn. See `examples/concurrency/async_demo.xi`.
 
 ## Scheduled jobs — `scheduled … cron` / `every`
 
@@ -306,7 +306,7 @@ Declaring any scheduled job makes the program **run a scheduler** that keeps the
 process alive and fires each job (at minute resolution) when local time matches.
 A program can be *only* scheduled jobs (no `entry` needed); if you also have an
 `entry`, its body runs first for setup — don't `return` early or the process
-exits before the scheduler starts. See `examples/scheduled_demo.xi`.
+exits before the scheduler starts. See `examples/concurrency/scheduled_demo.xi`.
 
 ## Infix functions
 
@@ -327,7 +327,7 @@ if 3 divides 12 { … } // an infix predicate reads well in a guard
 Infix functions bind at low precedence (looser than arithmetic, like `to`), so
 `a plus b * c` is `plus(a, b * c)`. Any function kind works (`mapper`,
 `predicate`, `creator`, …); the `infix` modifier goes first, before `async` and
-the kind. See `examples/infix_demo.xi`.
+the kind. See `examples/language/infix_demo.xi`.
 
 ## Extension functions — `mapper Type.method(...)`
 
@@ -363,7 +363,7 @@ mapper Integer[].total() -> Integer {
 [3, 4, 5].total()      // 12
 ```
 
-See `examples/extensions_test.xi`.
+See `examples/language/extensions_test.xi`.
 
 ## `capture` — name a sub-expression's value
 
@@ -384,7 +384,7 @@ if positive(make(7) capture box: Box) {
 The type annotation is required (it's how the binding is declared). A captured
 name is **zero-initialized**, so if its `capture` sits on a short-circuited
 branch (the unevaluated side of `and`/`or`) it simply holds the zero value rather
-than crashing. See `examples/capture_demo.xi`.
+than crashing. See `examples/language/capture_demo.xi`.
 
 ## `where`-guarded overloading
 
@@ -553,7 +553,7 @@ async entry (logger: Logger) main(args: String[]) -> Integer {     // entry too
 
 Interface calls dispatch through a vtable; the compiler devirtualizes when the
 concrete type is known. See the dedicated [Dependency injection](dependency-injection.md)
-page, plus `examples/di_auto.xi` and `examples/logger_demo.xi`.
+page, plus `examples/di/di_auto.xi` and `examples/di/logger_demo.xi`.
 
 ## Control flow
 

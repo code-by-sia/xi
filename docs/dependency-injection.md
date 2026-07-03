@@ -156,7 +156,7 @@ depends on the deployment — credentials, region, feature flags. Each gateway
 reports whether it is `available()`, and the dependency picks the first one that
 is:
 
-```x title="examples/conditional_dep_demo.xi"
+```x title="examples/di/conditional_dep_demo.xi"
 interface PaymentGateway {
     predicate available() -> Bool                 // usable in this deployment?
     producer  charge(cents: Integer) -> String
@@ -183,7 +183,7 @@ class Checkout implements CheckoutService {
 ```
 
 ```console
-$ xc examples/conditional_dep_demo.xi && ./build/conditional_dep_demo
+$ xc examples/di/conditional_dep_demo.xi && ./build/conditional_dep_demo
 paypal: charged 1999      # Stripe is skipped (available() == false)
 ```
 
@@ -230,4 +230,4 @@ module {
 There's no runtime container and no registration step — resolution is resolved at
 compile time, so the abstraction is free at runtime.
 
-See `examples/logger_demo.xi`, `examples/di_auto.xi`, and `examples/greeting.xi`.
+See `examples/di/logger_demo.xi`, `examples/di/di_auto.xi`, and `examples/language/greeting.xi`.

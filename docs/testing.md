@@ -19,7 +19,7 @@ test "addition" {
 Run them:
 
 ```console
-$ xi test examples/calc_test.xi
+$ xi test examples/di/calc_test.xi
 ok - addition
 ok - multiplication
 not ok - subtraction

@@ -105,7 +105,7 @@ module App  { bind AppConfig -> readConfig("application.yaml") }
 module Test { bind AppConfig -> readConfig("application-test.yaml") }
 ```
 
-See `examples/config_demo.xi`.
+See `examples/serialization/config_demo.xi`.
 
 > `readConfig` is recognized by the compiler only as a `bind` target — it is not
 > a callable function.

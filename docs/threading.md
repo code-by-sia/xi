@@ -77,7 +77,7 @@ jobs.close()     // unblocks the pending recv -> body returns
 worker.wait()
 ```
 
-See `examples/thread_demo.xi` for a two-worker producer/consumer.
+See `examples/concurrency/thread_demo.xi` for a two-worker producer/consumer.
 
 ## Memory
 
@@ -105,7 +105,7 @@ loop {
 Everything allocated inside the `scope` (strings, lists, objects) is freed when
 the block ends. The one rule — the same as threads — is that a value must not
 **escape** its region: copy out anything you need to keep, and don't `return` out
-of a `scope` block. See [`examples/scope_demo.xi`](https://github.com/code-by-sia/xi/blob/main/examples/scope_demo.xi).
+of a `scope` block. See [`examples/concurrency/scope_demo.xi`](https://github.com/code-by-sia/xi/blob/main/examples/concurrency/scope_demo.xi).
 
 ## Notes & limits
 

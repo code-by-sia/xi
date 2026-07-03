@@ -173,6 +173,6 @@ count is known at compile time, so it fills a fixed-capacity buffer.
   metadata — these are deliberate non-goals for now (the `?( … )` escape hatch
   makes general static analysis undecidable anyway).
 
-See `examples/decision_demo.xi` (when-form), `examples/decision_table_demo.xi`
-(table form), and `examples/decision_table_advanced.xi` (multi-out, `unique`,
+See `examples/language/decision_demo.xi` (when-form), `examples/language/decision_table_demo.xi`
+(table form), and `examples/language/decision_table_advanced.xi` (multi-out, `unique`,
 `collect`).

@@ -187,7 +187,7 @@ compiler/   the compiler, written in Xi (lexer, parser, codegen, driver) + xc_he
             plus bootstrap.sh / fetch-seed.sh / selfhost.sh
 runtime/    the C runtime (runtime.h, runtime.c) — the Xi equivalent of libc/libcore
 std/        standard library (math, text, bytes, convert, json, yaml, xml, crypto, events, web, io, fs, path, net, http, process, time)
-examples/   runnable programs, incl. showcase/ (full multi-file project)
+examples/   runnable programs grouped by subject (language/, collections/, di/, web/, …) + showcase/ (full multi-file project)
 docs/       documentation (Docusaurus site under website/)
 editors/    Tree-sitter grammar, Zed extension, Vim plugin
 ```

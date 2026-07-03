@@ -127,7 +127,8 @@ compiler/
 runtime/
   runtime.h runtime.c   the C runtime
 examples/
-  *.xi            single-file examples
+  <subject>/     demos + *_test.xi grouped by subject (language, collections,
+                 di, concurrency, events, state, web, serialization, stdlib, …)
   showcase/      full multi-file project (import + namespace)
 docs/            this documentation (MkDocs)
 ```

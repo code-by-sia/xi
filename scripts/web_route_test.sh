@@ -3,7 +3,7 @@
 # params and a trailing literal segment (/playlists/:playlistId/tracks/:trackId/move),
 # which can't be checked by a `test { }` unit (it needs a running HTTP server).
 #
-# Compiles examples/web_route_move_demo.xi, starts it, curls each route, and
+# Compiles examples/web/web_route_move_demo.xi, starts it, curls each route, and
 # asserts the JSON response. Exits nonzero on any mismatch.
 #
 #   scripts/web_route_test.sh
@@ -14,8 +14,8 @@ export XC_RUNTIME="$ROOT/runtime" XC_STD="$ROOT"
 PORT=8137
 BASE="http://127.0.0.1:$PORT"
 
-echo "==> compiling examples/web_route_move_demo.xi ..."
-./compiler/xc examples/web_route_move_demo.xi >/dev/null
+echo "==> compiling examples/web/web_route_move_demo.xi ..."
+./compiler/xc examples/web/web_route_move_demo.xi >/dev/null
 
 "$ROOT/build/web_route_move_demo" >/tmp/web-route-srv.log 2>&1 &
 SRV=$!

@@ -57,7 +57,7 @@ Because `xc` compiles through portable C99, the same program can target the web.
 instead of a native binary:
 
 ```console
-$ xc --target wasm examples/wasm_demo.xi
+$ xc --target wasm examples/stdlib/wasm_demo.xi
 xc: built WebAssembly build/wasm_demo.{html,js,wasm}
 xc: serve it, e.g.  python3 -m http.server -d build  then open wasm_demo.html
 ```
@@ -146,7 +146,7 @@ printing `ok`/`not ok` per case, a summary, and a nonzero exit code if any faile
 See [Testing](testing.md).
 
 ```console
-$ xi test examples/calc_test.xi      # one file
+$ xi test examples/di/calc_test.xi      # one file
 $ xi test --all                      # every *_test.xi under the current dir
 ok - addition
 ...
@@ -214,8 +214,8 @@ A standalone test runner (`module Test`), the same compile-in-test-mode-and-run
 engine as `xi test`, as its own binary:
 
 ```console
-$ xt examples/calc_test.xi              # one file
-$ xt examples/calc_test.xi --filter mul # only matching test names
+$ xt examples/di/calc_test.xi              # one file
+$ xt examples/di/calc_test.xi --filter mul # only matching test names
 $ xt --all                              # every *_test.xi under the cwd
 3 tests, 3 passed, 0 failed
 ```

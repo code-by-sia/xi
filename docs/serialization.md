@@ -191,4 +191,4 @@ inherently lossy, so use it for data interchange, not document fidelity.
 - No streaming parser — `parse` reads a whole string.
 - No schema validation; you check shapes yourself with `kind`/`is*`.
 
-See `examples/json_demo.xi` and `examples/yaml_xml_demo.xi`.
+See `examples/serialization/json_demo.xi` and `examples/serialization/yaml_xml_demo.xi`.

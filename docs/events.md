@@ -93,7 +93,7 @@ async entry main(args: String[]) -> Integer {
 ```
 
 Listeners then run on the worker thread, so treat their work as you would any
-threaded code. See `examples/async_events_demo.xi`.
+threaded code. See `examples/events/async_events_demo.xi`.
 
 ## Application vs. external: only the transport differs
 
@@ -182,4 +182,4 @@ work-around noted; none block normal use:
   external buses isn't expressible directly — implement a fan-out transport that
   dispatches per topic.
 
-See `examples/typed_event_demo.xi`.
+See `examples/events/typed_event_demo.xi`.

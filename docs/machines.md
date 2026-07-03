@@ -137,5 +137,5 @@ xc: app.xi: warning: machine Door: non-terminal state 'Ghost' has no outgoing tr
 - Transitions are synchronous and single-threaded; entry/exit actions and `async`
   transitions aren't supported yet.
 
-See `examples/machine_demo.xi` (data-less) and `examples/machine_data_demo.xi`
+See `examples/state/machine_demo.xi` (data-less) and `examples/state/machine_data_demo.xi`
 (data + guards + `update` + `can`).

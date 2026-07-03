@@ -127,7 +127,7 @@ $ xc sqlite_demo.xi && ./build/sqlite_demo
 [info] #2 Grace
 ```
 
-The full runnable version is [`examples/sqlite_demo.xi`](https://github.com/code-by-sia/xi/blob/main/examples/sqlite_demo.xi).
+The full runnable version is [`examples/stdlib/sqlite_demo.xi`](https://github.com/code-by-sia/xi/blob/main/examples/stdlib/sqlite_demo.xi).
 
 ## Packaging a binding as a library
 

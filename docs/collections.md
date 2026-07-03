@@ -68,7 +68,7 @@ mapper totalQty(items: List<Item>) -> Integer {
 - A `List<T>` is a **mutable handle** (reference semantics): passing it to a
   function and mutating it is visible to the caller.
 - Element access is bounds-checked; an out-of-range `get`/`set`/`removeAt` aborts.
-- See `examples/collections_demo.xi`.
+- See `examples/collections/collections_demo.xi`.
 
 ## Functional operations on `List<T>`
 
@@ -174,7 +174,7 @@ nums.asSequence().take(3).sum()      // visits only the first 3 elements
   `count()`, `any`, `all`, `first()`, `firstOrNone()`.
 
 They chain naturally — `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.
-See `examples/functional_demo.xi`.
+See `examples/collections/functional_demo.xi`.
 
 ## Pairs — `Pair<A, B>`
 
@@ -208,7 +208,7 @@ cols.first                   // List<String>  ["ada", "bo"]
 cols.second                  // List<Integer> [36, 28]
 ```
 
-See `examples/pairs_demo.xi`.
+See `examples/collections/pairs_demo.xi`.
 
 ## `Set<T>`
 
@@ -352,7 +352,7 @@ pq.len()   pq.isEmpty()   pq.clear()
 
 > `pop`/`peek`/`dequeue` **abort** on an empty container (like `list.first()`);
 > guard with `isEmpty()`/`len()`. These containers are mutable handles (reference
-> semantics), like `List`. See `examples/containers_demo.xi`.
+> semantics), like `List`. See `examples/collections/containers_demo.xi`.
 
 ## Lazy infinite sources — `generateSequence`
 
@@ -367,7 +367,7 @@ generateSequence(1) { it + 1 }.take(10).fold(0) { a, b => a + b }   // 55
 generateSequence(0) { it + 2 }.takeWhile { it < 10 }.toList()      // [0,2,4,6,8]
 ```
 
-See `examples/generate_sequence_demo.xi`.
+See `examples/collections/generate_sequence_demo.xi`.
 
 ## What's next
 
@@ -375,7 +375,7 @@ The collection layer is complete: containers (`List`/`Vec`/`Set`/`Map`,
 `Stack`/`Queue`/`SortedQueue`), the eager functional API, lazy sequences (incl.
 `generateSequence`), `Pair<A, B>`, and `zip`/`partition`/`unzip`. For fixed-size
 **math vectors** (Vec2/Vec3/Vec4 with dot/cross/normalize/…) see the `std/vec`
-module and `examples/vec_math_demo.xi`.
+module and `examples/collections/vec_math_demo.xi`.
 [First-class closures](language-guide.md#first-class-functions-closures)
 now ship (single typed param, capture-free); multi-parameter lambdas, captures,
 and generics are the remaining language-level work (see `FEATURES.md`).

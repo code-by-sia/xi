@@ -6,7 +6,7 @@ web is a matter of swapping that compiler for [Emscripten](https://emscripten.or
 WebAssembly instead of a native binary; codegen is unchanged.
 
 ```console
-$ xc --target wasm examples/wasm_demo.xi
+$ xc --target wasm examples/stdlib/wasm_demo.xi
 xc: built WebAssembly build/wasm_demo.{html,js,wasm}
 xc: serve it, e.g.  python3 -m http.server -d build  then open wasm_demo.html
 ```
