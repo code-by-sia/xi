@@ -44,7 +44,7 @@ XC_SEED=/path/to/xc ./compiler/bootstrap.sh
 
    ```sh
    export XC_RUNTIME="$PWD/runtime"
-   for f in examples/*.xi examples/proj/main.xi examples/showcase/main.xi; do
+   for f in examples/*.xi examples/showcase/main.xi; do
        ./compiler/xc "$f"
    done
    ```

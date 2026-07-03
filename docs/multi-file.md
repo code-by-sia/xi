@@ -9,18 +9,18 @@ into the compilation unit. Imports are resolved **recursively** and
 **de-duplicated** by path, so a diamond of imports includes each file once.
 Paths are relative to the importing file.
 
-```x title="examples/proj/math.xi"
+```x title="math.xi"
 namespace math
 mapper add(a: Number, b: Number) -> Number { return a + b }
 mapper square(x: Number) -> Number { return x * x }
 ```
 
-```x title="examples/proj/text.xi"
+```x title="text.xi"
 namespace text
 mapper shout(s: String) -> String { return s + "!" }
 ```
 
-```x title="examples/proj/main.xi"
+```x title="main.xi"
 import "math.xi"
 import "text.xi"
 import "std/log.xi"

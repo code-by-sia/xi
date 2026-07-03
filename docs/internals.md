@@ -128,6 +128,6 @@ runtime/
   runtime.h runtime.c   the C runtime
 examples/
   *.xi            single-file examples
-  proj/          multi-file example (import + namespace)
+  showcase/      full multi-file project (import + namespace)
 docs/            this documentation (MkDocs)
 ```

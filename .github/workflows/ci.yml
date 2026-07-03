@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           export XC_RUNTIME="$PWD/runtime"
-          for f in examples/*.xi examples/proj/main.xi examples/showcase/main.xi; do
+          for f in examples/*.xi examples/showcase/main.xi; do
             echo "== $f =="
             case "$(basename "$f")" in
               # *_test.xi files have no entry — they run via `xi test` below.

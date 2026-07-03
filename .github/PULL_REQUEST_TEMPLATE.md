@@ -15,7 +15,7 @@
 
 - [ ] Builds from source: `./compiler/bootstrap.sh`
 - [ ] Self-hosting fixpoint holds (byte-identical): `./compiler/selfhost.sh`
-- [ ] Examples compile and run (`examples/*.xi`, `examples/proj/main.xi`, `examples/showcase/main.xi`)
+- [ ] Examples compile and run (`examples/*.xi`, `examples/showcase/main.xi`)
 - [ ] Added/updated an example covering the change (for new features)
 - [ ] Updated docs (`docs/`, `README.md` feature table) where behaviour changed
 - [ ] Commit messages are clear and each commit is one logical change
