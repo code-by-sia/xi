@@ -412,7 +412,14 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     if k == 254 { return ExprRes { code: "{0}", pos: pos + 1, xtyp: "" , owned: false } }
     if k == 253 { return ExprRes { code: "input", pos: pos + 1, xtyp: "" , owned: false } }
     if k == 243 { return ExprRes { code: "value", pos: pos + 1, xtyp: ctx.lookupVar("value") , owned: false } }
-    if k == 238 { return ExprRes { code: "self", pos: pos + 1, xtyp: "self" , owned: false } }
+    if k == 238 {
+        // `this` — the receiver. In an extension method it's a seeded `this` param
+        // (carrying the receiver's xtype); in a class method it's the instance,
+        // which lowers to the C var `self`.
+        let tt = ctx.lookupVar("this")
+        if string_len(tt) > 0 { return ExprRes { code: "this", pos: pos + 1, xtyp: tt , owned: false } }
+        return ExprRes { code: "self", pos: pos + 1, xtyp: "self" , owned: false }
+    }
     if k == 100 {
         if isLambdaAt(toks, pos) { return genLambda(toks, pos, ctx) }
         let inner = genExpr(toks, pos + 1, ctx)

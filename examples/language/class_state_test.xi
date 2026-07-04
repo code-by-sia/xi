@@ -1,5 +1,5 @@
 // Feature: classes with a mutable `state { }` block — instance data read and
-// written through `self.field`. A singleton keeps its state across calls.
+// written through `this.field`. A singleton keeps its state across calls.
 interface Counter {
     consumer bump()
     consumer addN(n: Integer)
@@ -8,9 +8,9 @@ interface Counter {
 class TallyCounter implements Counter {
     deps {}
     state { n: Integer = 0 }
-    consumer bump()          { self.n = self.n + 1 }
-    consumer addN(n: Integer) { self.n = self.n + n }
-    projector count() -> Integer => self.n
+    consumer bump()          { this.n = this.n + 1 }
+    consumer addN(n: Integer) { this.n = this.n + n }
+    projector count() -> Integer => this.n
 }
 
 interface Acc {
@@ -21,9 +21,9 @@ interface Acc {
 class SumAcc implements Acc {
     deps {}
     state { sum: Number = 0.0, name: String = "acc" }
-    consumer add(x: Number) { self.sum = self.sum + x }
-    projector total() -> Number => self.sum
-    projector label() -> String => self.name
+    consumer add(x: Number) { this.sum = this.sum + x }
+    projector total() -> Number => this.sum
+    projector label() -> String => this.name
 }
 
 module App {

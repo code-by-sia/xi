@@ -352,7 +352,7 @@ module App {}     // add `bind Greeter -> FormalGreeter` here to override
 ```
 
 Inside a class, call sibling methods **unqualified** — `helper(x)` or a recursive
-`self`-call `factorial(n - 1)` — no `self.` prefix. They dispatch on `self`,
+`factorial(n - 1)` — no `this.` prefix. They dispatch on `this`,
 including private helpers not in the interface and `where`-overloaded methods.
 Use `field` directly for injected `deps`/fields.
 
@@ -360,15 +360,15 @@ Function/method deps use the same `(dep: I)` form:
 `consumer (logger: Logger) report(msg: String) { logger.info(msg) }`.
 
 **Mutable class state.** A class may hold instance data in a `state { … }` block,
-read/written via `self.field`. A `singleton` keeps its state across calls;
+read/written via `this.field`. A `singleton` keeps its state across calls;
 `transient`/`scoped` start fresh. For shared, event-sourced state, prefer an atom.
 
 ```x
 class Counter implements Store {
     deps {}
     state { n: Integer = 0 }
-    consumer bump()          { self.n = self.n + 1 }
-    projector count() -> Integer => self.n
+    consumer bump()          { this.n = this.n + 1 }
+    projector count() -> Integer => this.n
 }
 ```
 

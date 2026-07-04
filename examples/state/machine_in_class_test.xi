@@ -1,6 +1,6 @@
 // Feature: a class can hold a `machine` value in its mutable state and drive it.
 // Machines are immutable value types, so a state field holds one and each
-// transition reassigns self.<field> with the returned next-state value.
+// transition reassigns this.<field> with the returned next-state value.
 machine Turnstile {
     states  Locked, Open
     initial Locked
@@ -17,9 +17,9 @@ interface Gate {
 class GateImpl implements Gate {
     deps {}
     state { t: Turnstile = Turnstile.start() }
-    consumer insertCoin()  { self.t = self.t.coin() }
-    consumer pushThrough() { self.t = self.t.push() }
-    projector state() -> String => self.t.state
+    consumer insertCoin()  { this.t = this.t.coin() }
+    consumer pushThrough() { this.t = this.t.push() }
+    projector state() -> String => this.t.state
 }
 module App { bind Gate -> GateImpl as singleton }
 

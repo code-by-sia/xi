@@ -412,7 +412,7 @@ mapper mapResponse(res: ApiResponse) -> String {        // default
 ```
 
 The same applies to **methods**: a class may declare a method several times with
-`where` guards (each can use `self`/deps), and the first matching guard wins.
+`where` guards (each can use `this`/deps), and the first matching guard wins.
 `std/web` routing is exactly this — several
 `action handle(req, res) where req.path == "…"` overloads plus a default.
 
@@ -467,7 +467,7 @@ module App {
 ### Mutable class state
 
 Alongside its injected `deps`, a class may hold **mutable instance data** in a
-`state { … }` block. Fields are read and written through `self.field`, and each
+`state { … }` block. Fields are read and written through `this.field`, and each
 gets its initial value when the instance is constructed. Lifetime follows the DI
 scope: a `singleton` keeps its state across calls; `transient`/`scoped` start
 fresh.
@@ -478,16 +478,16 @@ interface Store { consumer bump()  projector count() -> Integer }
 class Counter implements Store {
     deps {}
     state { n: Integer = 0 }                // mutable instance data
-    consumer bump()          { self.n = self.n + 1 }
-    projector count() -> Integer => self.n
+    consumer bump()          { this.n = this.n + 1 }
+    projector count() -> Integer => this.n
 }
 
 module App { bind Store -> Counter as singleton }
 ```
 
 Reach for `state` when a service genuinely accumulates (a cache, counter, pool);
-for shared, event-sourced state prefer an [atom](machines.md). `self.field` also
-reads an injected dep (`self.logger`).
+for shared, event-sourced state prefer an [atom](machines.md). `this.field` also
+reads an injected dep (`this.logger`).
 
 A state field may hold a [machine](machines.md) value (machines are immutable
 value types), letting a class own and drive a state machine — reassign the field
@@ -497,8 +497,8 @@ with each transition's result:
 class Gate implements ... {
     deps {}
     state { t: Turnstile = Turnstile.start() }
-    consumer insertCoin() { self.t = self.t.coin() }   // transition -> new value
-    projector state() -> String => self.t.state
+    consumer insertCoin() { this.t = this.t.coin() }   // transition -> new value
+    projector state() -> String => this.t.state
 }
 ```
 

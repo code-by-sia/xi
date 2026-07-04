@@ -1,7 +1,7 @@
 // Calling sibling methods from inside a class — unqualified, like a normal call.
 // A method can call any other method of the same class (including private
 // helpers not in the interface) and call itself recursively; the compiler
-// dispatches them on `self`. No `self.` prefix is required.
+// dispatches them on `this`. No `this.` prefix is required.
 //
 //   xc examples/self_methods_demo.xi && ./build/self_methods_demo
 import "std/log.xi"

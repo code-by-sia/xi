@@ -148,7 +148,7 @@ class XiLexer implements Lexer {
             "extern"      -> 235
             "true"        -> 236
             "false"       -> 237
-            "self"        -> 238
+            "this"        -> 238
             "singleton"   -> 239
             "transient"   -> 240
             "scoped"      -> 241
