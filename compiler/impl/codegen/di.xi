@@ -275,6 +275,9 @@ mapper genResolvers(prog: Program) -> String {
 
 mapper genSingletons(prog: Program) -> String {
     let out = "/* === Singleton storage === */\n"
+    // One storage slot per concrete class — a class bound (as singleton) to more
+    // than one of the interfaces it implements shares a single instance.
+    let seen: String[] = []
     let i = 0
     let n = moduleSpecLen(prog.modules)
     while i < n {
@@ -283,7 +286,11 @@ mapper genSingletons(prog: Program) -> String {
         let m = bindSpecLen(mod.bindings)
         while j < m {
             let b = bindSpecGet(mod.bindings, j)
-            if b.scopeKind == "singleton" and string_len(b.configPath) == 0 {
+            let already = false
+            let s = 0
+            while s < stringArrLen(seen) { if stringArrGet(seen, s) == b.concreteName { already = true }  s = s + 1 }
+            if b.scopeKind == "singleton" and string_len(b.configPath) == 0 and not already {
+                seen = appendString(seen, b.concreteName)
                 out = out + "static xc_" + b.concreteName + "_t xc_singleton_" + b.concreteName + ";\n"
                 out = out + "static bool xc_singleton_" + b.concreteName + "_initialized = false;\n"
             }
@@ -297,6 +304,7 @@ mapper genSingletons(prog: Program) -> String {
 mapper genSingletonInit(prog: Program) -> String {
     let out = "/* === Singleton init === */\n"
     out = out + "static void xc_init_singletons(void) {\n"
+    let seen: String[] = []
     let i = 0
     let n = moduleSpecLen(prog.modules)
     while i < n {
@@ -305,7 +313,11 @@ mapper genSingletonInit(prog: Program) -> String {
         let m = bindSpecLen(mod.bindings)
         while j < m {
             let b = bindSpecGet(mod.bindings, j)
-            if b.scopeKind == "singleton" and string_len(b.configPath) == 0 {
+            let already = false
+            let s = 0
+            while s < stringArrLen(seen) { if stringArrGet(seen, s) == b.concreteName { already = true }  s = s + 1 }
+            if b.scopeKind == "singleton" and string_len(b.configPath) == 0 and not already {
+                seen = appendString(seen, b.concreteName)
                 let cn = b.concreteName
                 // xc_new_ wires deps; singletons capture stable &storage addresses,
                 // so initialisation order is irrelevant.
