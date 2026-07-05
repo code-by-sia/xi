@@ -307,6 +307,38 @@ mapper Program.classFieldXType(cls: String, field: String) -> String {
     return ""
 }
 
+// If `this` names a bare std-library function that lives in a specific module,
+// return that module's import path — for a "missing import" diagnostic when the
+// name is otherwise unresolved. "" if it isn't a known std symbol.
+mapper String.stdImportHint() -> String {
+    if this == "int_to_string" or this == "intToString" or this == "number_to_str"
+        or this == "toString" or this == "boolToString"
+        or this == "parseNumber" or this == "parseInteger" { return "std/convert.xi" }
+    return ""
+}
+
+// If `this` is a std-library namespace, the import path that provides it; else ""
+// (used to report `json.foo(...)` when `std/json.xi` isn't imported).
+mapper String.stdNamespaceImport() -> String {
+    if this == "json"   { return "std/json.xi" }
+    if this == "yaml"   { return "std/yaml.xi" }
+    if this == "xml"    { return "std/xml.xi" }
+    if this == "crypto" { return "std/crypto.xi" }
+    if this == "math"   { return "std/math.xi" }
+    if this == "text"   { return "std/text.xi" }
+    if this == "bytes"  { return "std/bytes.xi" }
+    if this == "net"    { return "std/net.xi" }
+    if this == "fs"     { return "std/fs.xi" }
+    if this == "path"   { return "std/path.xi" }
+    if this == "time"   { return "std/time.xi" }
+    if this == "http"   { return "std/http.xi" }
+    if this == "io"     { return "std/io.xi" }
+    if this == "proc"   { return "std/process.xi" }
+    if this == "vec"    { return "std/vec.xi" }
+    if this == "web"    { return "std/web.xi" }
+    return ""
+}
+
 // The X type of module-scoped const `Module.name`, or "" if there's no such const.
 mapper Program.moduleConstXType(moduleName: String, name: String) -> String {
     let i = 0

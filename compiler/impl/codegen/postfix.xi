@@ -555,6 +555,14 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = bname + "(" + al.code + ")"
                         typ = (ctx.prog).externRetXType(bname)
                     } else {
+                        // Unresolved call. If it's a known std-library symbol, the
+                        // module just isn't imported — report that in Xi terms
+                        // (diag_error prints `<file>:<line>: error: …` and exits)
+                        // instead of leaking a C error on the generated call.
+                        let hint = bname.stdImportHint()
+                        if string_len(hint) > 0 {
+                            diag_error(tokenArrGet(toks, pos).line, bname + "(...) is defined in " + hint + " — add:  import \"" + hint + "\"")
+                        }
                         code = bname + "(" + al.code + ")"
                         typ = ""
                     }

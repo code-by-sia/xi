@@ -511,6 +511,15 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if (ctx.prog).isMachineTypeC(txt) {
             return ExprRes { code: txt, pos: pos + 1, xtyp: "machinetype:" + txt , owned: false }
         }
+        // `ns.foo(...)` where `ns` is a std namespace that isn't imported: no
+        // `ns__foo` function exists, `ns` isn't a local — report the missing import
+        // in Xi terms rather than leaking a C `undeclared identifier 'ns'` error.
+        if toks.kindAt(pos + 1) == 107 and string_len(ctx.lookupVar(txt)) == 0 {
+            let nsImp = txt.stdNamespaceImport()
+            if string_len(nsImp) > 0 and not (ctx.prog).isFuncNameC(txt + "__" + toks.textAt(pos + 2)) {
+                diag_error(tokenArrGet(toks, pos).line, txt + "." + toks.textAt(pos + 2) + "(...) — the '" + txt + "' namespace isn't imported; add:  import \"" + nsImp + "\"")
+            }
+        }
         return ExprRes { code: txt, pos: pos + 1, xtyp: ctx.lookupVar(txt) , owned: false }
     }
     return ExprRes { code: txt, pos: pos + 1, xtyp: "" , owned: false }

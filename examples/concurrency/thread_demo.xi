@@ -5,6 +5,7 @@
 //   xc examples/thread_demo.xi && ./build/thread_demo
 import "std/log.xi"
 import "std/thread.xi"
+import "std/convert.xi"
 
 async entry (logger: Logger) main(args: String[]) -> Integer {
     let jobs    = thread.channel()
