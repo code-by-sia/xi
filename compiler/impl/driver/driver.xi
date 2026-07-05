@@ -518,7 +518,7 @@ producer packLibrary(srcPath: String) -> Integer {
 }
 
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
-mapper xcVersion() -> String { return "0.0.90" }
+mapper xcVersion() -> String { return "0.0.91" }
 
 // The value of a `--target <t>` / `--target=<t>` flag anywhere in args, or "".
 mapper argTarget(args: String[]) -> String {
