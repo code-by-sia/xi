@@ -6,7 +6,18 @@ mapper genStmts(toks: Token[], start: Integer, stop: Integer, ctx: GCtx) -> Stri
     let out = ""
     let p = start
     let curCtx = ctx
+    let lastLine = 0
+    let lastFile = ""
     while p < stop and toks.kindAt(p) != 0 {
+        // Map C-compiler errors back to Xi source: emit a `#line` directive at
+        // each statement boundary (deduped) when the file/line moves.
+        let sl = tokenArrGet(toks, p).line
+        let sf = tokenArrGet(toks, p).file
+        if string_len(sf) > 0 and (sl != lastLine or sf != lastFile) {
+            out = out + "#line " + int_to_string(sl) + " \"" + sf + "\"\n"
+            lastLine = sl
+            lastFile = sf
+        }
         let sr = genStmt(toks, p, curCtx)
         out = out + sr.code
         curCtx = sr.ctx

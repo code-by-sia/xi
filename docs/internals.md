@@ -102,6 +102,17 @@ flowchart LR
     cc --> bin([native binary])
 ```
 
+### Source mapping (`#line`)
+
+Each token is stamped with its originating file as it is lexed (`stampFile` in
+`impl/driver/driver.xi`), so file identity survives the multi-file import splice.
+Codegen then emits a C `#line <line> "<file>.xi"` directive at every statement
+boundary (`genStmts` in `impl/codegen/stmt.xi`). The upshot: when `cc` rejects
+the generated C, it reports the error against the **Xi source file and line**,
+not the transient `.gen.c` — and correctly across imports, so an error inside an
+imported helper points at that helper. Directives are deduped and deterministic,
+so the self-hosting fixpoint is unaffected.
+
 ## What runs at runtime
 
 DI resolution, overload dispatch tables, and refined-type layout are decided at

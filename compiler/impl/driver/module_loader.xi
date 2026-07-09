@@ -13,7 +13,7 @@ class XiModuleLoader implements ModuleLoader {
         let vis = appendString(visited, path)
         let src = host.readFile(path)
         diag_set_file(path)              // lexer errors report this file
-        let toks = lexer.lex(src)
+        let toks = stampFile(lexer.lex(src), path)   // tag each token with its source file
         let dir = dirOf(path)
 
         let nsName = scanNamespaceName(toks)

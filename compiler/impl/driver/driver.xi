@@ -215,9 +215,23 @@ mapper collectExports(toks: Token[]) -> String[] {
 
 mapper renameTok(t: Token, prefix: String, exports: String[]) -> Token {
     if t.kind == 1 and strArrContains(exports, t.text) {
-        return Token { kind: 1, text: prefix + "__" + t.text, line: t.line }
+        return Token { kind: 1, text: prefix + "__" + t.text, line: t.line, file: t.file }
     }
     return t
+}
+
+// Tag every token of a freshly-lexed file with its source path, so codegen can
+// emit `#line` directives that point C compiler errors back at the Xi source.
+mapper stampFile(toks: Token[], path: String) -> Token[] {
+    let out: Token[] = []
+    let i = 0
+    let n = tokenArrLen(toks)
+    while i < n {
+        let t = tokenArrGet(toks, i)
+        out = appendToken(out, Token { kind: t.kind, text: t.text, line: t.line, file: path })
+        i = i + 1
+    }
+    return out
 }
 
 // Read `path`, recursively splice imports, strip import/namespace lines, and
@@ -254,7 +268,7 @@ mapper collapseQualified(toks: Token[], qnames: String[], qrepl: String[]) -> To
                 let q = t.text + "." + nm.text
                 let idx = strArrIndexOf(qnames, q)
                 if idx >= 0 {
-                    out = appendToken(out, Token { kind: 1, text: stringArrGet(qrepl, idx), line: t.line })
+                    out = appendToken(out, Token { kind: 1, text: stringArrGet(qrepl, idx), line: t.line, file: t.file })
                     i = i + 3
                 } else {
                     out = appendToken(out, t)

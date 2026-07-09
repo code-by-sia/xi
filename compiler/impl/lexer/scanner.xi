@@ -22,7 +22,8 @@
 type Token = {
     kind:  Integer,
     text:  String,
-    line:  Integer
+    line:  Integer,
+    file:  String     // source file the token came from (stamped by the loader)
 }
 
 // literal kinds
