@@ -88,7 +88,7 @@ mapper buildProgram(decls: String, stmts: String) -> String {
 }
 
 // The toolchain version. Bump this when cutting a release (matches the tag).
-mapper xiVersion() -> String { return "0.0.92" }
+mapper xiVersion() -> String { return "0.0.93" }
 
 // Directory part of a path (everything before the last '/'); "." if none.
 mapper dirOf(path: String) -> String {
