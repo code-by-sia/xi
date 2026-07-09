@@ -27,6 +27,11 @@ mapper genTypeLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     let first = true
     while toks.kindAt(p) != 103 and toks.kindAt(p) != 0 {
         let fname = toks.textAt(p)
+        // A field name the type doesn't declare is a typo — report it in Xi terms
+        // rather than emitting a C `field designator does not refer to any field`.
+        if (ctx.prog).isCompoundTypeC(typeName) and not (ctx.prog).hasFieldC(typeName, fname) {
+            diag_error(tokenArrGet(toks, p).line, "type '" + typeName + "' has no field '" + fname + "'")
+        }
         p = p + 1
         if toks.kindAt(p) == 108 { p = p + 1 }
         let e = genExpr(toks, p, ctx)
@@ -519,6 +524,14 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
             if string_len(nsImp) > 0 and not (ctx.prog).isFuncNameC(txt + "__" + toks.textAt(pos + 2)) {
                 diag_error(tokenArrGet(toks, pos).line, txt + "." + toks.textAt(pos + 2) + "(...) — the '" + txt + "' namespace isn't imported; add:  import \"" + nsImp + "\"")
             }
+        }
+        // Constructor `Name { ... }` for a name that resolves to nothing: neither a
+        // sum-type variant (488) nor a type/event/class (492) matched, and it's not
+        // a local. A capitalized name before `{` in expression position is only ever
+        // a constructor, so report the unknown type in Xi terms instead of letting
+        // the bare name leak out as a cryptic C `undeclared identifier` cascade.
+        if toks.kindAt(pos + 1) == 102 and txt.startsUpper() and string_len(ctx.lookupVar(txt)) == 0 {
+            diag_error(tokenArrGet(toks, pos).line, "unknown type '" + txt + "' — no type, event, or sum-type variant with that name is declared or imported")
         }
         return ExprRes { code: txt, pos: pos + 1, xtyp: ctx.lookupVar(txt) , owned: false }
     }

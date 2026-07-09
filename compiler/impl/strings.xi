@@ -18,6 +18,14 @@ predicate String.endsWith2(suffix: String) {
     return string_slice(this, n - sl, n) == suffix
 }
 
+// Does the name start with an ASCII uppercase letter? Type / event / variant
+// names are Capitalized by convention, so this gates type-shaped diagnostics.
+predicate String.startsUpper() {
+    if string_len(this) == 0 { return false }
+    let c = string_char_at(this, 0)
+    return c >= 65 and c <= 90
+}
+
 // Membership test over a String[] — `names.includes(x)`. Lets a long run of
 // `if x == "a" { return true } ...` collapse to a single set-style query.
 predicate String[].includes(s: String) {

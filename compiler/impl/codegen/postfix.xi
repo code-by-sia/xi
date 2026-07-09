@@ -486,6 +486,14 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                             typ = "Integer"
                         } else {
                             let ft = (ctx.prog).fieldTypeNameC(typ, fld)
+                            // Field access on a declared compound type whose field
+                            // set is fixed: a name that is not a declared field is a
+                            // typo. Report it in Xi terms instead of leaking a C
+                            // `no member named`. (Test name presence, not ft — a
+                            // valid field of sum-type resolves ft to "".)
+                            if (ctx.prog).isCompoundTypeC(typ) and not (ctx.prog).hasFieldC(typ, fld) {
+                                diag_error(tokenArrGet(toks, p + 1).line, "type '" + typ + "' has no field '" + fld + "'")
+                            }
                             code = code + "." + fld
                             typ = ft
                         }

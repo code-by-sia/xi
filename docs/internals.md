@@ -113,6 +113,26 @@ not the transient `.gen.c` — and correctly across imports, so an error inside 
 imported helper points at that helper. Directives are deduped and deterministic,
 so the self-hosting fixpoint is unaffected.
 
+### Semantic diagnostics (Xi errors, not C errors)
+
+Beyond `#line`, codegen catches the most common mistakes *before* they reach the
+C compiler and reports them in Xi terms at the source line. Each check is placed
+where a name legitimately fails to resolve and is gated so it never fires on
+valid code (verified: zero false positives across every example):
+
+| Mistake | Message |
+| --- | --- |
+| call to an un-imported std function | `int_to_string(...) is defined in std/convert.xi — add: import "std/convert.xi"` |
+| use of an un-imported std namespace | `json.foo(...) — the 'json' namespace isn't imported; add: import "std/json.xi"` |
+| constructing an unknown type | `unknown type 'Uzer' — no type, event, or sum-type variant with that name is declared or imported` |
+| unknown field in a constructor | `type 'User' has no field 'nam'` |
+| reading an unknown field | `type 'User' has no field 'aeg'` |
+
+The field checks test name presence against the type's declared field set
+(`hasFieldC`), not the field's resolved type, so a valid field of sum-type is
+never mis-flagged. Anything not caught here still compiles to C and, if it
+fails, is reported against the Xi source via `#line`.
+
 ## What runs at runtime
 
 DI resolution, overload dispatch tables, and refined-type layout are decided at

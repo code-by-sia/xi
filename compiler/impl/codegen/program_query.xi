@@ -245,6 +245,32 @@ mapper Program.fieldCheckFn(typeName: String, field: String) -> String {
     return ""
 }
 
+// Does the declared compound type `typeName` have a field literally named
+// `field`? Tests name presence only — unlike fieldTypeNameC, it does not depend
+// on the field's type resolving to a non-empty xtype (a field of sum-type or
+// otherwise unresolvable type still counts), so it is a sound basis for the
+// "type has no field" diagnostic.
+predicate Program.hasFieldC(typeName: String, field: String) {
+    if field == "ok" or field == "err" or field == "value" { return true }
+    let i = 0
+    let n = typeSpecLen(this.types)
+    while i < n {
+        let ts = typeSpecGet(this.types, i)
+        if ts.name == typeName {
+            let fi = 0
+            let fn2 = stringArrLen(ts.fields)
+            while fi < fn2 {
+                let fentry = stringArrGet(ts.fields, fi)
+                let colon = findChar(fentry, 58)
+                if string_slice(fentry, 0, colon) == field { return true }
+                fi = fi + 1
+            }
+        }
+        i = i + 1
+    }
+    return false
+}
+
 mapper Program.fieldTypeNameC(typeName: String, field: String) -> String {
     // Result<T> fields: .ok is Bool, .err is String, .value is T.
     if field == "ok"  { return "Bool" }
