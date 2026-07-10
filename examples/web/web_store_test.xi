@@ -53,3 +53,12 @@ test "the list round-trips through JSON" {
     assertEq(back.items.get(0).name, "pen")
     assertEq(back.items.get(1).qty, 5)
 }
+
+// A bare List<T> serializes to a JSON array — this is what `res.send(list)` does
+// (a controller returning a repository's list directly, with no wrapper DTO).
+test "a bare List<T> serializes to a JSON array (res.send path)" {
+    let xs = empty List<Item>
+    xs.push(Item { name: "pen",  qty: 2 })
+    xs.push(Item { name: "book", qty: 5 })
+    assertEq(json.stringify(xs as Json), "[{\"name\":\"pen\",\"qty\":2},{\"name\":\"book\",\"qty\":5}]")
+}

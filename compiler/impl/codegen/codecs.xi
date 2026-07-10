@@ -98,6 +98,29 @@ mapper jsonDecodeExpr(prog: Program, fct: String, getexpr: String) -> String {
     }
 }
 
+// Build a JSON value for a payload of any xtype — used by `res.send`, `<x> as
+// Json`, and event encode. A compound type uses its derived codec; a growable
+// `List<T>` or an array `T[]` is encoded as a JSON array element-by-element
+// (the element codec already exists — every compound type gets one when codecs
+// are enabled). This is what lets a controller `res.send` a bare list.
+mapper jsonOfPayload(prog: Program, xtype: String, code: String) -> String {
+    if xtype.isListXType() {
+        let ec = xtype.listElemCtype()
+        let encE = jsonEncodeExpr(prog, ec, "(*(" + ec + "*)xstd_list_at(__pv, __pi))")
+        return "({ xc_List_t __pv = (" + code + "); xc_Json_t __pa = xstd_json_array();"
+             + " for (xc_integer_t __pi = 0; __pi < (xc_integer_t)xstd_list_len(__pv); __pi++)"
+             + " xstd_json_push(__pa, " + encE + "); __pa; })"
+    }
+    if xtype.startsWith2("arr_") {
+        let ec = string_slice(xtype, 4, string_len(xtype)).xnameFromArrSuffix().xnameToCtype()
+        let encE = jsonEncodeExpr(prog, ec, "__pv.data[__pi]")
+        return "({ xc_" + xtype + "_t __pv = (" + code + "); xc_Json_t __pa = xstd_json_array();"
+             + " for (xc_integer_t __pi = 0; __pi < (xc_integer_t)__pv.len; __pi++)"
+             + " xstd_json_push(__pa, " + encE + "); __pa; })"
+    }
+    return "xc_tojson_" + xtype + "(" + code + ")"
+}
+
 // Derived JSON codec for one event type (used only at the process boundary).
 
 // JsonCodecs — the default Codecs: emits JSON (de)serialization + event/web

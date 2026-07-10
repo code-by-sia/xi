@@ -293,7 +293,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     let recv = code
                     if fld == "send" {
                         let dtoE = genExpr(toks, p + 3, ctx)
-                        code = "xstd_resp_set(" + recv + ", 200, xc_resolve_WebTransport().vtable->serialize(xc_resolve_WebTransport().self, xc_tojson_" + dtoE.xtyp + "(" + dtoE.code + ")), xc_string_from_cstr(\"application/json\"))"
+                        code = "xstd_resp_set(" + recv + ", 200, xc_resolve_WebTransport().vtable->serialize(xc_resolve_WebTransport().self, " + jsonOfPayload(ctx.prog, dtoE.xtyp, dtoE.code) + "), xc_string_from_cstr(\"application/json\"))"
                         p = dtoE.pos
                         if toks.kindAt(p) == 101 { p = p + 1 }   // ')'
                     } else {
@@ -614,9 +614,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         p = r.pos
                     } else {
                     if k == 209 and toks.kindAt(p + 1) == 1 and toks.textAt(p + 1) == "Json" {
-                        // `<obj> as Json` — serialize a compound value into a Json
-                        // tree via its derived codec (the mirror of `<json> as T`).
-                        code = "xc_tojson_" + typ + "(" + code + ")"
+                        // `<obj> as Json` — serialize a compound value (or a bare
+                        // List<T>/T[]) into a Json tree (the mirror of `<json> as T`).
+                        code = jsonOfPayload(ctx.prog, typ, code)
                         typ = "Json"
                         p = p + 2
                     } else {
