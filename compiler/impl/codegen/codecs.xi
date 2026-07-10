@@ -50,15 +50,23 @@ predicate hasExternalPublisher(prog: Program) {
 }
 
 // JSON encode/decode expressions for one field ctype ("" = unsupported -> skip).
-// Element C type of an array ctype "xc_arr_<suffix>_t".
-mapper arrElemCtype(fct: String) -> String {
-    let suf = string_slice(fct, 7, string_len(fct) - 2)   // strip "xc_arr_" and "_t"
+// Map a collection element suffix (the "<suffix>" of xc_arr_<suffix>_t or
+// xc_List_<suffix>_t) to its element C type.
+mapper elemCtypeOfSuffix(suf: String) -> String {
     if suf == "string"  { return "xc_string_t" }
     if suf == "number"  { return "xc_number_t" }
     if suf == "integer" { return "xc_integer_t" }
     if suf == "bool"    { return "xc_bool_t" }
     if suf == "char"    { return "xc_char_t" }
     return "xc_" + suf + "_t"
+}
+// Element C type of an array ctype "xc_arr_<suffix>_t".
+mapper arrElemCtype(fct: String) -> String {
+    return elemCtypeOfSuffix(string_slice(fct, 7, string_len(fct) - 2))   // strip "xc_arr_" and "_t"
+}
+// Element C type of a growable-list ctype "xc_List_<suffix>_t".
+mapper listElemCtype(fct: String) -> String {
+    return elemCtypeOfSuffix(string_slice(fct, 8, string_len(fct) - 2))   // strip "xc_List_" and "_t"
 }
 
 mapper jsonEncodeExpr(prog: Program, fct: String, expr: String) -> String {
@@ -77,7 +85,7 @@ mapper jsonEncodeExpr(prog: Program, fct: String, expr: String) -> String {
 }
 mapper jsonDecodeExpr(prog: Program, fct: String, getexpr: String) -> String {
     match fct {
-        "xc_string_t"  -> "xstd_json_as_string(" + getexpr + ")"
+        "xc_string_t"  -> "xstd_json_as_string_owned(" + getexpr + ")"
         "xc_number_t"  -> "xstd_json_as_number(" + getexpr + ")"
         "xc_integer_t" -> "(xc_integer_t)xstd_json_as_number(" + getexpr + ")"
         "xc_bool_t"    -> "xstd_json_as_bool(" + getexpr + ")"
@@ -131,10 +139,35 @@ class JsonCodecs implements Codecs {
                        + "      v." + fname + " = __r" + sx + "; }\n"
                 }
             } else {
+            if fct.startsWith2("xc_List_") {
+                // growable List<T> field -> a JSON array, element by element.
+                // Same wire shape as an array field, but read/written through the
+                // xstd_list_* API (len/at/new/push) so `List<T>` round-trips too.
+                let ec = listElemCtype(fct)
+                let sx = int_to_string(i)
+                let encE = jsonEncodeExpr(prog, ec, "(*(" + ec + "*)xstd_list_at(v." + fname + ", __i" + sx + "))")
+                let decE = jsonDecodeExpr(prog, ec, "xstd_json_at(__a" + sx + ", __i" + sx + ")")
+                if string_len(encE) > 0 {
+                    to = to + "    { xc_Json_t __a" + sx + " = xstd_json_array();\n"
+                       + "      for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < (xc_integer_t)xstd_list_len(v." + fname + "); __i" + sx + "++)\n"
+                       + "          xstd_json_push(__a" + sx + ", " + encE + ");\n"
+                       + "      o = xstd_json_set(o, " + key + ", __a" + sx + "); }\n"
+                }
+                if string_len(decE) > 0 {
+                    fr = fr + "    { xc_Json_t __a" + sx + " = xstd_json_get(j, " + key + ");\n"
+                       + "      xc_integer_t __n" + sx + " = xstd_json_length(__a" + sx + ");\n"
+                       + "      xc_List_t __r" + sx + " = xstd_list_new(sizeof(" + ec + "));\n"
+                       + "      for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < __n" + sx + "; __i" + sx + "++) {\n"
+                       + "          " + ec + " __e" + sx + " = " + decE + ";\n"
+                       + "          xstd_list_push(__r" + sx + ", (" + ec + "[]){ __e" + sx + " }); }\n"
+                       + "      v." + fname + " = __r" + sx + "; }\n"
+                }
+            } else {
                 let enc = jsonEncodeExpr(prog, fct, "v." + fname)
                 if string_len(enc) > 0 { to = to + "    o = xstd_json_set(o, " + key + ", " + enc + ");\n" }
                 let dec = jsonDecodeExpr(prog, fct, "xstd_json_get(j, " + key + ")")
                 if string_len(dec) > 0 { fr = fr + "    v." + fname + " = " + dec + ";\n" }
+            }
             }
             i = i + 1
         }
@@ -176,6 +209,7 @@ class JsonCodecs implements Codecs {
         out = out + "extern xc_Json_t xstd_json_bool(xc_bool_t);\n"
         out = out + "extern xc_Json_t xstd_json_get(xc_Json_t, xc_string_t);\n"
         out = out + "extern xc_string_t xstd_json_as_string(xc_Json_t);\n"
+        out = out + "extern xc_string_t xstd_json_as_string_owned(xc_Json_t);\n"
         out = out + "extern xc_number_t xstd_json_as_number(xc_Json_t);\n"
         out = out + "extern xc_bool_t xstd_json_as_bool(xc_Json_t);\n"
         out = out + "extern xc_Json_t xstd_json_array(void);\n"

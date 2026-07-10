@@ -114,6 +114,11 @@ from the type's fields** — no hand-written mapping, nested types included, in
 - **Event** transports and typed **`readConfig`** — see [events](events.md) and
   [config](config.md).
 
+Both array fields (`T[]`) and growable-list fields (`List<T>`) serialize as JSON
+arrays and round-trip back. Use `List<T>` when the field is also accumulated in
+memory (e.g. a service that `.push`es onto its state) — it stores *and*
+serializes, so no conversion is needed at the boundary.
+
 ```x
 type Address = { city: String, zip: Integer }
 type User    = { name: String, age: Integer, addr: Address }

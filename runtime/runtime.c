@@ -969,6 +969,23 @@ xc_string_t xstd_json_as_string(xc_Json_t v) {
     if (v->kind == XJ_BOOL) return v->b ? xc_str_copy("true", 4) : xc_str_copy("false", 5);
     return xc_str_copy("", 0);
 }
+/* Like xstd_json_as_string, but the returned buffer is always heap-owned (plain
+ * malloc), never request/thread-arena scoped. A value deserialized inside a web
+ * request or spawned thread (which runs in an arena that is freed when the
+ * request/thread ends) can then be safely stored somewhere longer-lived — e.g. a
+ * singleton service's state — without its strings dangling. Used by the
+ * generated fromjson_* codecs so `req.parse(T)` / `json as T` results are safe
+ * to keep. (The transient copy leaks under the default no-XC_ARC build if never
+ * stored; that is the deliberate trade for correctness — arena scoping silently
+ * corrupted escaped data.) */
+xc_string_t xstd_json_as_string_owned(xc_Json_t v) {
+    xc_string_t s = xstd_json_as_string(v);
+    char* buf = (char*)malloc(s.len + 1);
+    if (!buf) abort();
+    if (s.len) memcpy(buf, s.data, s.len);
+    buf[s.len] = '\0';
+    return (xc_string_t){ .data = buf, .len = s.len };
+}
 xc_number_t xstd_json_as_number(xc_Json_t v) {
     if (!v) return 0.0;
     if (v->kind == XJ_NUMBER) return v->num;

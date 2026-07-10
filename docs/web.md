@@ -130,8 +130,27 @@ The response is *mutable* — fill it in, don't return it.
 | `res.sendText(code, body)` | reply `code` with a plain-text body |
 
 `res.send` / `req.parse` work for any `event` or compound `type`; the compiler
-derives the codec automatically. A request that no controller matches gets a
-`404`.
+derives the codec automatically. A field may be a `List<T>` — it is stored
+growably in memory and serialized as a JSON array, so a service can accumulate
+posted items and hand the list straight back. A request that no controller
+matches gets a `404`.
+
+### Keeping state across requests
+
+A service that accumulates data across requests must be bound **`as singleton`**
+so every request shares one instance:
+
+```x
+class ItemStore implements Store {
+    state { items: List<Item> = empty List<Item> }
+    consumer add(it: Item) { this.items.push(it) }
+    ...
+}
+module App { bind Store -> ItemStore as singleton }   // shared, not per-resolve
+```
+
+Without `as singleton` the service is resolved fresh each time and its state
+never accumulates. See `examples/web/web_store_demo.xi` for the full pattern.
 
 ## The `WebTransport`
 
