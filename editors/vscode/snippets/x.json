@@ -9,6 +9,27 @@
     ],
     "description": "Program entry point"
   },
+  "stateful service": {
+    "prefix": "service",
+    "body": [
+      "class ${1:Name} implements ${2:Interface} {",
+      "\tdeps { ${3:dep}: ${4:Service} as singleton }",
+      "\tstate { ${5:items}: ${6:List<Item>} = ${7:empty List<Item>} }",
+      "\t$0",
+      "}"
+    ],
+    "description": "A stateful service: singleton deps + mutable state block"
+  },
+  "state block": {
+    "prefix": "state",
+    "body": ["state { ${1:field}: ${2:Type} = ${3:init} }"],
+    "description": "Mutable instance state block"
+  },
+  "module const": {
+    "prefix": "const",
+    "body": ["const ${1:NAME}: ${2:Type} = ${3:value}"],
+    "description": "Module-scoped constant"
+  },
   "mapper": {
     "prefix": "mapper",
     "body": ["mapper ${1:name}(${2:params}) -> ${3:Type} {", "\treturn $0", "}"],

@@ -60,6 +60,7 @@ module.exports = grammar({
 
     _type: $ => choice(
       $.primitive_type,
+      $.generic_type,
       $.named_type,
       $.compound_type,
       $.optional_type,
@@ -68,6 +69,11 @@ module.exports = grammar({
       $.ref_type,
       $.own_type,
     ),
+
+    // generic instantiation:  List<Item>, Map<String, Integer>, Future<T>, …
+    generic_type: $ => prec(PREC.postfix, seq(
+      field('name', $.qualified_name), '<', commaSep1($._type), '>',
+    )),
 
     primitive_type: _ => choice(
       'Number', 'Integer', 'Bool', 'String', 'Char',
@@ -97,17 +103,24 @@ module.exports = grammar({
     class_decl: $ => seq(
       'class', field('name', $.identifier),
       'implements', optional(commaSep1($.qualified_name)),
-      '{', optional($.deps_block), repeat($._class_member), '}',
+      '{', optional($.deps_block), optional($.state_block), repeat($._class_member), '}',
     ),
     deps_block: $ => seq('deps', '{', repeat($.dep), '}'),
     dep: $ => seq(
       field('name', $.identifier), ':', field('type', $._type),
+      optional(seq('as', field('scope', $.scope_kind))),
       optional(choice(
         seq('where', field('guard', $._expression)),
         seq('or', field('fallback', $.qualified_name)),
         $.when_clause,
       )),
       optional(','),
+    ),
+    // mutable instance state:  state { name: Type = expr, ... }
+    state_block: $ => seq('state', '{', commaSep($.state_field), '}'),
+    state_field: $ => seq(
+      field('name', $.identifier), ':', field('type', $._type),
+      optional(seq('=', field('value', $._expression))),
     ),
     when_clause: $ => seq('when', '{', commaSep($.when_arm), '}'),
     when_arm: $ => seq(choice($._expression, 'otherwise'), '->', choice($.qualified_name, $.array_literal, 'none')),
@@ -123,7 +136,7 @@ module.exports = grammar({
       field('name', $.identifier), $.params,
       optional(seq('->', field('return', $._type))),
       optional(seq('where', field('guard', $._expression))),
-      $.block,
+      field('body', choice($.block, seq('=>', $._expression))),
     ),
     fn_deps_block: $ => seq('{', repeat($.dep), '}'),
     creator_decl: $ => seq(
@@ -143,7 +156,13 @@ module.exports = grammar({
                     optional(seq('=', $._expression))),
 
     // ── modules ─────────────────────────────────────────────────
-    module_decl: $ => seq('module', $.qualified_name, '{', repeat(choice($.import_decl, $.binding)), '}'),
+    module_decl: $ => seq('module', optional($.qualified_name), '{',
+      repeat(choice($.import_decl, $.binding, $.const_decl, $.module_field)), '}'),
+    // module-scoped constant:  const NAME: Type = expr
+    const_decl: $ => seq('const', field('name', $.identifier), ':', field('type', $._type),
+                         '=', field('value', $._expression)),
+    // module metadata field:  id = "…", version = "…", includes = [ … ], …
+    module_field: $ => prec(-1, seq(field('name', $.identifier), '=', field('value', $._expression))),
     binding: $ => seq(
       'bind', field('interface', $._type), '->',
       field('target', choice($.qualified_name, $.array_literal, 'none')),
@@ -190,15 +209,18 @@ module.exports = grammar({
     // ── expressions ─────────────────────────────────────────────
     _expression: $ => choice(
       $.binary_expr, $.unary_expr, $.try_expr, $.call_expr, $.member_expr,
-      $.index_expr, $.type_literal, $.array_literal, $.paren_expr,
+      $.index_expr, $.type_literal, $.array_literal, $.paren_expr, $.empty_expr,
       $.identifier, $.self, $.input, $.value,
       $.number, $.string, $.char, $.boolean, 'none', $.regex,
     ),
 
+    // empty collection literal:  empty List<Item>, empty Map<String, Integer>, …
+    empty_expr: $ => prec.right(seq('empty', field('type', $._type))),
+
     // postfix `?` — Result/Optional error-propagation
     try_expr: $ => prec(PREC.postfix, seq($._expression, '?')),
     paren_expr: $ => seq('(', $._expression, ')'),
-    self: _ => 'self',
+    self: _ => 'this',
     input: _ => 'input',
     value: _ => 'value',
 

@@ -89,7 +89,7 @@
       "patterns": [
         {
           "comment": "Function kinds, optionally async, capturing the name (incl. extension receiver, e.g. Type.method and Type[].method)",
-          "match": "\\b(async\\s+)?(mapper|projector|predicate|consumer|producer|reducer|creator|decision|entry)\\b\\s*(?:\\{[^}]*\\}\\s*)?([A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?(?:\\.[A-Za-z_][A-Za-z0-9_]*)?)?",
+          "match": "\\b(async\\s+)?(mapper|projector|predicate|consumer|producer|reducer|creator|decision|action|listener|entry)\\b\\s*(?:\\{[^}]*\\}\\s*)?([A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?(?:\\.[A-Za-z_][A-Za-z0-9_]*)?)?",
           "captures": {
             "1": { "name": "storage.modifier.x" },
             "2": { "name": "storage.type.function.x" },
@@ -106,7 +106,7 @@
         },
         {
           "name": "keyword.declaration.x",
-          "match": "\\b(implements|extends|deps|bind|as|import|export|extern|hit)\\b"
+          "match": "\\b(implements|extends|deps|bind|as|import|export|extern|hit|const|state|event|atom|machine|transition|interrupt|listener)\\b"
         }
       ]
     },
@@ -138,7 +138,7 @@
       "patterns": [
         {
           "name": "constant.language.x",
-          "match": "\\b(true|false|none|self|value|input)\\b"
+          "match": "\\b(true|false|none|this|value|input)\\b"
         }
       ]
     },

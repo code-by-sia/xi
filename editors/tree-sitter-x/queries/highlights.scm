@@ -22,13 +22,19 @@
 ; ── type expressions ──────────────────────────────────────────────
 (primitive_type) @type.builtin
 (named_type (qualified_name (identifier) @type))
+(generic_type name: (qualified_name (identifier) @type))
+(empty_expr type: (_) @type)
 
 ; ── fields / properties ───────────────────────────────────────────
 (field_def name: (identifier) @property)
 (dep name: (identifier) @property)
+(state_field name: (identifier) @property)
 (member_expr field: (identifier) @property)
 (named_arg name: (identifier) @property)
 (type_literal field: (identifier) @property)
+
+; module-scoped constant name
+(const_decl name: (identifier) @constant)
 
 ; ── parameters / bindings ─────────────────────────────────────────
 (param name: (identifier) @variable.parameter)
@@ -57,6 +63,7 @@
   "match" "async" "await" "own" "dup" "unsafe" "extern" "export" "import"
   "namespace" "for" "while" "loop" "spawn" "where"
   "singleton" "transient" "scoped" "move"
+  "const" "state" "empty"
 ] @keyword
 
 ; `break` / `continue` are single-keyword statements, captured as nodes
