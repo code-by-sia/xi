@@ -1988,16 +1988,32 @@ static void xw_serve_conn(void* conn, xw_rd_fn rd, xw_wr_fn wr) {
 static long xw_fd_rd(void* c, char* b, long n) { return (long)recv((int)(intptr_t)c, b, (size_t)n, 0); }
 static long xw_fd_wr(void* c, const char* b, long n) { return (long)send((int)(intptr_t)c, b, (size_t)n, 0); }
 
+/* Cooperative shutdown for the blocking serve loops. web.shutdown() sets the
+   flag and closes the listening socket, which unblocks the accept() so the loop
+   can return. Safe to call from another thread (e.g. a runWithDelay timer). */
+static volatile int xw_stop = 0;
+static int xw_listen_fd = -1;
+void xstd_web_shutdown(void) {
+    xw_stop = 1;
+    int fd = xw_listen_fd;
+    xw_listen_fd = -1;
+    if (fd >= 0) { shutdown(fd, SHUT_RDWR); close(fd); }
+}
+
 void xstd_web_serve(xc_integer_t port) {
     int fd = (int)xstd_tcp_listen(port, 64);
     if (fd < 0) { fprintf(stderr, "web: cannot listen on port %lld\n", (long long)port); return; }
+    xw_stop = 0;
+    xw_listen_fd = fd;
     fprintf(stderr, "web: serving on http://0.0.0.0:%lld\n", (long long)port);
-    for (;;) {
+    while (!xw_stop) {
         int c = accept(fd, NULL, NULL);
-        if (c < 0) continue;
+        if (c < 0) { if (xw_stop) break; continue; }
         xw_serve_conn((void*)(intptr_t)c, xw_fd_rd, xw_fd_wr);
         close(c);
     }
+    if (xw_listen_fd >= 0) { close(xw_listen_fd); xw_listen_fd = -1; }
+    fprintf(stderr, "web: shut down\n");
 }
 
 /* ─── HTTPS (opt-in: build with XC_TLS=1, needs OpenSSL) ─────────────────────── */

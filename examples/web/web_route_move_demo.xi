@@ -34,6 +34,7 @@ class Routes implements WebRequestHandler {
 module App { bind WebRequestHandler -> Routes }
 
 async entry main(args: String[]) -> Integer {
+    runWithDelay(30000) { web.shutdown() }   // self-terminate after 30s so the server never blocks
     web.serve(8137)
     return 0
 }

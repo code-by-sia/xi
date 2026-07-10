@@ -33,6 +33,7 @@ extern "C" {
     producer xstd_web_serve(port: Integer)
     producer xstd_web_serve_tls(port: Integer, cert: String, key: String)
     producer xstd_web_serve_http2(port: Integer, cert: String, key: String)
+    producer xstd_web_shutdown()
     mapper   xstd_web_match(req: HttpRequest, method: String, pattern: String) -> Bool
     mapper   xstd_req_params_json(req: HttpRequest) -> Json
     mapper   xstd_req_query_json(req: HttpRequest) -> Json
@@ -63,6 +64,11 @@ producer body(req: HttpRequest) -> Json    { return xstd_json_parse(xstd_req_bod
 
 // ── Server ──────────────────────────────────────────────────────────
 producer serve(port: Integer) { xstd_web_serve(port) }
+
+// Stop a running server: unblocks `serve` so it returns. Safe to call from
+// another thread — e.g. `runWithDelay(30000) { web.shutdown() }` before `serve`
+// gives a self-terminating server (used by the examples so CI never blocks).
+producer shutdown() { xstd_web_shutdown() }
 
 // HTTPS. Requires the toolchain to be built with TLS: compile with `XC_TLS=1`
 // (needs OpenSSL). Without it, this prints a notice and serves nothing.

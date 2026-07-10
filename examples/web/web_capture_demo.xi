@@ -44,6 +44,7 @@ class OrderApi implements WebRequestHandler {
 module App { bind WebRequestHandler -> OrderApi }
 
 async entry main(args: String[]) -> Integer {
+    runWithDelay(30000) { web.shutdown() }   // self-terminate after 30s so the server never blocks
     web.serve(8080)
     return 0
 }
