@@ -187,7 +187,7 @@ module LoadTest {
     id           = "loadtest"
     name         = "Xi Load Tester"
     description  = "Load/perf testing for Xi projects: compile-stress, run-bench, and HTTP load."
-    version      = "0.0.93"
+    version      = "0.0.94"
     license      = "Apache 2.0"
     includes     = []
     excludes     = []
