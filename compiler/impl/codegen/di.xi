@@ -298,6 +298,30 @@ mapper genSingletons(prog: Program) -> String {
         }
         i = i + 1
     }
+    // `d: I as singleton` markers: one storage slot per chosen implementor.
+    let ci = 0
+    let cn2 = classSpecLen(prog.classes)
+    while ci < cn2 {
+        let cs = classSpecGet(prog.classes, ci)
+        let di = 0
+        let dn = depSpecLen(cs.depList)
+        while di < dn {
+            let dep = depSpecGet(cs.depList, di)
+            if dep.scopeKind == "singleton" {
+                let conc = chosenImpl(prog, dep.ifaceName)
+                let already2 = false
+                let s2 = 0
+                while s2 < stringArrLen(seen) { if stringArrGet(seen, s2) == conc { already2 = true }  s2 = s2 + 1 }
+                if string_len(conc) > 0 and not already2 {
+                    seen = appendString(seen, conc)
+                    out = out + "static xc_" + conc + "_t xc_singleton_" + conc + ";\n"
+                    out = out + "static bool xc_singleton_" + conc + "_initialized = false;\n"
+                }
+            }
+            di = di + 1
+        }
+        ci = ci + 1
+    }
     return out + "\n"
 }
 
@@ -329,6 +353,32 @@ mapper genSingletonInit(prog: Program) -> String {
             j = j + 1
         }
         i = i + 1
+    }
+    // `d: I as singleton` markers: init the chosen implementor's storage once.
+    let ci = 0
+    let cn2 = classSpecLen(prog.classes)
+    while ci < cn2 {
+        let cs = classSpecGet(prog.classes, ci)
+        let di = 0
+        let dn = depSpecLen(cs.depList)
+        while di < dn {
+            let dep = depSpecGet(cs.depList, di)
+            if dep.scopeKind == "singleton" {
+                let conc = chosenImpl(prog, dep.ifaceName)
+                let already2 = false
+                let s2 = 0
+                while s2 < stringArrLen(seen) { if stringArrGet(seen, s2) == conc { already2 = true }  s2 = s2 + 1 }
+                if string_len(conc) > 0 and not already2 {
+                    seen = appendString(seen, conc)
+                    out = out + "    if (!xc_singleton_" + conc + "_initialized) {\n"
+                    out = out + "        xc_singleton_" + conc + "_initialized = true;\n"
+                    out = out + "        xc_singleton_" + conc + " = *xc_new_" + conc + "();\n"
+                    out = out + "    }\n"
+                }
+            }
+            di = di + 1
+        }
+        ci = ci + 1
     }
     out = out + "}\n\n"
     return out

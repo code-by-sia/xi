@@ -268,6 +268,7 @@ mapper findScope(prog: Program, moduleName: String, ifaceName: String) -> String
         }
         i = i + 1
     }
+    if prog.isDepMarkedSingleton(ifaceName) { return "singleton" }
     return "transient"
 }
 
@@ -371,6 +372,26 @@ mapper bindFor(prog: Program, iface: String) -> String {
     return found
 }
 
+// Does any class declare a dependency on `iface` as `d: I as singleton`? Such a
+// marker binds `iface` as a singleton at the injection site, so no module-level
+// `bind I -> Impl as singleton` is required.
+predicate Program.isDepMarkedSingleton(iface: String) {
+    let i = 0
+    let n = classSpecLen(this.classes)
+    while i < n {
+        let cs = classSpecGet(this.classes, i)
+        let di = 0
+        let dn = depSpecLen(cs.depList)
+        while di < dn {
+            let dep = depSpecGet(cs.depList, di)
+            if dep.ifaceName == iface and dep.scopeKind == "singleton" { return true }
+            di = di + 1
+        }
+        i = i + 1
+    }
+    return false
+}
+
 mapper bindScopeFor(prog: Program, iface: String) -> String {
     let i = 0
     let n = moduleSpecLen(prog.modules)
@@ -386,6 +407,8 @@ mapper bindScopeFor(prog: Program, iface: String) -> String {
         }
         i = i + 1
     }
+    // A `d: I as singleton` marker on any dep upgrades I to singleton scope.
+    if found != "singleton" and prog.isDepMarkedSingleton(iface) { return "singleton" }
     return found
 }
 

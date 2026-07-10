@@ -414,6 +414,15 @@ mapper parseDep(ps: PState) -> DepResult {
     if tr.ctype.startsWith2("xc_arr_") { form = "list" }
     if tr.ctype.startsWith2("xc_opt_") { form = "opt" }
 
+    // optional `as singleton` — mark this dependency's binding as a shared
+    // singleton at the injection site (no module `bind ... as singleton` needed).
+    let scopeKind = ""
+    if peek(ps2).kind == 209 and peekAt(ps2, 1).kind == 239 {   // as singleton
+        scopeKind = "singleton"
+        ps2 = advance(ps2)
+        ps2 = advance(ps2)
+    }
+
     let orAlt = ""
     let whereToks: Token[] = []
     if peek(ps2).kind == 242 {        // where <cond>
@@ -448,7 +457,7 @@ mapper parseDep(ps: PState) -> DepResult {
 
     let spec = DepSpec {
         name: dname, ctype: tr.ctype, ifaceName: ifName, hasWhen: false,
-        form: form, orAlt: orAlt, whereTokens: whereToks
+        form: form, orAlt: orAlt, whereTokens: whereToks, scopeKind: scopeKind
     }
     return DepResult { spec: spec, ps: ps2 }
 }

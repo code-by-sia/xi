@@ -50,7 +50,8 @@ type DepSpec = {
     hasWhen:    Bool,
     form:       String,
     orAlt:      String,    // fallback class for `I or J`
-    whereTokens: Token[]   // guard tokens for `I where <cond>`
+    whereTokens: Token[],  // guard tokens for `I where <cond>`
+    scopeKind:  String     // "singleton" if declared `d: I as singleton`, else ""
 }
 
 // A class
