@@ -130,15 +130,25 @@ The response is *mutable* — fill it in, don't return it.
 | `res.sendText(code, body)` | reply `code` with a plain-text body |
 
 `res.send` / `req.parse` work for any `event` or compound `type`; the compiler
-derives the codec automatically. A field may be a `List<T>` — it is stored
-growably in memory and serialized as a JSON array, so a service can accumulate
-posted items and hand the list straight back. A request that no controller
-matches gets a `404`.
+derives the codec automatically. The payload can also be a **bare `List<T>` or
+`T[]`** — it serializes to a JSON array, so a controller can return a
+repository's list directly with no wrapper DTO:
+
+```x
+action handle(req: HttpRequest, res: HttpResponse) {
+    res.send(users.findAll())      // -> [ {...}, {...} ]  (List<User>)
+}
+```
+
+A `List<T>` field on a DTO works the same way, and is stored growably in memory,
+so a service can accumulate posted items and hand the list straight back. A
+request that no controller matches gets a `404`.
 
 ### Keeping state across requests
 
-A service that accumulates data across requests must be bound **`as singleton`**
-so every request shares one instance:
+A service that accumulates data across requests must be a **singleton** so every
+request shares one instance — either mark the dependency at the injection site
+or bind it in the module:
 
 ```x
 class ItemStore implements Store {
@@ -146,11 +156,18 @@ class ItemStore implements Store {
     consumer add(it: Item) { this.items.push(it) }
     ...
 }
-module App { bind Store -> ItemStore as singleton }   // shared, not per-resolve
+
+class ItemController implements WebRequestHandler {
+    deps { store: Store as singleton }                // marker: one shared store
+    ...
+}
+// — or, equivalently, in the module —
+module App { bind Store -> ItemStore as singleton }
 ```
 
-Without `as singleton` the service is resolved fresh each time and its state
-never accumulates. See `examples/web/web_store_demo.xi` for the full pattern.
+Left transient (the default), the service is resolved fresh each request and its
+state never accumulates. See `examples/web/web_store_demo.xi` for the full
+pattern.
 
 ## The `WebTransport`
 
@@ -184,6 +201,19 @@ async entry main(args: String[]) -> Integer {
 ```console
 $ xc app.xi && ./build/app
 web: serving on http://0.0.0.0:8080
+```
+
+`web.serve` blocks until the server is stopped. **`web.shutdown()`** stops it —
+it unblocks `serve` so the call returns and the process exits. It is safe to call
+from another thread, so a background timer can bound the server's lifetime (the
+serve demos use this so a run never blocks):
+
+```x
+async entry main(args: String[]) -> Integer {
+    runWithDelay(30000) { web.shutdown() }   // self-terminate after 30s
+    web.serve(8080)
+    return 0
+}
 ```
 
 ## HTTPS

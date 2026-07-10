@@ -206,6 +206,21 @@ A binding is `transient` by default (constructed per dependent); mark it
 module App { bind Cache -> LruCache as singleton }
 ```
 
+You can also mark a scope **at the injection site**, right on the dependency —
+no module `bind` needed:
+
+```x
+class OrderController implements WebRequestHandler {
+    deps { store: OrderStore as singleton }   // one shared OrderStore
+    …
+}
+```
+
+`x: I as singleton` binds `I` as a singleton for the whole program (an explicit
+module `bind … as singleton` still takes precedence). This is the idiomatic way
+to give a **stateful service** one shared instance: without it the service is
+transient and, being reconstructed per use, silently never accumulates state.
+
 Singletons live for the whole process (and are never freed by design); transients
 are created where needed.
 
