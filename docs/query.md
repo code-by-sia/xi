@@ -149,6 +149,19 @@ let out = query.from<User>("users").filter { it.age > 21 }.collect(App.resolve(Q
 Because the provider is an interface, tests swap a database for MemorySource
 with a one-line bind — same queries, no infrastructure.
 
+A real backend is the same one method. `examples/query/sqlite_query_demo.xi`
+implements `QueryProvider` over libsqlite3: its `run` renders the plan with
+`sqlRender` + `SqliteDialect`, executes the statement with **bound parameters**,
+and returns the rows — so a chain `.collect(sqlite)` comes back as typed values
+straight from the database.
+
+```x
+producer run(plan: QueryPlan) -> Json {
+    let stmt = (sqlRender(plan, SqliteDialect {} as SqlDialect)).value
+    // prepare stmt.text, bind stmt.params, step, return rows as Json
+}
+```
+
 ## The plan is data
 
 `QueryPlan` / `QueryStage` / `QueryExpr` are ordinary sum types
