@@ -12,7 +12,7 @@ slug: /
   <p class="hero-x__tagline">
     A statically-typed, ahead-of-time compiled language that makes
     <strong>dependency injection</strong>, <strong>function intent</strong>, and
-    <strong>refined types</strong> first-class — compiled to native binaries
+    <strong>refined types</strong> first-class - compiled to native binaries
     through C, and self-hosting.
   </p>
   <p class="hero-x__cta">
@@ -21,10 +21,10 @@ slug: /
   </p>
 </div>
 
-Xi is **self-hosting** — its compiler is written in Xi and compiles its own source
+Xi is **self-hosting** - its compiler is written in Xi and compiles its own source
 to a byte-identical fixpoint. The only non-Xi code is a small C runtime (the
 equivalent of a language's libc/libcore). You don't need any of that to write
-Xi — [install the toolchain](getting-started.md) and go.
+Xi - [install the toolchain](getting-started.md) and go.
 
 ## Install
 
@@ -42,23 +42,23 @@ just need a C compiler (`cc`) on `PATH`. Full steps:
 
 ## Highlights
 
-- **Refined types** — `type Age = Number where value >= 0 and value <= 130`,
+- **Refined types** - `type Age = Number where value >= 0 and value <= 130`,
   checked at construction.
-- **Eight function kinds** — `mapper`, `projector`, `predicate`, `consumer`,
+- **Eight function kinds** - `mapper`, `projector`, `predicate`, `consumer`,
   `producer`, `reducer`, `creator`, `action`: intent is syntactic.
-- **Dependency injection** in the language — `deps { ... }`, `module { bind ... }`,
+- **Dependency injection** in the language - `deps { ... }`, `module { bind ... }`,
   `App.resolve(Interface)`, conditional `when` bindings, `singleton`/`transient`.
-- **`where`-guarded overloading** — multiple functions with one name, selected by
+- **`where`-guarded overloading** - multiple functions with one name, selected by
   a guard.
-- **Decision tables, interrupts, atoms, machines & events** — business rules,
+- **Decision tables, interrupts, atoms, machines & events** - business rules,
   resumable conditions, active-state stores, finite state machines, and
   publish/subscribe with the `listener` kind, all as language features.
-- **Error handling** — `T!` result types, `ok`/`err`, and `?` propagation.
-- **Serialization** — a built-in [`std/json`](serialization.md) library.
-- **xi-query** — [reified query chains](query.md): `query.from<User>("users")
+- **Error handling** - `T!` result types, `ok`/`err`, and `?` propagation.
+- **Serialization** - a built-in [`std/json`](serialization.md) library.
+- **Query** - [reified query chains](query.md): `query.from<User>("users")
   .filter { it.age >= 18 }.collect(db)` compiles to a typed plan a provider
   runs in memory or renders to SQL.
-- **Native output** — compiles to a standalone binary via C; no VM, no GC.
+- **Native output** - compiles to a standalone binary via C; no VM, no GC.
 
 ## A taste
 
@@ -91,7 +91,7 @@ $ xc greeting.xi && ./build/greeting
 See Xi in a real application: **[eXstream](https://github.com/code-by-sia/eXstream)**
 is a music-streaming service whose backend is a set of Xi microservices (auth,
 file storage, playlist) behind an API gateway, with a React front end and Docker
-deployment — an end-to-end example of modules, dependency injection, the web
+deployment - an end-to-end example of modules, dependency injection, the web
 framework, and JWT auth.
 
 Ready? Head to [Getting started](getting-started.md).

@@ -2,7 +2,7 @@
 
 Xi serializes data through **JSON**. The `std/json` module gives you a `Json`
 value tree you can build in code, render to text, and parse back. It is the
-foundation for anything that crosses a boundary — files, sockets, HTTP bodies,
+foundation for anything that crosses a boundary - files, sockets, HTTP bodies,
 and external [event](events.md) transports.
 
 ```x
@@ -13,7 +13,7 @@ import "std/json.xi"
 
 `Json` is an opaque, immutable-feeling handle to a node in a value tree. A node is
 one of six kinds: **null, bool, number, string, array, object**. You never
-construct one directly — you use the module's constructors:
+construct one directly - you use the module's constructors:
 
 ```x
 json.nul()             // null
@@ -21,8 +21,8 @@ json.of(true)          // bool
 json.num(3.14)         // number (from Number)
 json.int(36)           // number (from Integer)
 json.str("hello")      // string
-json.array()           // [] — fill with push
-json.object()          // {} — fill with set
+json.array()           // [] - fill with push
+json.object()          // {} - fill with set
 ```
 
 ## Building
@@ -64,7 +64,7 @@ fractional part.
 
 ## Parsing
 
-`parse` turns text into a `Json` tree. Malformed input doesn't crash — it yields
+`parse` turns text into a `Json` tree. Malformed input doesn't crash - it yields
 a value that fails `isValid`:
 
 ```x
@@ -75,7 +75,7 @@ if not json.isValid(v) {
 }
 ```
 
-Then read it. Object/array access never traps — a missing key or out-of-range
+Then read it. Object/array access never traps - a missing key or out-of-range
 index returns a `null` node, and the `as*` coercions return a zero value on a
 kind mismatch:
 
@@ -105,21 +105,21 @@ if json.isObject(v) {
 ## Automatic derive
 
 Wherever the compiler sees a (de)serialization boundary it **derives the codec
-from the type's fields** — no hand-written mapping, nested types included, in
+from the type's fields** - no hand-written mapping, nested types included, in
 **both directions**:
 
 - **`<obj> as Json`** serializes any compound value into a `Json` tree.
 - **`<json> as T`** reconstructs a compound type from a `Json` tree.
-- **Web** replies and bodies: `res.send(dto)` and `req.parse(T)` — see [web](web.md).
-- **Event** transports and typed **`readConfig`** — see [events](events.md) and
+- **Web** replies and bodies: `res.send(dto)` and `req.parse(T)` - see [web](web.md).
+- **Event** transports and typed **`readConfig`** - see [events](events.md) and
   [config](config.md).
 
 Both array fields (`T[]`) and growable-list fields (`List<T>`) serialize as JSON
 arrays and round-trip back. Use `List<T>` when the field is also accumulated in
-memory (e.g. a service that `.push`es onto its state) — it stores *and*
+memory (e.g. a service that `.push`es onto its state) - it stores *and*
 serializes, so no conversion is needed at the boundary.
 
-**Sum types** serialize as tagged objects — `{"tag":"Variant", ...payload}` —
+**Sum types** serialize as tagged objects - `{"tag":"Variant", ...payload}` -
 and round-trip back through `as`, recursion included. A whole tree (say, a
 [query plan](query.md)) is one `as Json` away from the wire:
 
@@ -144,7 +144,7 @@ let back = json.parse(text) as User   // Json tree -> nested compound (derived)
 ## Building a tree by hand
 
 `obj as Json` covers the common case. Reach for the explicit `std/json`
-constructors only when you need a **different shape** than the type's fields —
+constructors only when you need a **different shape** than the type's fields -
 renamed keys, omitted fields, or computed values:
 
 ```x
@@ -158,7 +158,7 @@ mapper userToJson(u: User) -> Json {
 
 This is what an **external event transport** does under the hood: an event's
 typed payload is turned into `Json` (`stringify`) to leave the process and rebuilt
-(`parse`) on the far side — see [Events](events.md). The `std/json` codecs for
+(`parse`) on the far side - see [Events](events.md). The `std/json` codecs for
 `event` types are derived automatically.
 
 ## YAML and XML
@@ -180,7 +180,7 @@ let x = xml.stringify(person)               // wrapped in <root>…</root>
 let q = xml.parse("<root><name>Ada</name></root>")   // -> Json (root value)
 ```
 
-### `yaml` — `std/yaml`
+### `yaml` - `std/yaml`
 
 | Function | Signature |
 |----------|-----------|
@@ -191,7 +191,7 @@ Supports block **mappings**, **sequences**, scalars, nesting, and `#` comments
 (including `- key: val` sequences-of-maps). Not supported: flow style (`{}`/`[]`),
 anchors/aliases, multi-line scalars, and inline (end-of-line) comments.
 
-### `xml` — `std/xml`
+### `xml` - `std/xml`
 
 | Function | Signature |
 |----------|-----------|
@@ -203,14 +203,14 @@ Convention: an **object** → child elements (one per key); an **array** → a
 repeated element; a **scalar** → element text. On parse, repeated tags collect
 into an array and leaf text is type-inferred. Entities
 (`&lt; &gt; &amp; &quot; &apos;`) are handled. **Attributes are ignored** on parse
-and not emitted, and mixed text+element content isn't represented — XML↔JSON is
+and not emitted, and mixed text+element content isn't represented - XML↔JSON is
 inherently lossy, so use it for data interchange, not document fidelity.
 
 ## Notes & limits
 
 - Three formats today (JSON, YAML, XML) over one `Json` tree; other encoders
   could target it later.
-- No streaming parser — `parse` reads a whole string.
+- No streaming parser - `parse` reads a whole string.
 - No schema validation; you check shapes yourself with `kind`/`is*`.
 
 See `examples/serialization/json_demo.xi` and `examples/serialization/yaml_xml_demo.xi`.

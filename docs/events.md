@@ -2,9 +2,9 @@
 
 Xi has a built-in **typed publish/subscribe** event system. A producer publishes
 any **DTO** under a topic; a **`listener`** subscribed to that topic receives the
-**typed value** — never `Json`. Producers and listeners never reference each
+**typed value** - never `Json`. Producers and listeners never reference each
 other, and the *same* code works whether events stay in the process or cross the
-network — only the bound transport changes.
+network - only the bound transport changes.
 
 ```x
 import "std/json.xi"
@@ -13,14 +13,14 @@ import "std/events.xi"
 
 ## Declaring an event
 
-An **`event`** is a DTO — an ordinary value type that may be published. (The
+An **`event`** is a DTO - an ordinary value type that may be published. (The
 compiler also derives a JSON codec for it, used *only* by external transports.)
 
 ```x
 event OrderPaid { id: String, item: String, total: Number }
 ```
 
-## Publishing — any DTO under a topic
+## Publishing - any DTO under a topic
 
 A producer depends on the injected **`PublisherService`** and calls
 `publish(topic, dto)`:
@@ -36,7 +36,7 @@ class Shop {
 
 No `Json` is built. The DTO is the payload.
 
-## Reacting — typed listeners
+## Reacting - typed listeners
 
 A **`listener`** names its topic with `on "…"` and receives the **typed DTO**:
 
@@ -55,7 +55,7 @@ delivery resolves a fresh owning instance through DI.
 ## Delivery is queued; run the pump
 
 The default transport puts published events on an in-memory queue. Deliver them
-by running the **pump** — the bound `ConsumerService`:
+by running the **pump** - the bound `ConsumerService`:
 
 ```x
 async entry main(args: String[]) -> Integer {
@@ -69,10 +69,10 @@ module App {}                    // MemoryBus / MemoryConsumer are the defaults
 
 `Events.run()` resolves the `ConsumerService` and runs it; the default
 `MemoryConsumer` drains the in-memory queue and dispatches each event to its
-typed listeners. Nothing is serialized — the typed value is passed straight
+typed listeners. Nothing is serialized - the typed value is passed straight
 through.
 
-### Async delivery — `Events.runAsync()`
+### Async delivery - `Events.runAsync()`
 
 `Events.run()` drains on the calling thread. `Events.runAsync()` instead spawns a
 background worker (a [thread](threading.md)) that blocks on the queue and
@@ -103,13 +103,13 @@ between an in-process event and one that crosses the network is which
 
 | | Application (default) | External (your impl) |
 |---|---|---|
-| `PublisherService` | `MemoryBus` — enqueue, no serialize | serialize + send on the wire |
-| `ConsumerService` | `MemoryConsumer` — drain queue | receive + deserialize + dispatch |
+| `PublisherService` | `MemoryBus` - enqueue, no serialize | serialize + send on the wire |
+| `ConsumerService` | `MemoryConsumer` - drain queue | receive + deserialize + dispatch |
 | Payload in transit | the **typed value** (a pointer) | bytes (your format) |
 
 An event travels internally as a **type-erased envelope** (topic + type name +
 an opaque pointer to the typed value). Producers and listeners only ever see the
-topic and the typed DTO — the envelope is what the transport carries.
+topic and the typed DTO - the envelope is what the transport carries.
 
 ### Writing an external transport
 
@@ -149,7 +149,7 @@ module App {
 ```
 
 The derived codec supports `String`, `Number`, `Integer`, `Bool`, `Json`, nested
-`event` fields, and **arrays** of those (`String[]`, `Order[]`, …) — each encoded
+`event` fields, and **arrays** of those (`String[]`, `Order[]`, …) - each encoded
 element by element. (Arrays of *primitive numbers/bools* in a payload await the
 language's general primitive-array-in-struct support; `String[]` and arrays of
 `event` types work today.)
@@ -171,15 +171,15 @@ work-around noted; none block normal use:
 - **The firing topic inside a listener.** A `listener (e: T) on "orders.paid"` is
   bound to one topic, which it already knows statically, so it receives just the
   typed DTO. *One* listener spanning *several* topics (wildcards) that needs to
-  know which fired isn't built — use a listener per topic, or carry the topic as a
+  know which fired isn't built - use a listener per topic, or carry the topic as a
   field on the DTO.
 - **Wire schema / version negotiation.** External transports serialize by the
   event's **type name**, so producer and consumer must agree on the shape. To
   evolve an event across versions, version the type itself (a `version` field, or
-  a new event type) — there's no automatic cross-version negotiation.
+  a new event type) - there's no automatic cross-version negotiation.
 - **Multiple external buses at once.** A program binds **one** transport
   (`PublisherService`/`ConsumerService`); routing different topics to different
-  external buses isn't expressible directly — implement a fan-out transport that
+  external buses isn't expressible directly - implement a fan-out transport that
   dispatches per topic.
 
 See `examples/events/typed_event_demo.xi`.

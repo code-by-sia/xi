@@ -29,7 +29,7 @@ $ xc myapp.xi
 
 ## Modules
 
-### `math` — `std/math.xi`
+### `math` - `std/math.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -41,7 +41,7 @@ $ xc myapp.xi
 | `min`, `max` | `(Number, Number) -> Number` |
 | `clamp` | `(Number, Number, Number) -> Number` |
 
-### `text` — `std/text.xi`
+### `text` - `std/text.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -55,11 +55,11 @@ $ xc myapp.xi
 | `replace` | `(String, String, String) -> String` (all occurrences) |
 | `isEmpty` | `predicate (String)` |
 | `split`, `join` | `(String, String) -> String[]` / `(String[], String) -> String` |
-| `isAlpha`, `isDigit`, `isAlnum`, `isSpace` | `predicate (Integer)` — classify a char code (e.g. from `charAt`) |
-| `indexOfChar` | `(String, Integer) -> Integer` — first index of a char code (`-1` if absent) |
-| `fromCharCode` | `(Integer) -> String` — a one-character string from a char code |
+| `isAlpha`, `isDigit`, `isAlnum`, `isSpace` | `predicate (Integer)` - classify a char code (e.g. from `charAt`) |
+| `indexOfChar` | `(String, Integer) -> Integer` - first index of a char code (`-1` if absent) |
+| `fromCharCode` | `(Integer) -> String` - a one-character string from a char code |
 
-### `bytes` — `std/bytes.xi`
+### `bytes` - `std/bytes.xi`
 
 `Bytes` is a primitive type: a raw byte buffer, distinct from `String`. Like
 `String` it is an immutable value (copies share the buffer; producers
@@ -76,7 +76,7 @@ heap-allocate a fresh one). Used for binary I/O.
 | `empty` | `() -> Bytes` |
 | `isEmpty` | `predicate (Bytes)` |
 
-### `convert` — `std/convert.xi`
+### `convert` - `std/convert.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -93,7 +93,7 @@ let r = convert.parseInteger("42")
 if isOk(r) { system.stdout.writeln("got " + r.value) }
 ```
 
-### `json` — `std/json.xi`
+### `json` - `std/json.xi`
 
 Xi's **serialization** library. `Json` is an opaque value tree; build it with the
 constructors, compose with `set`/`push`, render with `stringify`/`pretty`, and
@@ -119,7 +119,7 @@ guide.
 | `asString`, `asNumber`, `asBool` | leaf coercion |
 | `getString`, `getNumber` | `(Json, String) -> …` (field shortcut) |
 
-### `yaml` — `std/yaml.xi`
+### `yaml` - `std/yaml.xi`
 
 YAML over the same `Json` tree (block style). See [Serialization](serialization.md).
 
@@ -128,7 +128,7 @@ YAML over the same `Json` tree (block style). See [Serialization](serialization.
 | `stringify` | `(Json) -> String` |
 | `parse` | `(String) -> Json` |
 
-### `xml` — `std/xml.xi`
+### `xml` - `std/xml.xi`
 
 XML over the same `Json` tree (object → child elements, array → repeated element,
 scalar → text). See [Serialization](serialization.md).
@@ -139,9 +139,9 @@ scalar → text). See [Serialization](serialization.md).
 | `stringifyAs` | `(Json, String) -> String` (custom root tag) |
 | `parse` | `(String) -> Json` |
 
-### `crypto` — `std/crypto.xi`
+### `crypto` - `std/crypto.xi`
 
-Self-contained hashing, HMAC, encodings, and a CSPRNG — no external libraries.
+Self-contained hashing, HMAC, encodings, and a CSPRNG - no external libraries.
 Digests are `Bytes`; render with `hex`/`base64`. (Test-vector verified.)
 
 | Function | Signature |
@@ -154,7 +154,7 @@ Digests are `Bytes`; render with `hex`/`base64`. (Test-vector verified.)
 | `base64` / `fromBase64` | `(Bytes) -> String` / `(String) -> Bytes` |
 | `randomBytes` / `randomHex` | `(Integer) -> Bytes` / `(Integer) -> String` (from `/dev/urandom`) |
 
-### `web` — `std/web.xi`
+### `web` - `std/web.xi`
 
 A tiny **REST framework** over HTTP/1.1: implement `WebRequestHandler`, route by
 overloading `handle` with `where` guards, and run `web.serve`. Payloads
@@ -162,47 +162,47 @@ auto-(de)serialize via a `WebTransport` (JSON by default). See [Web](web.md).
 
 | Name | Kind / Signature |
 |------|------------------|
-| `WebRequestHandler` | interface — `action handle(req: HttpRequest, res: HttpResponse)` |
-| `WebTransport` | interface — `serialize(Json) -> String` / `deserialize(String) -> Json` (JSON default) |
+| `WebRequestHandler` | interface - `action handle(req: HttpRequest, res: HttpResponse)` |
+| `WebTransport` | interface - `serialize(Json) -> String` / `deserialize(String) -> Json` (JSON default) |
 | `req.path` / `req.method` / `req.body` | `HttpRequest -> String` |
 | `req.query("q")` / `req.header("X")` | `(HttpRequest, String) -> String` |
 | `req.parse(T)` | deserialize the body into a `T` |
 | `res.send(dto)` | serialize `dto` and reply `200` |
 | `res.sendStatus(code, msg)` / `res.sendText(code, body)` | plain-text reply |
-| `web.serve` | `(Integer)` — run a blocking HTTP/1.1 server |
-| `web.serveTLS` | `(Integer, String, String)` — HTTPS (cert, key); build with `XC_TLS=1` |
-| `web.serveHttp2` | `(Integer, String, String)` — HTTP/2 over TLS (ALPN h2); build with `XC_HTTP2=1` |
-| `web.shutdown` | `()` — stop a running server (safe from another thread) |
+| `web.serve` | `(Integer)` - run a blocking HTTP/1.1 server |
+| `web.serveTLS` | `(Integer, String, String)` - HTTPS (cert, key); build with `XC_TLS=1` |
+| `web.serveHttp2` | `(Integer, String, String)` - HTTP/2 over TLS (ALPN h2); build with `XC_HTTP2=1` |
+| `web.shutdown` | `()` - stop a running server (safe from another thread) |
 
-### `query` — `std/query.xi`
+### `query` - `std/query.xi`
 
-**xi-query**: reified query plans and the provider contract. A chain rooted at
+**Query**: reified query plans and the provider contract. A chain rooted at
 `query.from<T>("source")` compiles to a `QueryPlan` value; `collect(provider)`
-runs it. See [xi-query](query.md).
+runs it. See [Query](query.md).
 
 | Name | Kind / Signature |
 |------|------------------|
 | `query.from<T>("src")` | root a query at a named source |
 | `list.asQuery()` / `arr.asQuery()` | root a query at an in-memory collection; run with `.toList()` |
-| `QueryProvider` | interface — `run(plan: QueryPlan) -> Json` |
-| `RowStore` | interface — `load(name: String, rows: Json)` |
-| `MemorySource` | class — the in-memory reference provider (implements both) |
-| `QueryPlan` / `QueryStage` / `QueryExpr` | the plan's types — walk with `match`; serialize with `as Json` |
+| `QueryProvider` | interface - `run(plan: QueryPlan) -> Json` |
+| `RowStore` | interface - `load(name: String, rows: Json)` |
+| `MemorySource` | class - the in-memory reference provider (implements both) |
+| `QueryPlan` / `QueryStage` / `QueryExpr` | the plan's types - walk with `match`; serialize with `as Json` |
 | `someList.asQuery()` … `.toList()` | root a query at a `List<T>`/`T[]` and run it locally |
 
-### `sql` — `std/sql.xi`
+### `sql` - `std/sql.xi`
 
 Render a `QueryPlan` to a SQL statement with **bound parameters**. Dialects are
-an interface — three are bundled; add your own without touching std.
+an interface - three are bundled; add your own without touching std.
 
 | Name | Kind / Signature |
 |------|------------------|
 | `sqlRender` | `(QueryPlan, SqlDialect) -> SqlStatement!` |
 | `SqlStatement` | `{ text: String, params: Json }` |
-| `SqlDialect` | interface — name / placeholder / quoteIdent / callSql / regexpExpr / limitSql |
+| `SqlDialect` | interface - name / placeholder / quoteIdent / callSql / regexpExpr / limitSql |
 | `SqliteDialect` / `PostgresDialect` / `MysqlDialect` | bundled dialects (`.name()` -> `"sqlite"` / `"postgres"` / `"mysql"`) |
 
-### `thread` — `std/thread.xi`
+### `thread` - `std/thread.xi`
 
 **Share-nothing threads + channels.** A `parallel` block runs on a new OS thread
 and yields a `Thread` handle; threads communicate only through thread-safe
@@ -213,16 +213,16 @@ channels, which carry strings or structured values. See [Threading](threading.md
 | `thread.channel()` | `() -> Channel` (thread-safe FIFO) |
 | `ch.send(x)` | String as-is; a structured `event`/`type` is JSON-serialized; numbers/bools stringify |
 | `ch.recv()` / `ch.recv(T)` | raw `String` / deserialize a structured `T` (blocks) |
-| `ch.close()` | `(Channel)` — wakes a blocked `recv` |
+| `ch.close()` | `(Channel)` - wakes a blocked `recv` |
 | `parallel [(caps…)] { … }` | spawn a thread, evaluates to a `Thread` (captures must be channels) |
-| `thread.stopped()` | `() -> Bool` — inside a block, has stop been requested? |
+| `thread.stopped()` | `() -> Bool` - inside a block, has stop been requested? |
 | `t.stop()` / `t.wait()` / `t.running()` | request stop / join / `Bool` liveness |
 
-### `events` — `std/events.xi`
+### `events` - `std/events.xi`
 
 Built-in **typed publish/subscribe**. A producer publishes any DTO under a topic
 through an injected `PublisherService`; a `listener` subscribes to a topic and
-receives the **typed DTO** — no JSON. The default `MemoryBus`/`MemoryConsumer`
+receives the **typed DTO** - no JSON. The default `MemoryBus`/`MemoryConsumer`
 queue events in memory and pass the typed value through without serialization;
 bind your own transport to go external (serialize on publish, deserialize on
 receive). See [Events](events.md).
@@ -232,8 +232,8 @@ receive). See [Events](events.md).
 | `event T { … }` | a typed event DTO (publishable; gets a derived codec) |
 | `events.publish(topic, dto)` | publish any DTO under a topic (via `PublisherService`) |
 | `listener f(e: T) on "topic"` | typed subscriber for a topic |
-| `PublisherService` | `interface { producer publish(e: Event) }` — outbound transport |
-| `ConsumerService` | `interface { consumer run() }` — the delivery pump |
+| `PublisherService` | `interface { producer publish(e: Event) }` - outbound transport |
+| `ConsumerService` | `interface { consumer run() }` - the delivery pump |
 | `MemoryBus` / `MemoryConsumer` | defaults: in-memory queue, no serialization |
 | `Events.run()` | run the pump synchronously (resolve + run the `ConsumerService`) |
 | `Events.runAsync()` / `Events.stop()` | deliver on a worker thread (returns a `Thread`) / close the queue to stop it |
@@ -241,7 +241,7 @@ receive). See [Events](events.md).
 | `Events.encode(e)` / `Events.decode(topic, type, json)` | codec helpers for transports |
 | `Events.topic(e)` / `Events.type(e)` | envelope accessors |
 
-### `io` — `std/io.xi`
+### `io` - `std/io.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -249,18 +249,18 @@ receive). See [Events](events.md).
 | `readLine` | `() -> String` |
 | `eof` | `predicate ()` |
 
-### `config` — `std/config.xi`
+### `config` - `std/config.xi`
 
 Typed configuration: `bind I -> readConfig("app.yaml")` makes the compiler
 synthesize an implementor of interface `I` that loads the file once and
 deserializes each method's value from the matching key. See
 [Configuration](config.md).
 
-### `log` — `std/log.xi`
+### `log` - `std/log.xi`
 
 A leveled `Logger` interface with a `ConsoleLogger` default (DI picks it as the
-sole implementor). Inject `Logger` anywhere deps are wired — classes, functions,
-and `entry` — and bind your own implementor to redirect output.
+sole implementor). Inject `Logger` anywhere deps are wired - classes, functions,
+and `entry` - and bind your own implementor to redirect output.
 
 | Method | Level / Destination |
 |--------|---------------------|
@@ -275,7 +275,7 @@ and `entry` — and bind your own implementor to redirect output.
 `ConsoleLogger` is the default implementor; bind your own `Logger` (file,
 structured JSON, a test buffer, …) to redirect any of these.
 
-### `fs` — `std/fs.xi`
+### `fs` - `std/fs.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -292,7 +292,7 @@ structured JSON, a test buffer, …) to redirect any of these.
 | `cwd` | `() -> String` |
 | `listDir` | `(String) -> String[]` (names; empty if not a dir) |
 
-### `path` — `std/path.xi`
+### `path` - `std/path.xi`
 
 Pure-Xi path string helpers (no I/O).
 
@@ -304,7 +304,7 @@ Pure-Xi path string helpers (no I/O).
 | `ext` | `(String) -> String` (incl. dot, `""` if none) |
 | `stripExt` | `(String) -> String` |
 
-### `net` — `std/net.xi`
+### `net` - `std/net.xi`
 
 Blocking TCP sockets, client and server. `Conn` and `Listener` wrap a socket
 file descriptor. Data is sent/received as `Bytes` (with `*Text` convenience
@@ -321,7 +321,7 @@ helpers). Listen on port `0` for an OS-assigned port, then read it with `port`.
 | `close` | `consumer (Conn)` |
 | `closeListener` | `consumer (Listener)` |
 
-### `http` — `std/http.xi`
+### `http` - `std/http.xi`
 
 A minimal HTTP/1.1 client over `net`. `http://` always works; `https://` needs the toolchain built with `XC_TLS=1`. A
 `Response` is `{ status: Integer, headers: String, body: String }`, where
@@ -345,7 +345,7 @@ if isOk(r) {
 }
 ```
 
-### `proc` — `std/process.xi`
+### `proc` - `std/process.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -354,7 +354,7 @@ if isOk(r) {
 | `run` | `(String) -> Integer` (shell command exit) |
 | `exit` | `consumer (Integer)` |
 
-### `time` — `std/time.xi`
+### `time` - `std/time.xi`
 
 | Function | Signature |
 |----------|-----------|
@@ -366,7 +366,7 @@ if isOk(r) {
 Each module declares the C primitives it needs via `extern "C"` (e.g.
 `xstd_sqrt`, `xstd_trim`) and exposes a clean, namespaced API. The primitives
 live in `runtime/runtime.c`. Because modules use `namespace`, two modules can
-expose the same short name without colliding — see
+expose the same short name without colliding - see
 [Multi-file projects](multi-file.md).
 
 !!! note "Collections"

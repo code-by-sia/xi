@@ -2,7 +2,7 @@
 
 `decision` is a function kind for expressing business rules as a list of
 `when <condition> => <result>` arms with a final `else`. It reads like a
-decision table, and the conditions are ordinary Xi expressions — so they can call
+decision table, and the conditions are ordinary Xi expressions - so they can call
 `predicate` functions and use injected dependencies.
 
 ```x
@@ -25,11 +25,11 @@ decision name(params) -> Type {
 }
 ```
 
-- **`hit first`** (the default; may be omitted) — the arms are evaluated top to
+- **`hit first`** (the default; may be omitted) - the arms are evaluated top to
   bottom and the first matching arm's result is returned.
-- **`when <cond> => <result>`** — `cond` is any boolean expression; `result` is
+- **`when <cond> => <result>`** - `cond` is any boolean expression; `result` is
   any expression of the decision's return type.
-- **`else => <result>`** — the mandatory default, evaluated when no `when`
+- **`else => <result>`** - the mandatory default, evaluated when no `when`
   matches. It must come last.
 
 A `decision` is just a value-returning function: it desugars to an `if/return`
@@ -39,7 +39,7 @@ like any other function.
 ## Dependency injection
 
 Because a `decision` is a function kind, it can be an interface method, which
-makes the whole *policy* injectable — swap one decision-backed implementation
+makes the whole *policy* injectable - swap one decision-backed implementation
 for another without touching call sites.
 
 ```x
@@ -112,7 +112,7 @@ Each input **cell** is a unary test on its column:
 | `?( <expr> )` | escape hatch: any boolean over the inputs (may call predicates) |
 
 A row whose cells are all `-` is the default. The table compiles to a flat
-`if/return` chain over the cells — zero runtime overhead — and, being a function
+`if/return` chain over the cells - zero runtime overhead - and, being a function
 kind, a table `decision` is equally DI-injectable.
 
 ### Multiple outputs
@@ -170,7 +170,7 @@ count is known at compile time, so it fills a fixed-capacity buffer.
   language's general primitive-array support; `String` outs and record (`<Decision>Out`)
   outs collect fine today.
 - No static completeness/overlap analysis, `priority`/`any` policies, or per-rule
-  metadata — these are deliberate non-goals for now (the `?( … )` escape hatch
+  metadata - these are deliberate non-goals for now (the `?( … )` escape hatch
   makes general static analysis undecidable anyway).
 
 See `examples/language/decision_demo.xi` (when-form), `examples/language/decision_table_demo.xi`

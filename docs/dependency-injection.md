@@ -2,7 +2,7 @@
 
 Ξ has **automatic dependency injection** built into the language. You program to
 *interfaces*; the compiler discovers which class implements each interface and
-wires it in. There's no container to configure, no framework, no annotations —
+wires it in. There's no container to configure, no framework, no annotations -
 and it all resolves at compile time into plain vtable calls.
 
 ## The idea in one minute
@@ -44,7 +44,7 @@ No registration: `FriendlyGreeter` is the only `Greeter`, so it's chosen.
 | **Function / method / `entry`** (simple) | `mapper (logger: Logger) f(x: T) -> U { … }` |
 | **Function / method / `entry`** (with disambiguation) | `mapper { db: Repo where env == "prod" } f(...) { … }` |
 
-The **`(…)` form** is for plain dependencies — the common case. The **`{…}` form**
+The **`(…)` form** is for plain dependencies - the common case. The **`{…}` form**
 additionally supports the disambiguation rules below (guards, lists, fallbacks).
 A dependency is visible in the body by name and resolves before the body runs.
 
@@ -65,7 +65,7 @@ class OrderService {
 ```
 
 Redirect every log line to a file or a test buffer by providing another
-`Logger` implementor — `OrderService` doesn't change.
+`Logger` implementor - `OrderService` doesn't change.
 
 ### 2. The repository pattern (swap the data source)
 
@@ -90,7 +90,7 @@ production; the controller is identical.
 
 ### 3. Services depending on services (a graph)
 
-Dependencies compose transitively — the compiler resolves the whole graph.
+Dependencies compose transitively - the compiler resolves the whole graph.
 
 ```x
 interface Clock  { mapper now() -> Integer }
@@ -108,7 +108,7 @@ class Billing {
 }
 ```
 
-### 4. Testability — inject a fake
+### 4. Testability - inject a fake
 
 Because the collaborator is an interface, a test binds a stand-in:
 
@@ -136,7 +136,7 @@ module App {
 | `dep: I where <cond>` | pick the implementor for which the guard holds |
 | `dep: I[]` | **all** implementors (a plugin list) |
 | `dep: I or Fallback` | this impl, or `Fallback` if unavailable |
-| `dep: I?` | optional — absent is allowed |
+| `dep: I?` | optional - absent is allowed |
 
 ```x
 interface Plugin { consumer run() }
@@ -149,10 +149,10 @@ class Pipeline {
 }
 ```
 
-### Conditional dependency — `dep: I where <cond>`
+### Conditional dependency - `dep: I where <cond>`
 
 A real-world case: a checkout needs a **payment gateway**, but which one is usable
-depends on the deployment — credentials, region, feature flags. Each gateway
+depends on the deployment - credentials, region, feature flags. Each gateway
 reports whether it is `available()`, and the dependency picks the first one that
 is:
 
@@ -188,11 +188,11 @@ paypal: charged 1999      # Stripe is skipped (available() == false)
 ```
 
 How it resolves: the compiler instantiates each implementor **in declaration
-order**, binds it to the dependency name (`gateway`), and evaluates the guard —
+order**, binds it to the dependency name (`gateway`), and evaluates the guard -
 any expression over that candidate, here a method call `gateway.available()`. The
 **first** candidate whose guard is `true` is injected; if none qualify it falls
 back to the first implementor. The guard is plain code, so it can test a
-capability (`gateway.supportsCurrency("EUR")`), a config flag, a health check —
+capability (`gateway.supportsCurrency("EUR")`), a config flag, a health check -
 whatever distinguishes the implementations. The same `where` form works on
 [function/method/entry dependencies](language-guide.md#function--method--and-entry-level-dependencies)
 via the `{ … }` syntax.
@@ -206,7 +206,7 @@ A binding is `transient` by default (constructed per dependent); mark it
 module App { bind Cache -> LruCache as singleton }
 ```
 
-You can also mark a scope **at the injection site**, right on the dependency —
+You can also mark a scope **at the injection site**, right on the dependency -
 no module `bind` needed:
 
 ```x
@@ -242,7 +242,7 @@ module {
 }
 ```
 
-There's no runtime container and no registration step — resolution is resolved at
+There's no runtime container and no registration step - resolution is resolved at
 compile time, so the abstraction is free at runtime.
 
 See `examples/di/logger_demo.xi`, `examples/di/di_auto.xi`, and `examples/language/greeting.xi`.

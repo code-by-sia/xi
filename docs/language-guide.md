@@ -16,21 +16,21 @@ let s = "tab\tand\nnewline"
 
 A **triple-quoted** string spans multiple lines. A single leading newline (right
 after the opening `"""`) is dropped, and the common leading indentation shared by
-all non-blank lines is stripped — so the block can sit at the indentation of the
+all non-blank lines is stripped - so the block can sit at the indentation of the
 surrounding code without that indentation leaking into the value:
 
 ```x
 let msg = """
     Dear user,
       thanks for trying Ξ.
-    — the team"""
-// == "Dear user,\n  thanks for trying Ξ.\n— the team"
+    - the team"""
+// == "Dear user,\n  thanks for trying Ξ.\n- the team"
 ```
 
 **Interpolation** is opt-in: prefix a string with `$` and `${expr}` holes are
 evaluated and concatenated (scalars coerce to text). It works on both single-line
 and triple-quoted strings. A plain string is never interpolated, so `${...}` stays
-literal — handy for shell commands and other text that uses that syntax.
+literal - handy for shell commands and other text that uses that syntax.
 
 ```x
 let name = "Ada"
@@ -40,7 +40,7 @@ let calc = $"next year: ${age + 1}"              // "next year: 37"
 let card = $"""
     Name: ${name}
     Age:  ${age}"""                              // indent-stripped + filled
-let raw  = "path is ${HOME}/bin"                 // literal — not interpolated
+let raw  = "path is ${HOME}/bin"                 // literal - not interpolated
 ```
 
 ## Refined types
@@ -91,7 +91,7 @@ type Color = | Red | Green | Blue        // no payloads == a plain enum
 ```
 
 Construct a variant by name (`Circle { radius: 2.0 }`, or just `Empty`).
-Deconstruct with `match` — a variant pattern may bind the payload:
+Deconstruct with `match` - a variant pattern may bind the payload:
 
 ```x
 mapper area(s: Shape) -> Number {
@@ -108,7 +108,7 @@ A sum type is an ordinary type: use it in fields (`type Light = { color: Color }
 arrays (`Shape[]`), parameters, and returns. Variant names must be unique
 across all sum types in the program.
 
-Sum types may be **recursive** — a variant's payload can reference the
+Sum types may be **recursive** - a variant's payload can reference the
 enclosing sum type directly or through a container, so trees are ordinary
 values:
 
@@ -129,12 +129,12 @@ mapper eval(e: Expr) -> Integer {
 ```
 
 Directly self-referential fields are stored boxed behind the scenes;
-construction and field access are unchanged. Recursive values also serialize —
+construction and field access are unchanged. Recursive values also serialize -
 see [serialization](serialization.md).
 
 ## Type aliases
 
-A `type` can alias another type — handy for readable *plural* names for arrays:
+A `type` can alias another type - handy for readable *plural* names for arrays:
 
 ```x
 type Person = { name: String, age: Number }
@@ -145,7 +145,7 @@ mapper headcount(p: People) -> Integer { return p.len }
 type Team = { lead: Person, members: People }
 ```
 
-## `empty` — zero values
+## `empty` - zero values
 
 `empty T` evaluates to the zero value of `T`: a struct with all fields zeroed,
 an empty array, `0`/`false`, an empty string.
@@ -184,7 +184,7 @@ consumer log(msg: String) { system.stdout.writeln(msg) }
 > **Purity is enforced.** `mapper`, `predicate`, and `projector` are pure: the
 > compiler rejects a body that does I/O (`system.stdout`/`stderr`/`stdin`) or
 > calls an effectful function (a `consumer` or `action`). If a function needs a
-> side effect, give it an effectful kind — usually `producer` (effect + returns a
+> side effect, give it an effectful kind - usually `producer` (effect + returns a
 > value) or `consumer`/`action`. This isn't bookkeeping for its own sake: the
 > guarantee is what lets the compiler treat a pure function's arguments as
 > borrowed (no copy, no reference-count traffic). Calls into
@@ -192,7 +192,7 @@ consumer log(msg: String) { system.stdout.writeln(msg) }
 > `producer`/`creator` from a pure function is allowed (constructing or producing
 > a value is not a side effect on the caller's inputs).
 
-A one-expression body can be written **inline** with `=>` — sugar for
+A one-expression body can be written **inline** with `=>` - sugar for
 `{ return <expr> }` (bounded to its line; use a `{ block }` for multi-line). It
 works for any kind, including methods and `where`-overloads:
 
@@ -240,7 +240,7 @@ feature matrix in `FEATURES.md`). See `examples/language/closures_demo.xi`.
 ## Concurrency: `async` / `await`
 
 An **`async` function** runs on its own worker thread when called and returns a
-`Future<T>` **immediately** — the caller keeps going while the work proceeds in
+`Future<T>` **immediately** - the caller keeps going while the work proceeds in
 the background. `await` blocks until the result is ready and yields the `T`. The
 `async` keyword is what makes a call spawn; the body returns the plain `T`:
 
@@ -250,11 +250,11 @@ async producer work(n: Integer) -> Integer {   // call yields Future<Integer>
 }
 
 let f = work(6)        // starts the worker, returns a Future<Integer> now
-let r = await f        // 36 — blocks here until the worker finishes
+let r = await f        // 36 - blocks here until the worker finishes
 ```
 
 A `-> Future<T>` **return type** (without `async`) means the function *returns a
-future value it built* — it is **not** auto-spawned. Use it for helpers that
+future value it built* - it is **not** auto-spawned. Use it for helpers that
 forward or combine futures:
 
 ```x
@@ -271,9 +271,9 @@ let jobs = listOf(work(2), work(3), work(4))   // three workers start here
 let done = await all jobs                       // List<Integer> = [4, 9, 16]
 ```
 
-Three 100ms jobs finish in ~100ms, not 300ms — they run in parallel.
+Three 100ms jobs finish in ~100ms, not 300ms - they run in parallel.
 
-### `runWithDelay` — run a block after a delay
+### `runWithDelay` - run a block after a delay
 
 `runWithDelay(ms) { … }` runs a block on a worker thread after `ms`
 milliseconds and returns a `Future` immediately, so it is `await`-able like any
@@ -287,26 +287,26 @@ await f                                              // wait for it to finish
 
 The block **captures** the enclosing function's parameters and dependencies by
 value (here `logger`), so it can use them on the worker. It cannot reference
-locals declared earlier in the same body — pass those in via a wrapping
+locals declared earlier in the same body - pass those in via a wrapping
 function. See `examples/concurrency/delay_demo.xi`.
 
 ### Notes
 
 - **Memory:** a future's worker allocates-and-leaks (it does **not** use a
-  per-thread arena), so the result — and everything it points to (a `String`,
-  a struct, a `List`) — safely outlives the `await`. See
+  per-thread arena), so the result - and everything it points to (a `String`,
+  a struct, a `List`) - safely outlives the `await`. See
   [Memory management](memory.md).
 - **Purity still applies:** an `async mapper`/`predicate` may not do I/O; use
   `async producer`/`consumer`/`action` for effectful background work.
 - `async` on an **entry** (`async entry main`) and on interface/class **methods**
-  is the established synchronous form and is unchanged — only free `async`
+  is the established synchronous form and is unchanged - only free `async`
   functions spawn. See `examples/concurrency/async_demo.xi`.
 
-## Scheduled jobs — `scheduled … cron` / `every`
+## Scheduled jobs - `scheduled … cron` / `every`
 
 A `scheduled` job runs a block on a schedule. It declares its own dependencies
 (auto-wired, exactly like a function or `entry`) and either a 5-field **cron**
-expression — `minute hour day-of-month month day-of-week` — or a fixed
+expression - `minute hour day-of-month month day-of-week` - or a fixed
 **millisecond interval** with `every <N>ms`:
 
 ```x
@@ -329,12 +329,12 @@ sub-second intervals are honored, unlike cron's minute resolution).
 Declaring any scheduled job makes the program **run a scheduler** that keeps the
 process alive and fires each job (at minute resolution) when local time matches.
 A program can be *only* scheduled jobs (no `entry` needed); if you also have an
-`entry`, its body runs first for setup — don't `return` early or the process
+`entry`, its body runs first for setup - don't `return` early or the process
 exits before the scheduler starts. See `examples/concurrency/scheduled_demo.xi`.
 
 ## Infix functions
 
-Mark a two-argument function `infix` and it can be called in **infix position** —
+Mark a two-argument function `infix` and it can be called in **infix position** -
 `a f b` is sugar for `f(a, b)`. It's still an ordinary function, so the normal
 `f(a, b)` call keeps working:
 
@@ -342,9 +342,9 @@ Mark a two-argument function `infix` and it can be called in **infix position** 
 infix mapper    plus(a: Integer, b: Integer) -> Integer { return a + b }
 infix predicate divides(a: Integer, b: Integer)         { return b % a == 0 }
 
-5 plus 3              // 8         — same as plus(5, 3)
-2 plus 3 plus 4       // 9         — left-associative
-plus(10, 20)          // 30        — the function form still works
+5 plus 3              // 8         - same as plus(5, 3)
+2 plus 3 plus 4       // 9         - left-associative
+plus(10, 20)          // 30        - the function form still works
 if 3 divides 12 { … } // an infix predicate reads well in a guard
 ```
 
@@ -353,9 +353,9 @@ Infix functions bind at low precedence (looser than arithmetic, like `to`), so
 `predicate`, `creator`, …); the `infix` modifier goes first, before `async` and
 the kind. See `examples/language/infix_demo.xi`.
 
-## Extension functions — `mapper Type.method(...)`
+## Extension functions - `mapper Type.method(...)`
 
-Add a method to **any type** — a primitive or your own — by qualifying the name
+Add a method to **any type** - a primitive or your own - by qualifying the name
 with the receiver type. Inside the body, `this` is the receiver:
 
 ```x
@@ -375,7 +375,7 @@ parameters after the receiver, return like any function, and **chain**
 desugar to a plain function taking the receiver as a `this` parameter, so there's
 no runtime cost.
 
-The receiver may also be an **array type** — `Type[].method` — with `this` the
+The receiver may also be an **array type** - `Type[].method` - with `this` the
 array:
 
 ```x
@@ -389,7 +389,7 @@ mapper Integer[].total() -> Integer {
 
 See `examples/language/extensions_test.xi`.
 
-## `capture` — name a sub-expression's value
+## `capture` - name a sub-expression's value
 
 `EXPR capture name: Type` evaluates `EXPR`, binds its value to `name` (of the
 given type), and the expression still **yields that value**. The binding lives
@@ -437,14 +437,14 @@ mapper mapResponse(res: ApiResponse) -> String {        // default
 
 The same applies to **methods**: a class may declare a method several times with
 `where` guards (each can use `this`/deps), and the first matching guard wins.
-`std/web` routing is exactly this — several
+`std/web` routing is exactly this - several
 `action handle(req, res) where req.path == "…"` overloads plus a default.
 
 ## Classes, deps, and dependency injection
 
 Classes never extend classes; reuse is via interfaces and injected deps.
 **Dependency injection is automatic**: the compiler discovers which class
-implements each interface and wires it in — no registration required.
+implements each interface and wires it in - no registration required.
 
 ```x
 interface Greeter   { mapper greet(u: User) -> String }
@@ -460,10 +460,10 @@ async entry main(args: String[]) -> Integer {
     ...
 }
 
-module App {}   // empty — present only so `App.resolve` has a name to call
+module App {}   // empty - present only so `App.resolve` has a name to call
 ```
 
-An interface method may carry a **default implementation** — a `{ … }` body that
+An interface method may carry a **default implementation** - a `{ … }` body that
 implementors inherit unless they override it. The default runs over the method's
 parameters (it can't touch instance fields, since the concrete type is unknown):
 
@@ -478,7 +478,7 @@ interface WebRequestHandler {
 
 A `module` may `bind` an interface to a specific class, or mark a class as a
 `singleton` (one shared instance) instead of the default `transient`
-(constructed per dependent). Binds are **overrides** — only needed to pick among
+(constructed per dependent). Binds are **overrides** - only needed to pick among
 candidates or change scope.
 
 ```x
@@ -514,7 +514,7 @@ for shared, event-sourced state prefer an [atom](machines.md). `this.field` also
 reads an injected dep (`this.logger`).
 
 A state field may hold a [machine](machines.md) value (machines are immutable
-value types), letting a class own and drive a state machine — reassign the field
+value types), letting a class own and drive a state machine - reassign the field
 with each transition's result:
 
 ```x
@@ -528,7 +528,7 @@ class Gate implements ... {
 
 ### Module-scoped constants
 
-A `module` may declare **`const` values** — immutable named values usable from
+A `module` may declare **`const` values** - immutable named values usable from
 anywhere as `Module.NAME` (free functions, class methods, other modules). The
 initializer is any compile-time expression.
 
@@ -622,7 +622,7 @@ match status {
 }
 ```
 
-A `match` arm can be a `{ block }` or — as sugar — a single-line **inline
+A `match` arm can be a `{ block }` or - as sugar - a single-line **inline
 expression**, which is returned. Patterns may be a single key, a
 **parenthesised list** of keys (matches any), or `else` / `_` for the default:
 
@@ -642,7 +642,7 @@ match code {
 ```x
 scope {
     let tmp = build()        // everything allocated here is freed when the
-    use(tmp)                 // block ends — keeps long-running loops flat
+    use(tmp)                 // block ends - keeps long-running loops flat
 }
 
 unsafe {
@@ -653,7 +653,7 @@ unsafe {
 A `scope { }` block is a memory **region**: its allocations are reclaimed at the
 end of the block (don't let a value escape it). See
 [Memory management](memory.md). An `unsafe { }` block relaxes Xi's safety checks
-for interop-heavy code — see [C interop](ffi.md).
+for interop-heavy code - see [C interop](ffi.md).
 
 See [Error handling](error-handling.md) for `T!`, `?`, `ok`/`err`, and
 [Multi-file projects](multi-file.md) for `import`/`namespace`.

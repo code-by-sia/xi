@@ -18,7 +18,7 @@ with no elements).
 
 ## `List<T>`
 
-`List<T>` is a growable, mutable, typed list — a **built-in generic**, the same
+`List<T>` is a growable, mutable, typed list - a **built-in generic**, the same
 way `T[]` arrays are. There's nothing to import; the compiler specializes it per
 element type and the runtime stores elements contiguously, so it's a thin,
 allocation-light layer (no boxing).
@@ -79,14 +79,14 @@ loop, so chains are zero-overhead (no intermediate closures).
 ```x
 let nums = listOf(1, 2, 3, 4, 5)
 
-nums.map { it * 2 }                 // List<U> — transform (U is the body's type)
-nums.filter { it % 2 == 0 }        // List<T> — keep matching
-nums.filterNot { it > 3 }          // List<T> — drop matching
+nums.map { it * 2 }                 // List<U> - transform (U is the body's type)
+nums.filter { it % 2 == 0 }        // List<T> - keep matching
+nums.filterNot { it > 3 }          // List<T> - drop matching
 nums.forEach { print(it) }         // run a side effect per element
 nums.fold(0) { acc, x => acc + x } // reduce with a seed
 nums.reduce { a, b => a + b }      // reduce, seed = first element
 nums.sumOf { it }                  // sum of a projection (Integer/Number)
-nums.count { it > 2 }              // Integer — how many match
+nums.count { it > 2 }              // Integer - how many match
 nums.any { it > 4 }                // Bool
 nums.all { it > 0 }                // Bool
 nums.none { it > 9 }               // Bool
@@ -103,7 +103,7 @@ nums.first() / nums.last()               // ends (bounds-checked)
 nums.toSet()                             // Set<T> of the elements
 nums.toList()                            // a shallow copy
 nums.onEach { print(it) }                // side effect per element, returns the list
-nums.withIndex()                         // List<Pair<Integer, T>> — index/value pairs
+nums.withIndex()                         // List<Pair<Integer, T>> - index/value pairs
 nested.flatten()                         // List<List<T>> -> List<T>
 nums.scan(0) { acc, x => acc + x }       // running accumulations, incl. the seed
 nums.runningFold(0) { acc, x => acc + x } // alias for scan
@@ -115,8 +115,8 @@ Whole-list reductions over the elements (numeric or `String`):
 nums.sum()                               // numeric total (0 if empty)
 nums.min() / nums.max()                  // natural extreme (aborts if empty)
 nums.maxOf { it.score } / nums.minOf { it.score }   // extreme of a projection
-nums.contains(3)                         // Bool — membership
-nums.indexOf(3)                          // Integer — first index, or -1
+nums.contains(3)                         // Bool - membership
+nums.indexOf(3)                          // Integer - first index, or -1
 nums.single { it > 4 }                   // the one match (aborts if 0 or many)
 ```
 
@@ -144,11 +144,11 @@ people.sortedByDescending { it.name }
 Grouping and slicing into sublists:
 
 ```x
-people.groupBy { it.team }          // Map<K, List<T>> — bucket by a key
-people.associateBy { it.id }        // Map<K, T> — index by a key
-items.associateWith { it.price }    // Map<T, V> — element -> value (T is primitive/String)
-nums.chunked(3)                     // List<List<T>> — consecutive groups
-nums.windowed(3)                    // List<List<T>> — sliding windows
+people.groupBy { it.team }          // Map<K, List<T>> - bucket by a key
+people.associateBy { it.id }        // Map<K, T> - index by a key
+items.associateWith { it.price }    // Map<T, V> - element -> value (T is primitive/String)
+nums.chunked(3)                     // List<List<T>> - consecutive groups
+nums.windowed(3)                    // List<List<T>> - sliding windows
 ```
 
 `groupBy` results chain: `people.groupBy { it.team }.get("x").average { it.age }`.
@@ -156,7 +156,7 @@ nums.windowed(3)                    // List<List<T>> — sliding windows
 ### Lazy sequences
 
 `asSequence()` makes the pipeline **lazy**: the chain of lazy operators plus the
-terminal compile into a **single fused loop** — no intermediate lists are built,
+terminal compile into a **single fused loop** - no intermediate lists are built,
 and `take` short-circuits.
 
 ```x
@@ -173,10 +173,10 @@ nums.asSequence().take(3).sum()      // visits only the first 3 elements
 - **Terminals:** `toList()`, `toSet()`, `forEach`, `fold(seed)`, `sum()`,
   `count()`, `any`, `all`, `first()`, `firstOrNone()`.
 
-They chain naturally — `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.
+They chain naturally - `orders.filter { it.paid }.map { it.qty }.fold(0) { a, b => a + b }`.
 See `examples/collections/functional_demo.xi`.
 
-## Pairs — `Pair<A, B>`
+## Pairs - `Pair<A, B>`
 
 A two-value tuple. Build one with the `to` infix; read the members with `.first`
 and `.second`. `A` and `B` can be any types (including lists or other pairs).
@@ -192,7 +192,7 @@ Three `List` operations produce or consume pairs:
 ```x
 names.zip(ages)              // List<Pair<String, Integer>> (truncated to the shorter)
 nums.partition { it > 0 }    // Pair<List<Integer> matching, List<Integer> not>
-pairs.unzip                  // Pair<List<A>, List<B>> — splits a list of pairs back
+pairs.unzip                  // Pair<List<A>, List<B>> - splits a list of pairs back
 ```
 
 ```x
@@ -212,7 +212,7 @@ See `examples/collections/pairs_demo.xi`.
 
 ## `Set<T>`
 
-`Set<T>` is a hash set of **unique** elements — also a built-in generic, created
+`Set<T>` is a hash set of **unique** elements - also a built-in generic, created
 with `empty`. Element-type-erased like `List`, with `String` elements compared by
 content (not by reference).
 
@@ -250,7 +250,7 @@ for x in ids { ... }
 
 ## `Map<K, V>`
 
-`Map<K, V>` is a hash map — a built-in generic, created with `empty`. Keys are
+`Map<K, V>` is a hash map - a built-in generic, created with `empty`. Keys are
 primitives or `String` (compared by value, `String` by content); values can be
 any type.
 
@@ -266,7 +266,7 @@ let byId  = empty Map<String, Item>      // value can be a compound
 
 ```x
 ages.put("ada", 37)      // insert or overwrite
-ages.get("ada")          // value (aborts if the key is absent — guard with has)
+ages.get("ada")          // value (aborts if the key is absent - guard with has)
 ages.getOr("zz", 0)      // value, or the fallback if absent
 ages.has("ada")          // Bool
 ages.remove("ada")       // delete (no-op if absent)
@@ -277,7 +277,7 @@ ages.keys()              // a List<K> of the keys
 ages.values()            // a List<V> of the values
 ```
 
-Since lookups can miss, iterate over the keys (no `null` in Ξ — a missing key
+Since lookups can miss, iterate over the keys (no `null` in Ξ - a missing key
 is simply not in `keys()`):
 
 ```x
@@ -289,19 +289,19 @@ for k in ages.keys() {
 
 ### Notes
 
-- `get` aborts if the key is absent — use `has` to check first, or `getOr` for a
+- `get` aborts if the key is absent - use `has` to check first, or `getOr` for a
   default. (A `V?`-returning lookup will follow once optionals are wired into the
   collection API.)
 - Keys are restricted to primitives and `String`; values may be any type.
 - A `Map<K, V>` is a mutable handle (reference semantics). Iteration order is
   unspecified.
 
-## `Vec<T>` — dynamic array
+## `Vec<T>` - dynamic array
 
 `Vec<T>` is a growable, index-addressable array. It is the **same type as
-`List<T>`** under a familiar name, so it has the entire `List` surface — indexing
+`List<T>`** under a familiar name, so it has the entire `List` surface - indexing
 (`get`/`set`), `push`/`removeAt`, the whole [functional API](#functional-operations-on-listt),
-and lazy sequences — plus two array conveniences:
+and lazy sequences - plus two array conveniences:
 
 ```x
 let v = vecOf(1, 2, 4)       // or: empty Vec<Integer>
@@ -314,7 +314,7 @@ v.map { it * 2 }.filter { it > 4 }     // the functional pipeline, as on List
 Because `Vec<T>` and `List<T>` are interchangeable, a value built with `vecOf`
 can be passed wherever a `List<T>` is expected, and vice versa.
 
-## `Stack<T>` — LIFO
+## `Stack<T>` - LIFO
 
 ```x
 let s = empty Stack<Integer>     // or: stackOf(1, 2, 3)
@@ -324,7 +324,7 @@ s.pop()                          // remove & return the top (aborts if empty)
 s.len()   s.isEmpty()   s.clear()
 ```
 
-## `Queue<T>` — FIFO
+## `Queue<T>` - FIFO
 
 ```x
 let q = empty Queue<String>      // or: queueOf("a", "b")
@@ -336,7 +336,7 @@ q.len()   q.isEmpty()   q.clear()
 
 Dequeue is amortised O(1) (an internal head index, no per-element shifting).
 
-## `SortedQueue<T>` — priority queue
+## `SortedQueue<T>` - priority queue
 
 A binary **min-heap**: `pop`/`peek` always return the **smallest** element by
 natural order. Element types are the comparable primitives (`Integer`, `Number`,
@@ -345,7 +345,7 @@ natural order. Element types are the comparable primitives (`Integer`, `Number`,
 ```x
 let pq = sortedQueueOf(5, 1, 9, 3)   // or: empty SortedQueue<Integer>
 pq.push(2)
-pq.peek()                            // 1 — the minimum (aborts if empty)
+pq.peek()                            // 1 - the minimum (aborts if empty)
 pq.pop()                             // 1, then 2, then 3, ... (ascending)
 pq.len()   pq.isEmpty()   pq.clear()
 ```
@@ -354,11 +354,11 @@ pq.len()   pq.isEmpty()   pq.clear()
 > guard with `isEmpty()`/`len()`. These containers are mutable handles (reference
 > semantics), like `List`. See `examples/collections/containers_demo.xi`.
 
-## Lazy infinite sources — `generateSequence`
+## Lazy infinite sources - `generateSequence`
 
 `generateSequence(seed) { next }` is a lazy source whose value starts at `seed`
 and advances through the generator each step. It fuses into the sequence loop like
-any other source, so it's only as long as the bounded terminal asks for — **always
+any other source, so it's only as long as the bounded terminal asks for - **always
 bound it** with `take`, `takeWhile`, or `first`:
 
 ```x

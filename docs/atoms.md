@@ -1,7 +1,7 @@
 # Atoms (active-state stores)
 
 An **`atom`** holds a single **immutable `state` value** and lets you change it
-only through **`transition`s** — pure reducers `(currentState, payload?) →
+only through **`transition`s** - pure reducers `(currentState, payload?) →
 newState`. Dispatching a transition computes the next value and swaps the held
 one (the old value is dropped). This is the Redux store / Clojure atom model.
 
@@ -30,7 +30,7 @@ let n = cart.current.items   // read the current immutable snapshot
 - **`atom name { initial <value>  transition* }`** declares one holder seeded
   with `initial`.
 - A **`transition f(s: T, p: P) -> T`** is a reducer. Calling `name.f(p)` passes
-  the *current* state as `s` automatically — you supply only the payload — then
+  the *current* state as `s` automatically - you supply only the payload - then
   stores the returned value. A transition with no payload is just `f(s: T) -> T`.
 - **`name.current`** reads the current value.
 - **Time-travel:** every transition records the prior state, so **`name.undo()`**
@@ -46,7 +46,7 @@ let n = cart.current.items   // read the current immutable snapshot
   arrays (`Integer[]`) aren't supported yet (a general limitation).
 
 A higher-level **state machine** layer (named states, a legal-transition graph,
-machine-wide `data`, and `where` guards) is also available — see
+machine-wide `data`, and `where` guards) is also available - see
 [Machines](machines.md).
 
 See `examples/state/atom_demo.xi`.

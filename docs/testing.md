@@ -1,6 +1,6 @@
 # Testing
 
-Xi has built-in tests and assertions — no framework to install. Write `test`
+Xi has built-in tests and assertions - no framework to install. Write `test`
 cases, run them with `xi test`.
 
 ## Writing tests
@@ -34,17 +34,17 @@ is ignored in test mode, and `test` cases are **stripped from normal `xc`
 builds**.
 
 There is also a standalone **`xt`** binary (the `Test` module) with the same
-engine and flags — `xt <file_test.xi> [--filter <substr>]` and
-`xt --all` — for running tests without the rest of the `xi` tool. See
+engine and flags - `xt <file_test.xi> [--filter <substr>]` and
+`xt --all` - for running tests without the rest of the `xi` tool. See
 [CLI › `xt`](cli.md#xt--test-runner).
 
 ## `assert`
 
-`assert <bool-expr>` is a general statement — it works anywhere, not just in
+`assert <bool-expr>` is a general statement - it works anywhere, not just in
 tests:
 
 - **Inside a `test`:** a failed assert reports the expression text + `file:line`,
-  marks the test failed, and **aborts just that test** — the remaining tests
+  marks the test failed, and **aborts just that test** - the remaining tests
   still run.
 - **In a normal program:** a failed assert prints `assertion failed: … (file:line)`
   and aborts the process. Handy as a precondition/invariant check.
@@ -75,7 +75,7 @@ assertErr(result)            // a Result `T!` is err
 ```x
 test "math" {
     assertEq(add(2, 2), 5)              // not ok: assertEq: expected 5, got 4
-    assertClose(0.1 + 0.2, 0.3, 1e-9)  // ok — no spurious float failure
+    assertClose(0.1 + 0.2, 0.3, 1e-9)  // ok - no spurious float failure
 }
 test "parsing" {
     assertErr(parseAge(""))            // assert the failure path
@@ -85,9 +85,9 @@ test "parsing" {
 
 `assertEq`/`assertNe` compare primitives and `String`s (Strings by content).
 `assertOk`/`assertErr` take a `T!` [result](error-handling.md) and report its
-`Err` message on failure — so you can finally test error paths directly.
+`Err` message on failure - so you can finally test error paths directly.
 
-## Running a subset — `--filter`
+## Running a subset - `--filter`
 
 ```console
 $ xi test users_test.xi --filter "login"     # only tests whose name contains "login"
@@ -96,7 +96,7 @@ $ xi test users_test.xi --filter "login"     # only tests whose name contains "l
 `--filter <substr>` runs only the tests whose name contains the substring (it
 sets `XC_TEST_FILTER` for the test binary; the summary counts only what ran).
 
-## Injecting test doubles — `module Test`
+## Injecting test doubles - `module Test`
 
 Tests get dependencies injected with the same `(dep: I)` form as `entry` and
 functions. A `module Test { bind … }` supplies test doubles; it **layers over
@@ -129,5 +129,5 @@ module App  { bind Clock -> RealClock }
 
 `before`/`after` fixtures, table/parameterized tests, per-test timeouts (relevant
 for `async`/threaded code), and parallel runs are future additions; the core
-above — value-showing assertions, messages, error-path assertions, `module Test`
-doubles, and `--filter` — is stable.
+above - value-showing assertions, messages, error-path assertions, `module Test`
+doubles, and `--filter` - is stable.

@@ -37,10 +37,10 @@ tax:
   rate: 3
 ```
 
-## `readConfig<T>` — read any file into a value
+## `readConfig<T>` - read any file into a value
 
 Beyond binding a whole interface, you can read a single file into a value with the
-generic `readConfig<T>` form. The format is chosen by extension — **JSON, YAML,
+generic `readConfig<T>` form. The format is chosen by extension - **JSON, YAML,
 and XML** are all supported:
 
 ```x
@@ -64,14 +64,14 @@ missing key is the zero value.
 - The file is read **once** (a singleton) on first use.
 - **YAML and JSON** are both supported, chosen by the file extension.
 - A **missing key yields the type's zero value** (empty string, `0`, `false`,
-  all-zero compound) — it never crashes.
+  all-zero compound) - it never crashes.
 
-## Live reload — `ApplicationConfig`
+## Live reload - `ApplicationConfig`
 
 `std/config` ships an `ApplicationConfig` service (default impl
 `FileApplicationConfig`). Inject it and call `watch(file, topic)`; a background
 watcher polls the file's mtime and publishes a `ConfigChanged { file }` event
-(via [std/events](events.md)) whenever it's edited — re-read the config in a
+(via [std/events](events.md)) whenever it's edited - re-read the config in a
 `listener` to hot-reload:
 
 ```x
@@ -93,7 +93,7 @@ async entry (cfg: ApplicationConfig) main(args: String[]) -> Integer {
 ```
 
 Bind your own `ApplicationConfig` (an OS-native watcher, or a no-op in tests) to
-change the watching strategy — callers don't change.
+change the watching strategy - callers don't change.
 
 ## Test configuration
 
@@ -107,5 +107,5 @@ module Test { bind AppConfig -> readConfig("application-test.yaml") }
 
 See `examples/serialization/config_demo.xi`.
 
-> `readConfig` is recognized by the compiler only as a `bind` target — it is not
+> `readConfig` is recognized by the compiler only as a `bind` target - it is not
 > a callable function.

@@ -1,6 +1,6 @@
 # Compiler internals (for contributors)
 
-> You don't need this page to **write** Xi — it's about how the toolchain itself
+> You don't need this page to **write** Xi - it's about how the toolchain itself
 > is built. See [Getting started](getting-started.md) and the
 > [Language guide](language-guide.md) to use the language. This page is for people
 > hacking on the compiler.
@@ -8,8 +8,8 @@
 ## The compiler is written in Xi
 
 `compiler/xc.xi` is the Xi compiler, written in Xi. It is a manifest that imports
-two layers: an **abstraction layer** (`contracts/` — every interface) and an
-**implementation layer** (`impl/` — all the code). The stages and services are
+two layers: an **abstraction layer** (`contracts/` - every interface) and an
+**implementation layer** (`impl/` - all the code). The stages and services are
 wired together with Xi's own dependency injection: classes declare `deps` on the
 *interfaces*, and the `module` in `impl/driver/app.xi` binds the implementations.
 Each interface and class lives in its own file.
@@ -17,7 +17,7 @@ Each interface and class lives in its own file.
 | Layer / folder | Role |
 |----------------|------|
 | `contracts/` | the contracts: `Lexer`, `Parser`, `Codegen`, `Compiler`, plus the FFI components `Text`, `TokenArrays`, `SpecArrays`, `Host` (file IO, env, processes) and `Diagnostics` |
-| `impl/ffi/text/`, `impl/ffi/arrays/`, `impl/ffi/host/`, `impl/ffi/diag/` | the FFI components — each file declares its `extern "C"` block on top (externs cannot live in a class) and a class (`StdText`, `StdTokenArrays`, `StdSpecArrays`, `PosixHost`, `Diag`) that wraps it |
+| `impl/ffi/text/`, `impl/ffi/arrays/`, `impl/ffi/host/`, `impl/ffi/diag/` | the FFI components - each file declares its `extern "C"` block on top (externs cannot live in a class) and a class (`StdText`, `StdTokenArrays`, `StdSpecArrays`, `PosixHost`, `Diag`) that wraps it |
 | `impl/lexer/`   | source text → tokens (`scanner.xi` logic + `XiLexer`) |
 | `impl/parser/`  | tokens → `Program` (`grammar.xi` logic + `XiParser`) |
 | `impl/codegen/` | `Program` → C99 (`core/xtype/expr/seq/postfix/stmt/decl/emit/top.xi` passes + `XiCodegen`) |
@@ -40,23 +40,23 @@ holds the metadata fields and the `entry`):
 | `compiler/loadtest.xi` | `LoadTest` | `loadtest` | load/perf tester |
 
 `xc` links the private FFI in `compiler/xc_helpers.c` (via `XC_HELPERS`), so it is
-built only by `bootstrap.sh` — `xc --all` skips any manifest sitting next to
+built only by `bootstrap.sh` - `xc --all` skips any manifest sitting next to
 `xc_helpers.c`. The other three link only the normal runtime + std.
 
 The compiler emits C and then invokes `cc` to produce a native binary. The only
 non-Xi code is:
 
-- `runtime/runtime.{h,c}` — the runtime: primitive types, strings, arrays,
+- `runtime/runtime.{h,c}` - the runtime: primitive types, strings, arrays,
   optionals, regex for refined-type `matches`, file/stdin I/O, and the
   `cc`-invocation helper. This is Xi's equivalent of libc/libcore.
-- `compiler/xc_helpers.c` — C primitives the compiler declares via `extern "C"`
+- `compiler/xc_helpers.c` - C primitives the compiler declares via `extern "C"`
   (growable typed arrays, file I/O, `cc` invocation). It is appended into the
   generated C, sharing the translation unit.
 
 ## Bootstrapping from source
 
 Self-hosting has a chicken-and-egg problem: you need a compiler to build the
-compiler. Xi solves it by **seeding from a released binary** — the previously
+compiler. Xi solves it by **seeding from a released binary** - the previously
 published `xc` for your platform:
 
 ```
@@ -66,7 +66,7 @@ released xc   (downloaded by compiler/fetch-seed.sh)
        xc   (built from current source)
         │  xc compiler/xc.xi          (self-rebuild)
         ▼
-       xc   (shipped compiler — from source, not the download)
+       xc   (shipped compiler - from source, not the download)
 ```
 
 `./compiler/bootstrap.sh` runs exactly this. There is no checked-in C seed, so
@@ -109,7 +109,7 @@ Each token is stamped with its originating file as it is lexed (`stampFile` in
 Codegen then emits a C `#line <line> "<file>.xi"` directive at every statement
 boundary (`genStmts` in `impl/codegen/stmt.xi`). The upshot: when `cc` rejects
 the generated C, it reports the error against the **Xi source file and line**,
-not the transient `.gen.c` — and correctly across imports, so an error inside an
+not the transient `.gen.c` - and correctly across imports, so an error inside an
 imported helper points at that helper. Directives are deduped and deterministic,
 so the self-hosting fixpoint is unaffected.
 
@@ -122,9 +122,9 @@ valid code (verified: zero false positives across every example):
 
 | Mistake | Message |
 | --- | --- |
-| call to an un-imported std function | `int_to_string(...) is defined in std/convert.xi — add: import "std/convert.xi"` |
-| use of an un-imported std namespace | `json.foo(...) — the 'json' namespace isn't imported; add: import "std/json.xi"` |
-| constructing an unknown type | `unknown type 'Uzer' — no type, event, or sum-type variant with that name is declared or imported` |
+| call to an un-imported std function | `int_to_string(...) is defined in std/convert.xi - add: import "std/convert.xi"` |
+| use of an un-imported std namespace | `json.foo(...) - the 'json' namespace isn't imported; add: import "std/json.xi"` |
+| constructing an unknown type | `unknown type 'Uzer' - no type, event, or sum-type variant with that name is declared or imported` |
 | unknown field in a constructor | `type 'User' has no field 'nam'` |
 | reading an unknown field | `type 'User' has no field 'aeg'` |
 
@@ -149,7 +149,7 @@ compiler/
   test.xi        manifest for the test runner       (module Test    -> ./bin/xt)
   loadtest.xi    manifest for the load tester       (module LoadTest-> ./bin/loadtest)
   contracts/     the abstraction layer: every interface
-  impl/          the implementation layer: ffi/ (text/ arrays/ host/ diag/ — each an extern block + wrapper class) + lexer/ parser/ codegen/ driver/
+  impl/          the implementation layer: ffi/ (text/ arrays/ host/ diag/ - each an extern block + wrapper class) + lexer/ parser/ codegen/ driver/
   repl/          the REPL / run tool parts (runner/repl/xi_repl)
   testing/       the test runner parts (tester/test_runner)
   xc_helpers.c  C primitives (extern "C")

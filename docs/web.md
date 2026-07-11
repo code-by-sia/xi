@@ -1,9 +1,9 @@
 # Web (`WebRequestHandler` & `std/web`)
 
-`std/web` is a small REST framework over HTTP/1.1. You write **controllers** —
-classes that implement the **`WebRequestHandler`** interface — and route by
+`std/web` is a small REST framework over HTTP/1.1. You write **controllers** -
+classes that implement the **`WebRequestHandler`** interface - and route by
 overloading its `handle` method with `where` guards. Payloads are
-(de)serialized automatically — there is no manual JSON.
+(de)serialized automatically - there is no manual JSON.
 
 ```x
 import "std/web.xi"
@@ -12,11 +12,11 @@ import "std/web.xi"
 ## Controllers
 
 A controller is any class that `implements WebRequestHandler`. The contract is one
-`action` method — `action` is an impure function kind: it may mutate, and is not
+`action` method - `action` is an impure function kind: it may mutate, and is not
 a pure function. Route by writing several `handle` overloads, each guarded with
 `where`; the first matching overload wins.
 
-**Controllers are auto-registered** — every class implementing
+**Controllers are auto-registered** - every class implementing
 `WebRequestHandler` is discovered and DI-wired automatically, with no `bind`.
 Split routes across as many controllers as you like; the server tries each (in
 declaration order) and the first overload whose guard matches handles the
@@ -48,7 +48,7 @@ A controller whose guards don't match simply leaves the response untouched, so
 the next controller gets a turn. (An un-guarded `handle` overload always matches,
 so use one only as a deliberate catch-all, and declare that controller last.)
 
-### Mount prefix — `getBaseUrl`
+### Mount prefix - `getBaseUrl`
 
 `WebRequestHandler` also has a `getBaseUrl()` method with a **default
 implementation** returning `"/"`; the server only consults a controller when the
@@ -64,7 +64,7 @@ class ApiController implements WebRequestHandler {
 ```
 
 (`where` guards still compare the full `req.path`.) `getBaseUrl` is an ordinary
-**interface default method** — any interface method may carry a `{ … }` body that
+**interface default method** - any interface method may carry a `{ … }` body that
 implementors inherit unless they override it.
 
 ## The `HttpRequest`
@@ -86,13 +86,13 @@ the four source getters each return a flat `Json` you decode with `as T`:
 
 | Call | Returns |
 |------|---------|
-| `web.route(req, "POST", "/users/:id")` | `Bool` — method+pattern match (use as a `where` guard; captures `:params`) |
+| `web.route(req, "POST", "/users/:id")` | `Bool` - method+pattern match (use as a `where` guard; captures `:params`) |
 | `web.params(req)` | path params as `Json` |
 | `web.query(req)` | query string as `Json` |
 | `web.headers(req)` | headers as `Json` (names normalized: `Content-Type` → `content_type`) |
 | `web.body(req)` | the parsed body as `Json` |
 
-`json as T` decodes a `Json` into any compound `type`, coercing string scalars —
+`json as T` decodes a `Json` into any compound `type`, coercing string scalars -
 so a `"42"` path segment becomes an `Integer` and `"true"` a `Bool`:
 
 ```x
@@ -108,20 +108,20 @@ action handle(req, res) where web.route(req, "POST", "/users/:id") {
 }
 ```
 
-Each source is decoded independently into the shape you want — no envelope, no
+Each source is decoded independently into the shape you want - no envelope, no
 merge order. `as T` is a general decode (it also works on any `Json`, e.g. from
 `json.parse`), so nothing about HTTP leaks into the language. See
 `examples/web/web_params_demo.xi`.
 
 `capture` pairs nicely here: name a value computed inside the guard (e.g. an
-order total) and reuse it in the body and the response —
+order total) and reuse it in the body and the response -
 `if lineTotal(order) capture total: Integer > 0 { … res.send(Receipt { total: total }) }`.
 See [`capture`](language-guide.md#capture--name-a-sub-expressions-value) and
 `examples/web/web_capture_demo.xi`.
 
 ## The `HttpResponse`
 
-The response is *mutable* — fill it in, don't return it.
+The response is *mutable* - fill it in, don't return it.
 
 | Method | Effect |
 |--------|--------|
@@ -131,7 +131,7 @@ The response is *mutable* — fill it in, don't return it.
 
 `res.send` / `req.parse` work for any `event` or compound `type`; the compiler
 derives the codec automatically. The payload can also be a **bare `List<T>` or
-`T[]`** — it serializes to a JSON array, so a controller can return a
+`T[]`** - it serializes to a JSON array, so a controller can return a
 repository's list directly with no wrapper DTO:
 
 ```x
@@ -147,7 +147,7 @@ request that no controller matches gets a `404`.
 ### Keeping state across requests
 
 A service that accumulates data across requests must be a **singleton** so every
-request shares one instance — either mark the dependency at the injection site
+request shares one instance - either mark the dependency at the injection site
 or bind it in the module:
 
 ```x
@@ -161,7 +161,7 @@ class ItemController implements WebRequestHandler {
     deps { store: Store as singleton }                // marker: one shared store
     ...
 }
-// — or, equivalently, in the module —
+// - or, equivalently, in the module -
 module App { bind Store -> ItemStore as singleton }
 ```
 
@@ -203,7 +203,7 @@ $ xc app.xi && ./build/app
 web: serving on http://0.0.0.0:8080
 ```
 
-`web.serve` blocks until the server is stopped. **`web.shutdown()`** stops it —
+`web.serve` blocks until the server is stopped. **`web.shutdown()`** stops it -
 it unblocks `serve` so the call returns and the process exits. It is safe to call
 from another thread, so a background timer can bound the server's lifetime (the
 serve demos use this so a run never blocks):
@@ -235,8 +235,8 @@ web: serving on https://0.0.0.0:8443
 ```
 
 Built without `XC_TLS`, `serveTLS` prints a notice and serves nothing (so the
-program still compiles everywhere). Everything else — controllers, `res.send`,
-`WebTransport` — is identical to plaintext.
+program still compiles everywhere). Everything else - controllers, `res.send`,
+`WebTransport` - is identical to plaintext.
 
 ### HTTP/2
 
@@ -250,16 +250,16 @@ web: serving HTTP/2 on https://0.0.0.0:8443
 $ curl --http2 -k https://localhost:8443/health    # negotiates h2 via ALPN
 ```
 
-HTTP/3 (QUIC) is not yet available — it needs a QUIC stack (`ngtcp2`/`quiche`),
+HTTP/3 (QUIC) is not yet available - it needs a QUIC stack (`ngtcp2`/`quiche`),
 which isn't broadly installed and has no common client to test against; it's the
 one open transport.
 
 ## Notes & limits
 
-- HTTP/1.1, blocking, one request per connection (no keep-alive) — fine for an
+- HTTP/1.1, blocking, one request per connection (no keep-alive) - fine for an
   API behind a reverse proxy; concurrency and keep-alive are future work.
 - Routing supports exact `req.path` matches **and** path-pattern capture via
-  `web.route(req, method, "/users/:id")` — including multiple parameters
+  `web.route(req, method, "/users/:id")` - including multiple parameters
   (`/foo/:id/bar/:second`), adjacent (`/x/:a/:b`) and leading (`/:a/foo/:b`)
   params. Captured `:params` are read with `web.params(req) as T`.
 - HTTPS / HTTP/2 need OpenSSL (and nghttp2) at build time (`XC_TLS=1` /

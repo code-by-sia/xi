@@ -14,7 +14,7 @@ own manifest + `module` (`Compile`, `Xi`, `Test`, `LoadTest`):
 [Getting started](getting-started.md)); `xt` and `loadtest` are built into
 `./bin` by bootstrap.
 
-## `xc` — the compiler
+## `xc` - the compiler
 
 ```console
 $ xc <source.xi>
@@ -25,7 +25,7 @@ Pipeline: resolve `import`s → lex → parse → generate C → invoke `cc` →
 (default `build/`). It's named after the source file, unless the program's
 `module` declares an `id` (see [module metadata](dependency-injection.md#module-metadata)),
 in which case `id` is used. The intermediate generated C is deleted after a successful
-build — set `XC_KEEP_C=1` to keep it for inspection.
+build - set `XC_KEEP_C=1` to keep it for inspection.
 
 ```console
 $ xc greeting.xi     # -> build/greeting
@@ -49,7 +49,7 @@ xc --all: built 2 module(s), 0 failed
 A C compiler (`cc`) must be on your `PATH`, since `xc` builds the native binary by
 compiling generated C. `xc version` prints the toolchain version.
 
-### WebAssembly — `xc --target wasm`
+### WebAssembly - `xc --target wasm`
 
 Because `xc` compiles through portable C99, the same program can target the web.
 `xc --target wasm <source.xi>` routes the generated C + runtime through
@@ -68,7 +68,7 @@ console), or run the `.js` under Node. Requires `emcc` on your `PATH`
 `--target native` to be explicit. See [WebAssembly](wasm.md) for what runs in
 the browser sandbox and what doesn't.
 
-### Dependencies — `xi install`
+### Dependencies - `xi install`
 
 A module can list third-party libraries as `dependencies` (URLs to `.tar.gz` /
 `.zip` source archives). `xi install [file]` downloads and extracts them into a
@@ -95,7 +95,7 @@ Needs `curl` (and `unzip` for `.zip`). See
 > The installed `xc`/`xi` wrappers set `XC_RUNTIME` and `XC_STD` for you, so you
 > normally only touch `XC_OUT`.
 
-## `xi` — run tool & REPL
+## `xi` - run tool & REPL
 
 `xi` compiles and runs a file, hosts the REPL, and provides `test` / `skill` /
 `update` / `version` subcommands.
@@ -119,7 +119,7 @@ xi 0.0.50
 ### Self-update
 
 `xi update` downloads the latest release bundle for your platform from GitHub and
-replaces the installed `xc`/`xi` binaries, `runtime/`, and `std/` **in place** —
+replaces the installed `xc`/`xi` binaries, `runtime/`, and `std/` **in place** -
 no reinstall needed.
 
 ```console
@@ -134,7 +134,7 @@ It no-ops with "already up to date" when you're on the latest version. Notes:
 
 - Works on an **installed release bundle** (the `bin/` + `libexec/` layout); run
   it from a source checkout and it reports that it can't find an install root.
-- Needs write access to the install directory — use `sudo xi update` if you
+- Needs write access to the install directory - use `sudo xi update` if you
   installed under a system path.
 - Requires `curl` and `tar` on `PATH`. Override the source repo with
   `XI_UPDATE_REPO=owner/name`.
@@ -153,15 +153,15 @@ ok - addition
 3 tests, 3 passed, 0 failed
 ```
 
-### AI agent skill
+### Language guide skill
 
-`xi skill` fetches the latest **[Xi agent guide](skill.md)** (a single markdown
-file that teaches an AI how to write Xi) and **prints it to stdout** — pipe it to
-a file or straight to your coding agent:
+`xi skill` fetches the latest **[Xi language guide](skill.md)** (a single markdown
+file documenting how to write Xi) and **prints it to stdout**. Pipe it to
+a file or straight to your coding tool:
 
 ```console
 $ xi skill > SKILL.md        # save it
-$ xi skill | pbcopy          # or copy it to hand to an agent
+$ xi skill | pbcopy          # or copy it to your clipboard
 ```
 
 Status/errors go to stderr, so stdout is clean markdown. Requires `curl`;
@@ -171,7 +171,7 @@ override the source with `XI_SKILL_URL` (or `XI_SKILL_REPO` / `XI_SKILL_REF`).
 
 ```console
 $ xi
-Xi REPL — :help for commands, :quit to exit
+Xi REPL - :help for commands, :quit to exit
 x> let n = 21
 x> print("n = " + n)
 n = 21
@@ -204,11 +204,11 @@ The REPL is a **compile-and-run loop**:
 | Command | Effect |
 |---------|--------|
 | `xi test <file.xi>` / `xi test --all` | run a file's `test`s, or every `*_test.xi` in the project ([Testing](testing.md)) |
-| `xi skill` | print the AI-agent language guide ([skill](skill.md)) |
+| `xi skill` | print the single-file language guide ([skill](skill.md)) |
 | `xi update` | self-update the toolchain to the latest release |
 | `xi version` | print the toolchain version |
 
-## `xt` — test runner
+## `xt` - test runner
 
 A standalone test runner (`module Test`), the same compile-in-test-mode-and-run
 engine as `xi test`, as its own binary:
@@ -222,7 +222,7 @@ $ xt --all                              # every *_test.xi under the cwd
 
 Reads `XC` (compiler path) and `XC_RUNTIME` from the environment, like `xi`.
 
-## `loadtest` — load / perf tester
+## `loadtest` - load / perf tester
 
 A load/performance tester for Xi projects (`module LoadTest`), built on the std
 library (`std/time`, `std/http`). Three modes:

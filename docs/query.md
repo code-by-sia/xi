@@ -1,7 +1,7 @@
-# xi-query — reified queries
+# Query - reified queries
 
 A query chain in Xi does not execute where it is written. The compiler turns
-the whole chain into a **plan** — a typed tree value — and hands it to a
+the whole chain into a **plan** - a typed tree value - and hands it to a
 **provider**, which decides what the plan means: run it in memory, translate
 it to SQL, forward it over the wire, or reject what it can't honor. One query
 syntax, any backend.
@@ -19,7 +19,7 @@ let adults = query.from<User>("users")
 ```
 
 Nothing before `.collect` touches data. The element type threads through the
-chain — `query.from<User>` starts it, `.map { it.age }` narrows it to
+chain - `query.from<User>` starts it, `.map { it.age }` narrows it to
 `Integer`, and `collect` decodes the provider's rows back into the right
 type automatically.
 
@@ -33,17 +33,17 @@ type automatically.
 | `.sortedBy { key }` / `.sortedByDescending { key }` | order rows | unchanged |
 | `.take(n)` / `.drop(n)` | limit / skip | unchanged |
 | `.concat(other)` | append another query's rows (same element type) | unchanged |
-| `.join(other, { lk }, { rk })` | pair rows whose keys agree | a pair — `it.first` / `it.second` |
-| `.groupBy { key }` | group rows by key | a group — `it.key` + aggregates |
+| `.join(other, { lk }, { rk })` | pair rows whose keys agree | a pair - `it.first` / `it.second` |
+| `.groupBy { key }` | group rows by key | a group - `it.key` + aggregates |
 | `.collect(provider)` | run the plan | `List<element>` |
 | `.plan` | the reified plan value itself | `QueryPlan` |
 
 `from` defaults its source to the type name: `query.from<User>()` queries
-`"User"` — providers map source names however they like.
+`"User"` - providers map source names however they like.
 
 ## Querying in-memory collections
 
-A plain `List<T>` (or `T[]`) roots a query too — `asQuery()` snapshots its
+A plain `List<T>` (or `T[]`) roots a query too - `asQuery()` snapshots its
 rows into the plan, and `.toList()` runs the chain locally, no provider needed:
 
 ```x
@@ -56,8 +56,8 @@ let picked = employees.asQuery()
 ```
 
 The eager list API already covers `filter/map/take`; what `asQuery` adds is
-the **query-only stages over ordinary collections** — equi-`join` between two
-lists, `groupBy` with aggregates into records — with the same syntax used
+the **query-only stages over ordinary collections** - equi-`join` between two
+lists, `groupBy` with aggregates into records - with the same syntax used
 against a provider:
 
 ```x
@@ -74,7 +74,7 @@ let views = people.asQuery()
 
 `asQuery` copies the rows at that point (a snapshot); `.toList()` is only for
 list-rooted queries (a source-rooted query needs `.collect(provider)`), and a
-list-rooted plan can't render to SQL — both mistakes are clear errors.
+list-rooted plan can't render to SQL - both mistakes are clear errors.
 
 ## What a lambda may contain
 
@@ -84,20 +84,20 @@ shapes the plan can express:
 - the lambda parameter and its fields: `it.age`, `it.addr.city`
 - literals, `and or not`, comparisons, `+ - * / %`, `in`, `matches`
 - string methods: `contains, startsWith, endsWith, lowercase, uppercase, length`
-- **captured locals** — evaluated immediately and embedded as bound values:
+- **captured locals** - evaluated immediately and embedded as bound values:
 
 ```x
 let minAge = 18
 .filter { it.age >= minAge }        // the VALUE 18 is in the plan, not the name
 ```
 
-- **record projections** — build a shape per row:
+- **record projections** - build a shape per row:
 
 ```x
 .map { UserView { who: it.name, tag: it.name.lowercase() } }
 ```
 
-Anything else is a compile-time error at the source line — a typo'd field
+Anything else is a compile-time error at the source line - a typo'd field
 (`it.nmae`) reports `type 'User' has no field 'nmae'`, an unknown method names
 the supported set.
 
@@ -132,7 +132,7 @@ interface QueryProvider {
 }
 ```
 
-`std/query.xi` ships **MemorySource** — the in-memory reference interpreter
+`std/query.xi` ships **MemorySource** - the in-memory reference interpreter
 every other provider must agree with. Load rows through its `RowStore` view;
 bind both views to it `as singleton` and they share one instance:
 
@@ -147,12 +147,12 @@ let out = query.from<User>("users").filter { it.age > 21 }.collect(App.resolve(Q
 ```
 
 Because the provider is an interface, tests swap a database for MemorySource
-with a one-line bind — same queries, no infrastructure.
+with a one-line bind - same queries, no infrastructure.
 
 A real backend is the same one method. `examples/query/sqlite_query_demo.xi`
 implements `QueryProvider` over libsqlite3: its `run` renders the plan with
 `sqlRender` + `SqliteDialect`, executes the statement with **bound parameters**,
-and returns the rows — so a chain `.collect(sqlite)` comes back as typed values
+and returns the rows - so a chain `.collect(sqlite)` comes back as typed values
 straight from the database.
 
 ```x
@@ -165,7 +165,7 @@ producer run(plan: QueryPlan) -> Json {
 ## The plan is data
 
 `QueryPlan` / `QueryStage` / `QueryExpr` are ordinary sum types
-(see `std/query.xi`) — walk them with `match`:
+(see `std/query.xi`) - walk them with `match`:
 
 ```x
 mapper describe(e: QueryExpr) -> String {
@@ -178,12 +178,12 @@ mapper describe(e: QueryExpr) -> String {
 }
 ```
 
-And they serialize — `plan as Json` / `json as QueryPlan` round-trip — so a
+And they serialize - `plan as Json` / `json as QueryPlan` round-trip - so a
 plan can be logged, cache-keyed, or shipped to a remote query service.
 
 Node kinds: `QLit, QField, QParam, QBin, QUn, QCall, QAgg, QRecord`.
 Stage kinds: `QFilter, QProject, QSortBy, QTake, QDrop, QConcat, QJoin, QGroupBy`.
-Captured values arrive as `QParam` nodes — already evaluated, ready to bind.
+Captured values arrive as `QParam` nodes - already evaluated, ready to bind.
 
 ## SQL rendering (std/sql.xi)
 
@@ -198,7 +198,7 @@ let st = (sqlRender(q.plan, SqliteDialect {} as SqlDialect))?
 // st.params  [18]
 ```
 
-Dialects are an interface — `SqliteDialect`, `PostgresDialect` (`$1`
+Dialects are an interface - `SqliteDialect`, `PostgresDialect` (`$1`
 placeholders), `MysqlDialect` are bundled; implement `SqlDialect` to add your
 own. A dialect that can't translate a reified method call fails the render
 with the method named, so untranslatable queries are a clear error, not a
@@ -206,7 +206,7 @@ silent wrong answer.
 
 | Hook | Decides |
 |---|---|
-| `name()` | the dialect's short name — `"sqlite"`, `"postgres"`, `"mysql"` |
+| `name()` | the dialect's short name - `"sqlite"`, `"postgres"`, `"mysql"` |
 | `placeholder(n)` | `?` vs `$n` |
 | `quoteIdent(name)` | `"col"` vs `` `col` `` |
 | `callSql(method, recv, args)` | how string methods translate ("" = can't) |
@@ -216,7 +216,7 @@ silent wrong answer.
 ## Scope notes
 
 - A plan value is built once per chain; branch by building separate chains.
-- Joining an already joined or grouped query isn't supported — project it
+- Joining an already joined or grouped query isn't supported - project it
   first.
 - MemorySource's stage-by-stage interpretation is the reference semantics;
   a translating provider may fold stages into one statement only where the

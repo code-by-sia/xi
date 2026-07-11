@@ -2,7 +2,7 @@
 
 A **`machine`** is a finite state machine expressed as an **immutable value**. You
 declare a set of named **`states`**, the **`initial`** state, any **`terminal`**
-states, and a set of **named transitions** — each an edge `name : From… -> To`.
+states, and a set of **named transitions** - each an edge `name : From… -> To`.
 Calling a transition returns a *new* machine value in the target state; the old
 value is untouched. An illegal move signals the built-in **`IllegalTransition`**
 interrupt, so the caller decides whether to `recover` (stay put) or unwind.
@@ -41,8 +41,8 @@ system.stdout.writeln(d.isTerminal())  // false
 
 - **`machine M { … }`** declares an immutable value type `M` carrying its current
   state.
-- **`states A, B, C`** — the legal states. **`initial A`** — where `M.start()`
-  begins. **`terminal …`** — states from which no transition is expected (`-`
+- **`states A, B, C`** - the legal states. **`initial A`** - where `M.start()`
+  begins. **`terminal …`** - states from which no transition is expected (`-`
   means none); `value.isTerminal()` reports whether the current state is one.
 - A transition **`name : From… -> To`** is a method `value.name()` returning a new
   `M` in state `To`. The left side may list several source states.
@@ -87,10 +87,10 @@ machine Lock {
 - **`data { f: T = expr, … }`** declares the context; `Lock.start()` seeds it with
   the initial expressions. Read it with **`value.data.f`**.
 - A transition **`name(params) : from… -> to`** may add:
-  - **`where <guard>`** — a boolean over the params and `data`; the move is legal
+  - **`where <guard>`** - a boolean over the params and `data`; the move is legal
     only if the source state matches **and** the guard holds. A failed guard is an
     illegal move (signals `IllegalTransition`), exactly like a wrong source state.
-  - **`update { f: expr, … }`** — produces the next context; only the listed fields
+  - **`update { f: expr, … }`** - produces the next context; only the listed fields
     change (the rest carry over). `expr` may read `data` (the old context) and the
     params.
 - **`value.can(name, args…)`** reports whether a transition would be legal (source
@@ -107,7 +107,7 @@ Guards are written on the line following the arrow; `update` blocks may span lin
 
 ## Machines vs. atoms
 
-A machine value is **immutable and explicit** — every move produces a new value
+A machine value is **immutable and explicit** - every move produces a new value
 you thread yourself (`d = d.open()`), and the legal-transition graph is enforced.
 An [atom](atoms.md) is a **single global holder** whose value you swap in place via
 `name.dispatch(...)`. Use a machine when the *shape of the lifecycle* matters; use

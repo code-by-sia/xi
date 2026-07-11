@@ -1,4 +1,4 @@
-# Xi language — AI agent skill
+# Xi language guide
 
 A complete, copy-pasteable guide to writing **Xi** (Ξ) code. Xi compiles to C99
 and then to a native binary. Fetch the latest copy with `xi skill`.
@@ -23,19 +23,19 @@ and then to a native binary. Fetch the latest copy with `xi skill`.
 
 ## Recommended practices (how to structure an app)
 
-Follow these by default — they make Xi code idiomatic and testable:
+Follow these by default - they make Xi code idiomatic and testable:
 
 - **Model behavior as an `interface` + a `class`, and depend on the interface.**
   Define an `interface` for each service/component and one (or more) `class`
   implementations; inject it by interface (`deps { repo: PlaylistRepository }`)
   so implementations are swappable and `module Test { bind … }` can substitute a
-  double. Don't wrap everything in a class, though — `entry main` needs no class,
+  double. Don't wrap everything in a class, though - `entry main` needs no class,
   and small pure helpers can be free functions (`mapper`/`predicate`).
 - **Keep layers separated.** Split a project into clear layers, each in its own
   file (and `namespace`): domain *types*, *repository*/data-access interfaces,
   *service*/business-logic interfaces, *web* handlers (`WebRequestHandler`), and a
   thin *entry*. Higher layers depend on lower-layer **interfaces**, never on
-  concrete classes — let DI wire them.
+  concrete classes - let DI wire them.
 - **Use `module`s to organize and build.** Give each app a `module App { id … }`
   with `includes`/`excludes`; put several services in one repo as separate modules
   and build them all with `xc --all` (each → its own binary). See
@@ -45,7 +45,7 @@ Follow these by default — they make Xi code idiomatic and testable:
   `readConfig<T>(...)`), with a `module Test` config for tests; inject it like any
   dependency. Supports YAML/JSON/XML and hot-reload via `ApplicationConfig`. See
   [Typed configuration](#typed-configuration-stdconfig) / [config](config.md).
-- **Reuse dependencies — don't reinvent them.** If a library already exists, add
+- **Reuse dependencies - don't reinvent them.** If a library already exists, add
   its archive URL to the module's `dependencies` and run `xi install` instead of
   writing it yourself. For example, use **[xi-sqlite](https://github.com/code-by-sia/xi-sqlite)**
   for SQLite rather than hand-writing the binding:
@@ -58,7 +58,7 @@ Follow these by default — they make Xi code idiomatic and testable:
   `xi install` fetches it into `./modules` (auto-compiled in); call its functions
   by `namespace`. Write your own `extern "C"` binding only when no library exists.
 - **Publishing a library:** give it a `namespace`, add a `library { id version includes }`
-  block (no `entry`/`module` — that block is inert when consumed), and run `xi pack`
+  block (no `entry`/`module` - that block is inert when consumed), and run `xi pack`
   to build `dist/<id>-<version>.tar.gz`. Host it; others depend on the URL.
 
 ## Hello, world
@@ -127,7 +127,7 @@ type Name   = String
 type People = Person[]      // plural/array alias
 ```
 
-## `empty` — the zero value
+## `empty` - the zero value
 
 ```x
 let p = empty Person          // all fields zeroed
@@ -164,7 +164,7 @@ let r = classify(25)
 if isOk(r) { use(r.value) } else { handle(r.err) }   // isOk/isErr, .value/.err
 ```
 
-## Functions — the eight kinds
+## Functions - the eight kinds
 
 Pick the kind by intent (purity is enforced for the pure kinds):
 
@@ -193,7 +193,7 @@ mapper fee(amount: Number) -> Number where amount > 100 => amount * 0.9
 mapper fee(amount: Number) -> Number => amount
 ```
 
-**Infix functions** — a 2-arg function marked `infix` is callable as `a f b`
+**Infix functions** - a 2-arg function marked `infix` is callable as `a f b`
 (and still as `f(a, b)`); left-associative, low precedence:
 
 ```x
@@ -201,7 +201,7 @@ infix mapper plus(a: Integer, b: Integer) -> Integer { return a + b }
 5 plus 3            // 8
 ```
 
-**Extension functions** — qualify the name with a receiver type (primitive or
+**Extension functions** - qualify the name with a receiver type (primitive or
 user-defined) to add a method; `this` is the receiver. Chains like a method:
 
 ```x
@@ -210,9 +210,9 @@ type Person = { name: String, family: String }
 mapper Person.fullName() -> String { return this.name + " " + this.family }
 ```
 
-**`capture`** — `EXPR capture name: Type` binds a sub-expression's value (the
+**`capture`** - `EXPR capture name: Type` binds a sub-expression's value (the
 type annotation is required) and still yields it; the name is usable for the rest
-of the function (works in functions, methods, entry — not inside a `where` guard):
+of the function (works in functions, methods, entry - not inside a `where` guard):
 
 ```x
 let bigger = foo(10) capture a: Integer > bar(10) capture b: Integer  // a,b reusable
@@ -261,7 +261,7 @@ let r = 2..4                   // ranges are values too
 Create with `empty` or a builder; no import needed.
 
 ```x
-// List<T> / Vec<T> — growable ordered array (same type, two names)
+// List<T> / Vec<T> - growable ordered array (same type, two names)
 let xs = empty List<Integer>
 xs.push(10)  xs.get(0)  xs.set(0, 9)  xs.insert(1, 7)  xs.swap(0, 2)
 xs.len()  xs.isEmpty()  xs.removeAt(0)  xs.clear()
@@ -272,12 +272,12 @@ let st = empty Stack<Integer>   st.push(1)  st.peek()  st.pop()   // pop/peek ab
 let q  = empty Queue<String>    q.enqueue("a")  q.peek()  q.dequeue()
 let pq = sortedQueueOf(5, 1, 3) pq.push(2)  pq.peek()  pq.pop()   // pop returns the smallest
 
-// Set<T> — unique elements (String compared by content)
+// Set<T> - unique elements (String compared by content)
 let s = empty Set<String>
 s.add("a")  s.contains("a")  s.remove("a")  s.len()  s.items()   // items() -> List<T>
 for e in s { ... }
 
-// Map<K, V> — K is a primitive or String; V is any type
+// Map<K, V> - K is a primitive or String; V is any type
 let m = empty Map<String, Integer>
 m.put("ada", 36)  m.get("ada")  m.getOr("zz", 0)  m.has("ada")  m.remove("ada")
 m.len()  m.keys()  m.values()                 // keys()/values() -> List
@@ -312,7 +312,7 @@ let d = runWithDelay(1000) { logger.info("yo") }
 await d
 ```
 
-- `async mapper`/`predicate` still can't do I/O (purity) — use `async producer`/`consumer`.
+- `async mapper`/`predicate` still can't do I/O (purity) - use `async producer`/`consumer`.
 - `async entry main` and async **methods** stay synchronous (only free async fns spawn).
 
 ```x
@@ -351,8 +351,8 @@ async entry (logger: Logger) main(args: String[]) -> Integer {   // entry deps i
 module App {}     // add `bind Greeter -> FormalGreeter` here to override
 ```
 
-Inside a class, call sibling methods **unqualified** — `helper(x)` or a recursive
-`factorial(n - 1)` — no `this.` prefix. They dispatch on `this`,
+Inside a class, call sibling methods **unqualified** - `helper(x)` or a recursive
+`factorial(n - 1)` - no `this.` prefix. They dispatch on `this`,
 including private helpers not in the interface and `where`-overloaded methods.
 Use `field` directly for injected `deps`/fields.
 
@@ -380,7 +380,7 @@ module App {
     const MAX: Integer    = 50
     const APP: String     = "xi"
 }
-// App.MAX / App.APP  — usable in free functions, class methods, other modules
+// App.MAX / App.APP  - usable in free functions, class methods, other modules
 ```
 
 ## Module metadata
@@ -405,14 +405,14 @@ module App {
     }
 }
 ```
-(The `entry` may also be top-level with a separate `module App {}` — both work.)
+(The `entry` may also be top-level with a separate `module App {}` - both work.)
 
 Multiple modules can share a folder (each owns its `entry main` + `includes`/
 `excludes`); build one with `xc file.xi` or all with `xc --all`.
 
 **Dependencies:** list `.tar.gz`/`.zip` source-archive URLs in `dependencies`,
 then `xi install [file]` downloads + extracts them into `./modules`, which `xc`
-auto-gathers at build time (reference their functions by `namespace` — no
+auto-gathers at build time (reference their functions by `namespace` - no
 `import` needed). A library dependency is plain Xi source with a `namespace` and
 no `entry`/`module`.
 
@@ -441,7 +441,7 @@ mapper area(s: Shape) -> Number {
 }
 ```
 
-Sum types may be **recursive** — a variant's payload can be the enclosing type
+Sum types may be **recursive** - a variant's payload can be the enclosing type
 itself (auto-boxed) or hold it in a `List<T>`, so trees are ordinary values.
 They also serialize: `tree as Json` produces a tagged object
 (`{"tag":"Add", ...}`) and `json as Expr` reconstructs it.
@@ -478,7 +478,7 @@ producer calc(n: Integer) interrupts Over {
 try { calc(150) } catch e: Over { if e.x > 200 { skip } else { recover } }
 ```
 
-Note: a `catch`/`recover` handler runs as an isolated frame — it can see globals
+Note: a `catch`/`recover` handler runs as an isolated frame - it can see globals
 (`system.stdout`) but **not** injected locals like `logger`.
 
 ## Atoms & machines (brief)
@@ -547,7 +547,7 @@ module Test { bind Clock -> FakeClock } // layered over App; ignored in normal b
   `assertErr(r)` (a `T!` result). Add a message with `assert cond : "why"`.
 - Run a subset: `xi test file.xi --filter <substr>` (matches the test name).
 
-## Web (REST) — typed extraction
+## Web (REST) - typed extraction
 
 Implement `WebRequestHandler` with `where`-overloaded `handle`. Route on method +
 a `/users/:id` pattern, then decode each request source into its own type:
@@ -567,14 +567,14 @@ action handle(req: HttpRequest, res: HttpResponse) where web.route(req, "POST", 
   multiple params: `"/foo/:id/bar/:second"`, adjacent `"/x/:a/:b"`, leading `"/:a/foo/:b"`.
 - Serialization derives from a type's fields, both directions: `<obj> as Json`
   (compound -> `Json` tree) and `<json> as T` (any `Json` -> compound, lenient
-  string coercion) — general, not web-specific; also `json.parse(s) as T`.
+  string coercion) - general, not web-specific; also `json.parse(s) as T`.
 - `async entry main(...) { web.serve(8080) }`. Capture works in the handler body.
-- `web.shutdown()` stops a running server (safe from another thread — e.g.
+- `web.shutdown()` stops a running server (safe from another thread - e.g.
   `runWithDelay(30000) { web.shutdown() }` before `web.serve` self-terminates).
 
-## Query (xi-query, `std/query.xi` / `std/sql.xi`)
+## Query (`std/query.xi` / `std/sql.xi`)
 
-A query chain does **not** execute where written — the compiler reifies it into
+A query chain does **not** execute where written - the compiler reifies it into
 a typed `QueryPlan` a provider interprets. `import "std/query.xi"`.
 
 ```x
@@ -601,7 +601,7 @@ let picked = employees.asQuery()           // ...or root at an in-memory List/T[
 - Plans are data: sum types you can `match`, and `plan as Json` round-trips.
 - `sqlRender(plan, dialect)` (`std/sql.xi`) -> `SqlStatement { text, params }`
   with **bound** params. `SqlDialect` is an interface; `SqliteDialect`,
-  `PostgresDialect`, `MysqlDialect` are bundled — `dialect.name()` is
+  `PostgresDialect`, `MysqlDialect` are bundled - `dialect.name()` is
   `"sqlite"`/`"postgres"`/`"mysql"`. Add your own by implementing `SqlDialect`.
 
 ## Typed configuration (std/config)
@@ -650,7 +650,7 @@ sqlite3_open(toCString(":memory:"), &mut db)             // &mut x = C out-param
 
 - `Ptr` = `void*` (opaque handle); `cstring` = `const char*`; `&mut x` = address-of
   (out-params); `empty Ptr` = null.
-- A Xi `String` is not a `cstring` — bridge with `toCString(s)` / `fromCString(p)`
+- A Xi `String` is not a `cstring` - bridge with `toCString(s)` / `fromCString(p)`
   from `std/ffi`.
 - Declare externs **or** `include` a header for the same function, not both
   (conflicting C declarations). For a simple port, externs + `link` only.
@@ -689,10 +689,10 @@ module App {}
 ## Common mistakes to avoid
 
 - Forgetting `module App {}` at the end, or the `async entry … main` signature.
-- Using `null` — use `T?` + `if let`, or `T!` + `ok`/`err`.
+- Using `null` - use `T?` + `if let`, or `T!` + `ok`/`err`.
 - Confusing array vs List access: arrays use `.len` / `.data[i]`; `List` uses
   `.len()` / `.get(i)`.
-- `Map.get(k)` aborts on a missing key — guard with `has` or use `getOr`.
+- `Map.get(k)` aborts on a missing key - guard with `has` or use `getOr`.
 - Using an injected `logger` inside an interrupt `catch`/`recover` block (use
   `system.stdout` there).
 - Adding semicolons (Xi uses newlines).

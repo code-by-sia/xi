@@ -1,7 +1,7 @@
 # Threading (`parallel` & `std/thread`)
 
 Xi threads are **share-nothing**: a thread can't reach another thread's mutable
-state. They communicate only through **channels** — thread-safe FIFOs that carry
+state. They communicate only through **channels** - thread-safe FIFOs that carry
 copied string payloads. A `parallel` block runs on a new OS thread and yields a
 `Thread` handle you can stop, join, and poll.
 
@@ -25,7 +25,7 @@ ch.close()
 Channels carry **any data**, not just strings:
 
 - a `String` passes through as-is;
-- a structured value — an `event` or compound `type` — is JSON-serialized on
+- a structured value - an `event` or compound `type` - is JSON-serialized on
   `send` and rebuilt with the typed `recv(T)`;
 - numbers and bools are stringified automatically.
 
@@ -43,7 +43,7 @@ Serialization uses the same derived codecs as `std/web` / `std/events`.
 
 `parallel [(captures…)] { body }` spawns a thread running `body` and evaluates to
 a `Thread`. The only things a block may capture are **channels**, listed
-explicitly — they are the share-nothing boundary, passed by value:
+explicitly - they are the share-nothing boundary, passed by value:
 
 ```x
 let jobs    = thread.channel()
@@ -61,9 +61,9 @@ let worker = parallel (jobs, results) {
 
 | Operation | Meaning |
 |-----------|---------|
-| `thread.stopped()` | inside a block — has `.stop()` been requested? |
+| `thread.stopped()` | inside a block - has `.stop()` been requested? |
 | `t.stop()` | request cooperative stop (sets the flag) |
-| `t.wait()` | join — block until the thread finishes |
+| `t.wait()` | join - block until the thread finishes |
 | `t.running()` | `false` once the thread's body has returned |
 
 ## Shutting down
@@ -83,14 +83,14 @@ See `examples/concurrency/thread_demo.xi` for a two-worker producer/consumer.
 
 Because threads are share-nothing, each thread allocates its values from its own
 **arena**, and the whole arena is freed when the thread finishes (or is stopped
-and returns). So a thread reclaims everything it allocated on exit — there's no
+and returns). So a thread reclaims everything it allocated on exit - there's no
 cross-thread garbage, and the main thread is unaffected (it keeps the usual
 allocate-and-free-at-exit behaviour). Data sent over a channel is copied, so it
 survives the sender's cleanup.
 
 Ξ reclaims memory by **region**, in three places: per **thread** (above), per
-**request** (`web.serve` frees each request's allocations), and — for a
-long-running loop on the main thread — wherever you write a **`scope { }`**
+**request** (`web.serve` frees each request's allocations), and - for a
+long-running loop on the main thread - wherever you write a **`scope { }`**
 block:
 
 ```x
@@ -103,7 +103,7 @@ loop {
 ```
 
 Everything allocated inside the `scope` (strings, lists, objects) is freed when
-the block ends. The one rule — the same as threads — is that a value must not
+the block ends. The one rule - the same as threads - is that a value must not
 **escape** its region: copy out anything you need to keep, and don't `return` out
 of a `scope` block. See [`examples/concurrency/scope_demo.xi`](https://github.com/code-by-sia/xi/blob/main/examples/concurrency/scope_demo.xi).
 
@@ -112,7 +112,7 @@ of a `scope` block. See [`examples/concurrency/scope_demo.xi`](https://github.co
 - Channels carry strings and structured values (`send(dto)` / `recv(T)`, via
   derived JSON codecs); the wire format is a copied string.
 - Captures must be channels (the only legal cross-thread references). Other state
-  stays thread-local — that's what makes the model share-nothing.
+  stays thread-local - that's what makes the model share-nothing.
 - `parallel`, `thread`, `Channel`, and `Thread` are reserved when threading is used.
 - Channels are unbounded FIFOs (no backpressure yet) and unbuffered selection /
   timeouts aren't available yet.

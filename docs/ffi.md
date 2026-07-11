@@ -2,7 +2,7 @@
 
 Xi compiles to C, so binding a C library is direct: declare its functions in an
 `extern "C"` block, tell `xc` how to link it, and call them. This is how you
-port a C library — SQLite, zlib, libcurl, your own `.c` — into Xi.
+port a C library - SQLite, zlib, libcurl, your own `.c` - into Xi.
 
 ## An `extern "C"` block
 
@@ -16,7 +16,7 @@ extern "C" {
 }
 ```
 
-Each `kind name(params) -> ret` line declares one C function — the declaration
+Each `kind name(params) -> ret` line declares one C function - the declaration
 *is* the binding. Pick any function kind (`producer`/`mapper`/…); for FFI it only
 affects intent, not codegen. The signatures generate matching C `extern`
 declarations, and the linker resolves the symbols from the library you name.
@@ -51,9 +51,9 @@ extern "C" {
 
 | Xi | C | Notes |
 |----|---|-------|
-| `Ptr` | `void*` | opaque handle — `sqlite3*`, `FILE*`, `sqlite3_stmt*` |
+| `Ptr` | `void*` | opaque handle - `sqlite3*`, `FILE*`, `sqlite3_stmt*` |
 | `cstring` | `const char*` | a C string |
-| `&mut x` | `&x` | address of a variable — for C **out-parameters** |
+| `&mut x` | `&x` | address of a variable - for C **out-parameters** |
 | `empty Ptr` | `(void*)0` | a null pointer |
 | `Integer`/`Number`/`Bool`/`Size` | `long long`/`double`/`bool`/`size_t` | scalars pass through |
 
@@ -67,7 +67,7 @@ toCString(s: String) -> cstring     // Xi String  -> C string
 fromCString(p: cstring) -> String   // C string   -> Xi String
 ```
 
-> Declare externs **or** `include` the header for a given function — not both
+> Declare externs **or** `include` the header for a given function - not both
 > with mismatched signatures, or C will report conflicting declarations. For a
 > simple port, declaring the externs and linking (no header) is cleanest; reach
 > for `include` only when you need the header's types or macros.
@@ -132,7 +132,7 @@ The full runnable version is [`examples/stdlib/sqlite_demo.xi`](https://github.c
 ## Packaging a binding as a library
 
 Put the `extern "C"` block and a set of Xi wrapper functions in their own `.xi`
-file and `import` it — the build directives travel with it, so users of your
+file and `import` it - the build directives travel with it, so users of your
 binding just `import "sqlite.xi"` and link is handled automatically:
 
 ```x title="sqlite.xi"
@@ -151,4 +151,4 @@ runs `pkg-config` for `pkg` entries) to the `cc` command. Linking is your system
 `cc`, so any library your toolchain can link, Xi can bind.
 
 > **Trust:** build directives place flags on the `cc` command line, so only
-> compile `extern "C"` code you trust — the same caution as a `Makefile`.
+> compile `extern "C"` code you trust - the same caution as a `Makefile`.

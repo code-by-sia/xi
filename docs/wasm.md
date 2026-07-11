@@ -1,6 +1,6 @@
 # WebAssembly
 
-Xi compiles to portable C99 and then invokes a C compiler — so targeting the
+Xi compiles to portable C99 and then invokes a C compiler - so targeting the
 web is a matter of swapping that compiler for [Emscripten](https://emscripten.org).
 `xc --target wasm <source.xi>` builds the **same** program and runtime to
 WebAssembly instead of a native binary; codegen is unchanged.
@@ -20,8 +20,8 @@ This emits three files in `$XC_OUT` (default `build/`):
 | `<name>.html` | a ready-to-open page that runs `entry main` and shows output |
 
 `stdout`/`stderr` are wired to the page console (and the browser devtools
-console). You can also run the build headless under Node — `node build/<name>.js`
-— which is handy in CI.
+console). You can also run the build headless under Node - `node build/<name>.js`
+- which is handy in CI.
 
 ## Requirements
 
@@ -48,7 +48,7 @@ $ python3 -m http.server -d build
 ## What runs in the browser
 
 The build is single-threaded and runs in the browser sandbox, so portability
-follows the platform — not Xi:
+follows the platform - not Xi:
 
 | Works | Notes |
 |-------|-------|
@@ -71,10 +71,10 @@ processes, real files) needs a browser-shaped replacement.
 ## Calling Xi from JavaScript
 
 The current target runs a whole program (`entry main`) end to end. Exporting
-individual Xi functions to call from JavaScript — with value marshaling across
-the JS↔WASM boundary — is a planned next step and not yet wired up.
+individual Xi functions to call from JavaScript - with value marshaling across
+the JS↔WASM boundary - is a planned next step and not yet wired up.
 
 ## See also
 
 - [CLI › `xc --target wasm`](cli.md#webassembly--xc---target-wasm)
-- [FFI](ffi.md) — the same C-interop seam the WASM target builds on
+- [FFI](ffi.md) - the same C-interop seam the WASM target builds on
