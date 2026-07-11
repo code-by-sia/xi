@@ -182,6 +182,8 @@ runs it. See [xi-query](query.md).
 
 | Name | Kind / Signature |
 |------|------------------|
+| `query.from<T>("src")` | root a query at a named source |
+| `list.asQuery()` / `arr.asQuery()` | root a query at an in-memory collection; run with `.toList()` |
 | `QueryProvider` | interface — `run(plan: QueryPlan) -> Json` |
 | `RowStore` | interface — `load(name: String, rows: Json)` |
 | `MemorySource` | class — the in-memory reference provider (implements both) |
@@ -197,8 +199,8 @@ an interface — three are bundled; add your own without touching std.
 |------|------------------|
 | `sqlRender` | `(QueryPlan, SqlDialect) -> SqlStatement!` |
 | `SqlStatement` | `{ text: String, params: Json }` |
-| `SqlDialect` | interface — placeholder / quoteIdent / callSql / regexpExpr / limitSql |
-| `SqliteDialect` / `PostgresDialect` / `MysqlDialect` | bundled dialects |
+| `SqlDialect` | interface — name / placeholder / quoteIdent / callSql / regexpExpr / limitSql |
+| `SqliteDialect` / `PostgresDialect` / `MysqlDialect` | bundled dialects (`.name()` -> `"sqlite"` / `"postgres"` / `"mysql"`) |
 
 ### `thread` — `std/thread.xi`
 

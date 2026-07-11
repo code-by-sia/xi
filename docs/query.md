@@ -193,6 +193,7 @@ silent wrong answer.
 
 | Hook | Decides |
 |---|---|
+| `name()` | the dialect's short name — `"sqlite"`, `"postgres"`, `"mysql"` |
 | `placeholder(n)` | `?` vs `$n` |
 | `quoteIdent(name)` | `"col"` vs `` `col` `` |
 | `callSql(method, recv, args)` | how string methods translate ("" = can't) |

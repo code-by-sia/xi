@@ -441,6 +441,18 @@ mapper area(s: Shape) -> Number {
 }
 ```
 
+Sum types may be **recursive** — a variant's payload can be the enclosing type
+itself (auto-boxed) or hold it in a `List<T>`, so trees are ordinary values.
+They also serialize: `tree as Json` produces a tagged object
+(`{"tag":"Add", ...}`) and `json as Expr` reconstructs it.
+
+```x
+type Expr = | Lit { value: Integer } | Add { left: Expr, right: Expr }
+mapper eval(e: Expr) -> Integer {
+    match e { Lit l -> l.value  Add a -> eval(a.left) + eval(a.right) }
+}
+```
+
 ## Decision tables (`decision` kind)
 
 ```x
@@ -557,6 +569,40 @@ action handle(req: HttpRequest, res: HttpResponse) where web.route(req, "POST", 
   (compound -> `Json` tree) and `<json> as T` (any `Json` -> compound, lenient
   string coercion) — general, not web-specific; also `json.parse(s) as T`.
 - `async entry main(...) { web.serve(8080) }`. Capture works in the handler body.
+- `web.shutdown()` stops a running server (safe from another thread — e.g.
+  `runWithDelay(30000) { web.shutdown() }` before `web.serve` self-terminates).
+
+## Query (xi-query, `std/query.xi` / `std/sql.xi`)
+
+A query chain does **not** execute where written — the compiler reifies it into
+a typed `QueryPlan` a provider interprets. `import "std/query.xi"`.
+
+```x
+let adults = query.from<User>("users")     // root at a named source
+    .filter { it.age >= minAge and it.name.startsWith("A") }  // minAge captured
+    .sortedBy { it.name }.take(10)
+    .collect(db)                           // -> List<User>, provider runs it
+
+let picked = employees.asQuery()           // ...or root at an in-memory List/T[]
+    .filter { it.active }.take(5).toList() // .toList() runs it locally
+```
+
+- Stages: `filter`, `map` (projects; may build a record `Type { f: expr }`),
+  `sortedBy` / `sortedByDescending`, `take` / `drop`, `concat`, `join(other,
+  { lk }, { rk })` (pair -> `it.first`/`it.second`), `groupBy { key }` (group ->
+  `it.key` + `count/sum/avg/min/max`), then `collect(provider)` or `toList()`;
+  `.plan` yields the plan value.
+- Lambdas are reified, not run: the `it` parameter becomes field refs; other
+  names are evaluated now and embedded as bound values. Typos and unsupported
+  methods/stages are compile-time errors.
+- Providers implement `QueryProvider { run(plan) -> Json }`. `MemorySource` is
+  the built-in reference (load rows via its `RowStore` view; bind both
+  `as singleton` for tests instead of a database).
+- Plans are data: sum types you can `match`, and `plan as Json` round-trips.
+- `sqlRender(plan, dialect)` (`std/sql.xi`) -> `SqlStatement { text, params }`
+  with **bound** params. `SqlDialect` is an interface; `SqliteDialect`,
+  `PostgresDialect`, `MysqlDialect` are bundled — `dialect.name()` is
+  `"sqlite"`/`"postgres"`/`"mysql"`. Add your own by implementing `SqlDialect`.
 
 ## Typed configuration (std/config)
 

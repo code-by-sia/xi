@@ -19,6 +19,7 @@ import "std/query.xi"
 type SqlStatement = { text: String, params: Json }
 
 interface SqlDialect {
+    mapper name() -> String                                     // e.g. "sqlite"
     mapper placeholder(n: Integer) -> String                    // 1-based param slot
     mapper quoteIdent(name: String) -> String
     mapper callSql(method: String, recv: String, args: List<String>) -> String
@@ -29,6 +30,7 @@ interface SqlDialect {
 // ── bundled dialects ────────────────────────────────────────────────
 class SqliteDialect implements SqlDialect {
     deps {}
+    mapper name() -> String => "sqlite"
     mapper placeholder(n: Integer) -> String => "?"
     mapper quoteIdent(name: String) -> String => "\"" + name + "\""
     mapper callSql(method: String, recv: String, args: List<String>) -> String {
@@ -51,6 +53,7 @@ class SqliteDialect implements SqlDialect {
 
 class PostgresDialect implements SqlDialect {
     deps {}
+    mapper name() -> String => "postgres"
     mapper placeholder(n: Integer) -> String => "$" + n
     mapper quoteIdent(name: String) -> String => "\"" + name + "\""
     mapper callSql(method: String, recv: String, args: List<String>) -> String {
@@ -73,6 +76,7 @@ class PostgresDialect implements SqlDialect {
 
 class MysqlDialect implements SqlDialect {
     deps {}
+    mapper name() -> String => "mysql"
     mapper placeholder(n: Integer) -> String => "?"
     mapper quoteIdent(name: String) -> String => "`" + name + "`"
     mapper callSql(method: String, recv: String, args: List<String>) -> String {
