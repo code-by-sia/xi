@@ -172,6 +172,32 @@ auto-(de)serialize via a `WebTransport` (JSON by default). See [Web](web.md).
 | `web.serve` | `(Integer)` — run a blocking HTTP/1.1 server |
 | `web.serveTLS` | `(Integer, String, String)` — HTTPS (cert, key); build with `XC_TLS=1` |
 | `web.serveHttp2` | `(Integer, String, String)` — HTTP/2 over TLS (ALPN h2); build with `XC_HTTP2=1` |
+| `web.shutdown` | `()` — stop a running server (safe from another thread) |
+
+### `query` — `std/query.xi`
+
+**xi-query**: reified query plans and the provider contract. A chain rooted at
+`query.from<T>("source")` compiles to a `QueryPlan` value; `collect(provider)`
+runs it. See [xi-query](query.md).
+
+| Name | Kind / Signature |
+|------|------------------|
+| `QueryProvider` | interface — `run(plan: QueryPlan) -> Json` |
+| `RowStore` | interface — `load(name: String, rows: Json)` |
+| `MemorySource` | class — the in-memory reference provider (implements both) |
+| `QueryPlan` / `QueryStage` / `QueryExpr` | the plan's types — walk with `match`; serialize with `as Json` |
+
+### `sql` — `std/sql.xi`
+
+Render a `QueryPlan` to a SQL statement with **bound parameters**. Dialects are
+an interface — three are bundled; add your own without touching std.
+
+| Name | Kind / Signature |
+|------|------------------|
+| `sqlRender` | `(QueryPlan, SqlDialect) -> SqlStatement!` |
+| `SqlStatement` | `{ text: String, params: Json }` |
+| `SqlDialect` | interface — placeholder / quoteIdent / callSql / regexpExpr / limitSql |
+| `SqliteDialect` / `PostgresDialect` / `MysqlDialect` | bundled dialects |
 
 ### `thread` — `std/thread.xi`
 

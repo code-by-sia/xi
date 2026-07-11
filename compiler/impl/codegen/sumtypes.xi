@@ -55,8 +55,66 @@ mapper Program.variantFieldsC(sumName: String, vname: String) -> String {
     return ""
 }
 
-// "f1:ct1,f2:ct2" -> "ct1 f1; ct2 f2; " for a C struct body.
-mapper String.sumFieldsToC() -> String {
+// The X type of one payload field of `sumName`.`vname` ("" if no such field).
+// Used by member access on a match binding (xtype "vpay:<Sum>:<Variant>") so a
+// payload field of container type (List<T>, T[], Map<...>) keeps its element
+// typing — e.g. `for a in c.args` iterates a List payload correctly.
+mapper Program.variantFieldXType(sumName: String, vname: String, field: String) -> String {
+    let fstr = this.variantFieldsC(sumName, vname)
+    let n = string_len(fstr)
+    if n == 0 { return "" }
+    let start = 0
+    let i = 0
+    let cont = true
+    while cont {
+        let atEnd = i == n
+        let c = 0
+        if not atEnd { c = string_char_at(fstr, i) }
+        if atEnd or c == 44 {                          // ','
+            let seg = string_slice(fstr, start, i)
+            let colon = findChar(seg, 58)              // ':'
+            if string_slice(seg, 0, colon) == field {
+                let fct = string_slice(seg, colon + 1, string_len(seg))
+                return this.resolveX(fct.ctypeToXName())
+            }
+            start = i + 1
+        }
+        if atEnd { cont = false }
+        i = i + 1
+    }
+    return ""
+}
+
+// Does variant `vname` of `sumName` declare a field literally named `field`?
+predicate Program.variantHasFieldC(sumName: String, vname: String, field: String) {
+    let fstr = this.variantFieldsC(sumName, vname)
+    let n = string_len(fstr)
+    if n == 0 { return false }
+    let start = 0
+    let i = 0
+    let cont = true
+    while cont {
+        let atEnd = i == n
+        let c = 0
+        if not atEnd { c = string_char_at(fstr, i) }
+        if atEnd or c == 44 {
+            let seg = string_slice(fstr, start, i)
+            let colon = findChar(seg, 58)
+            if string_slice(seg, 0, colon) == field { return true }
+            start = i + 1
+        }
+        if atEnd { cont = false }
+        i = i + 1
+    }
+    return false
+}
+
+// "f1:ct1,f2:ct2" -> "ct1 f1; ct2 f2; " for a C struct body. A field whose type
+// is the enclosing sum type itself (direct recursion, e.g. Bin { left: Expr })
+// is auto-boxed: emitted as a pointer, so the tree can nest to any depth.
+// Construction boxes (xc_box_<Sum>) and field access derefs — invisible in Xi.
+mapper String.sumFieldsToCFor(sumName: String) -> String {
+    let selfCt = "xc_" + sumName + "_t"
     let out = ""
     let n = string_len(this)
     if n == 0 { return out }
@@ -72,11 +130,34 @@ mapper String.sumFieldsToC() -> String {
             let colon = findChar(seg, 58)              // ':'
             let fname = string_slice(seg, 0, colon)
             let fct = string_slice(seg, colon + 1, string_len(seg))
-            out = out + fct + " " + fname + "; "
+            if fct == selfCt {
+                out = out + "struct xc_" + sumName + "_s* " + fname + "; "
+            } else {
+                out = out + fct + " " + fname + "; "
+            }
             start = i + 1
         }
         if atEnd { cont = false }
         i = i + 1
     }
     return out
+}
+
+// Does the sum type have any directly self-referential (boxed) payload field?
+predicate Program.sumHasBoxedFields(sumName: String) {
+    let ts = findTypeSpec(this, sumName)
+    let vi = 0
+    let vn = stringArrLen(ts.variants)
+    while vi < vn {
+        let v = stringArrGet(ts.variants, vi)
+        if containsSub(v + ",", ":xc_" + sumName + "_t,") { return true }
+        vi = vi + 1
+    }
+    return false
+}
+
+// Is `field` of `sumName`.`vname` a boxed (self-referential) payload field?
+predicate Program.variantFieldBoxed(sumName: String, vname: String, field: String) {
+    let fstr = this.variantFieldsC(sumName, vname)
+    return containsSub("," + fstr + ",", "," + field + ":xc_" + sumName + "_t,")
 }

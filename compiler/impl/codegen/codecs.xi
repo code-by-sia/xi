@@ -199,6 +199,110 @@ class JsonCodecs implements Codecs {
         return to + fr
     }
 
+    // Derived codec for one sum type: a tagged object {"tag":"Variant", ...payload}.
+    // Boxed (self-referential) fields recurse through the pointer; List<T>/T[]
+    // payload fields encode as JSON arrays — so recursive trees round-trip.
+    mapper genOneSumCodec(prog: Program, t: String) -> String {
+        let ts = findTypeSpec(prog, t)
+        let tj = "static xc_Json_t xc_tojson_" + t + "(xc_" + t + "_t v) {\n    xc_Json_t o = xstd_json_object();\n"
+        let fj = "static xc_" + t + "_t xc_fromjson_" + t + "(xc_Json_t j) {\n    xc_" + t + "_t v; memset(&v, 0, sizeof(v));\n"
+               + "    xc_string_t __tag = xstd_json_as_string(xstd_json_get(j, xc_string_from_cstr(\"tag\")));\n"
+        let vn = stringArrLen(ts.variants)
+        let vi = 0
+        while vi < vn {
+            let v = stringArrGet(ts.variants, vi)
+            let bar = findChar(v, 124)                          // '|'
+            let vname = string_slice(v, 0, bar)
+            let fstr = string_slice(v, bar + 1, string_len(v))
+            tj = tj + "    if (v.tag == xc_" + t + "_" + vname + ") {\n"
+                    + "        o = xstd_json_set(o, xc_string_from_cstr(\"tag\"), xstd_json_string(xc_string_from_cstr(\"" + vname + "\")));\n"
+            fj = fj + "    if (xc_string_eq(__tag, xc_string_from_cstr(\"" + vname + "\"))) {\n"
+                    + "        v.tag = xc_" + t + "_" + vname + ";\n"
+            // per payload field
+            let n = string_len(fstr)
+            let start = 0
+            let ci = 0
+            let fidx = 0
+            let scan = n > 0
+            while scan {
+                let atEnd = ci == n
+                let cc = 0
+                if not atEnd { cc = string_char_at(fstr, ci) }
+                if atEnd or cc == 44 {                          // ','
+                    let seg = string_slice(fstr, start, ci)
+                    let colon = findChar(seg, 58)               // ':'
+                    let fname = string_slice(seg, 0, colon)
+                    let fct = string_slice(seg, colon + 1, string_len(seg))
+                    let key = "xc_string_from_cstr(\"" + fname + "\")"
+                    let sx = int_to_string(vi) + "_" + int_to_string(fidx)
+                    let acc = "v.u." + vname + "." + fname
+                    if fct == "xc_" + t + "_t" {
+                        // boxed self-reference: encode through the pointer, box on decode
+                        tj = tj + "        o = xstd_json_set(o, " + key + ", xc_tojson_" + t + "((*" + acc + ")));\n"
+                        fj = fj + "        " + acc + " = xc_box_" + t + "(xc_fromjson_" + t + "(xstd_json_get(j, " + key + ")));\n"
+                    } else {
+                    if fct.startsWith2("xc_List_") {
+                        let ec = listElemCtype(fct)
+                        let encE = jsonEncodeExpr(prog, ec, "(*(" + ec + "*)xstd_list_at(" + acc + ", __i" + sx + "))")
+                        let decE = jsonDecodeExpr(prog, ec, "xstd_json_at(__a" + sx + ", __i" + sx + ")")
+                        if string_len(encE) > 0 {
+                            tj = tj + "        { xc_Json_t __a" + sx + " = xstd_json_array();\n"
+                                    + "          for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < (xc_integer_t)xstd_list_len(" + acc + "); __i" + sx + "++)\n"
+                                    + "              xstd_json_push(__a" + sx + ", " + encE + ");\n"
+                                    + "          o = xstd_json_set(o, " + key + ", __a" + sx + "); }\n"
+                        }
+                        if string_len(decE) > 0 {
+                            fj = fj + "        { xc_Json_t __a" + sx + " = xstd_json_get(j, " + key + ");\n"
+                                    + "          xc_integer_t __n" + sx + " = xstd_json_length(__a" + sx + ");\n"
+                                    + "          xc_List_t __r" + sx + " = xstd_list_new(sizeof(" + ec + "));\n"
+                                    + "          for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < __n" + sx + "; __i" + sx + "++) {\n"
+                                    + "              " + ec + " __e" + sx + " = " + decE + ";\n"
+                                    + "              xstd_list_push(__r" + sx + ", (" + ec + "[]){ __e" + sx + " }); }\n"
+                                    + "          " + acc + " = __r" + sx + "; }\n"
+                        }
+                    } else {
+                    if fct.startsWith2("xc_arr_") {
+                        let ec = arrElemCtype(fct)
+                        let encE = jsonEncodeExpr(prog, ec, acc + ".data[__i" + sx + "]")
+                        let decE = jsonDecodeExpr(prog, ec, "xstd_json_at(__a" + sx + ", __i" + sx + ")")
+                        if string_len(encE) > 0 {
+                            tj = tj + "        { xc_Json_t __a" + sx + " = xstd_json_array();\n"
+                                    + "          for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < (xc_integer_t)" + acc + ".len; __i" + sx + "++)\n"
+                                    + "              xstd_json_push(__a" + sx + ", " + encE + ");\n"
+                                    + "          o = xstd_json_set(o, " + key + ", __a" + sx + "); }\n"
+                        }
+                        if string_len(decE) > 0 {
+                            fj = fj + "        { xc_Json_t __a" + sx + " = xstd_json_get(j, " + key + ");\n"
+                                    + "          xc_integer_t __n" + sx + " = xstd_json_length(__a" + sx + ");\n"
+                                    + "          " + fct + " __r" + sx + "; __r" + sx + ".len = (xc_size_t)__n" + sx + "; __r" + sx + ".cap = (xc_size_t)__n" + sx + ";\n"
+                                    + "          __r" + sx + ".data = __n" + sx + " > 0 ? (" + ec + "*)malloc((xc_size_t)__n" + sx + " * sizeof(" + ec + ")) : (" + ec + "*)0;\n"
+                                    + "          for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < __n" + sx + "; __i" + sx + "++)\n"
+                                    + "              __r" + sx + ".data[__i" + sx + "] = " + decE + ";\n"
+                                    + "          " + acc + " = __r" + sx + "; }\n"
+                        }
+                    } else {
+                        let enc = jsonEncodeExpr(prog, fct, acc)
+                        if string_len(enc) > 0 { tj = tj + "        o = xstd_json_set(o, " + key + ", " + enc + ");\n" }
+                        let dec = jsonDecodeExpr(prog, fct, "xstd_json_get(j, " + key + ")")
+                        if string_len(dec) > 0 { fj = fj + "        " + acc + " = " + dec + ";\n" }
+                    }
+                    }
+                    }
+                    start = ci + 1
+                    fidx = fidx + 1
+                }
+                if atEnd { scan = false }
+                ci = ci + 1
+            }
+            tj = tj + "        return o;\n    }\n"
+            fj = fj + "        return v;\n    }\n"
+            vi = vi + 1
+        }
+        tj = tj + "    return o;\n}\n"
+        fj = fj + "    return v;\n}\n"
+        return tj + fj
+    }
+
     // toJson/fromJson for every event type. Emitted but invoked only by external
     // transports (in-process dispatch never serializes).
     mapper genEventCodecs(prog: Program) -> String {
@@ -216,7 +320,7 @@ class JsonCodecs implements Codecs {
             let tn = typeSpecLen(prog.types)
             while ti < tn {
                 let ts = typeSpecGet(prog.types, ti)
-                if ts.isCompound and not strArrContains(types, ts.name) {
+                if (ts.isCompound or ts.isSum) and not strArrContains(types, ts.name) {
                     types = appendString(types, ts.name)
                 }
                 ti = ti + 1
@@ -250,7 +354,12 @@ class JsonCodecs implements Codecs {
         }
         i = 0
         while i < nc {
-            out = out + genOneCodec(prog, stringArrGet(types, i))
+            let tnm = stringArrGet(types, i)
+            if prog.isSumTypeC(tnm) {
+                out = out + genOneSumCodec(prog, tnm)
+            } else {
+                out = out + genOneCodec(prog, tnm)
+            }
             i = i + 1
         }
         return out + "\n"

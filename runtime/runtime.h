@@ -345,6 +345,7 @@ typedef xc_List_t xc_List_number_t;
 typedef xc_List_t xc_List_bool_t;
 typedef xc_List_t xc_List_string_t;
 typedef xc_List_t xc_List_char_t;
+typedef xc_List_t xc_List_Json_t;   /* List<Json> — rows/trees as elements */
 xc_List_t    xstd_list_new(xc_size_t elem);
 void         xstd_list_push(xc_List_t, const void* e);
 void*        xstd_list_at(xc_List_t, xc_integer_t i);     /* ptr to element (aborts OOB) */

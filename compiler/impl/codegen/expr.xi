@@ -71,7 +71,12 @@ mapper genVariantLiteral(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         let e = genExpr(toks, p, ctx)
         p = e.pos
         if not first { inner = inner + ", " }
-        inner = inner + "." + fname + " = " + e.code
+        // a self-referential (boxed) payload field: copy the value to the heap
+        let val = e.code
+        if (ctx.prog).variantFieldBoxed(sum, vname, fname) {
+            val = "xc_box_" + sum + "(" + val + ")"
+        }
+        inner = inner + "." + fname + " = " + val
         first = false
         if toks.kindAt(p) == 106 { p = p + 1 }           // ,
     }
@@ -489,6 +494,10 @@ mapper genPrimary(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if txt == "thread" {
             // built-in thread facility: thread.channel() / thread.stopped()
             return ExprRes { code: "", pos: pos + 1, xtyp: "thread:" , owned: false }
+        }
+        if txt == "query" and toks.kindAt(pos + 1) == 107 and toks.textAt(pos + 2) == "from" and string_len(ctx.lookupVar("query")) == 0 {
+            // xi-query root:  query.from<T>("source") — seeds a reified plan
+            return genQueryFrom(toks, pos, ctx)
         }
         if (ctx.prog).isVariantNameC(txt) {
             // sum-type constructor: Variant { ... } or a bare nullary Variant

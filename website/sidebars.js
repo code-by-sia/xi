@@ -39,7 +39,7 @@ const sidebars = {
     {
       type: 'category',
       label: 'Standard library & interop',
-      items: ['stdlib', 'serialization', 'web', 'ffi', 'wasm'],
+      items: ['stdlib', 'serialization', 'query', 'web', 'ffi', 'wasm'],
     },
     {
       type: 'category',

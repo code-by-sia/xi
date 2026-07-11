@@ -108,6 +108,30 @@ A sum type is an ordinary type: use it in fields (`type Light = { color: Color }
 arrays (`Shape[]`), parameters, and returns. Variant names must be unique
 across all sum types in the program.
 
+Sum types may be **recursive** — a variant's payload can reference the
+enclosing sum type directly or through a container, so trees are ordinary
+values:
+
+```x
+type Expr =
+    | Lit  { value: Integer }
+    | Add  { left: Expr, right: Expr }        // direct recursion (auto-boxed)
+    | Call { name: String, args: List<Expr> } // recursion through a container
+
+mapper eval(e: Expr) -> Integer {
+    match e {
+        Lit l  -> { return l.value }
+        Add a  -> { return eval(a.left) + eval(a.right) }
+        Call c -> { let s = 0  for x in c.args { s = s + eval(x) }  return s }
+    }
+    return 0
+}
+```
+
+Directly self-referential fields are stored boxed behind the scenes;
+construction and field access are unchanged. Recursive values also serialize —
+see [serialization](serialization.md).
+
 ## Type aliases
 
 A `type` can alias another type — handy for readable *plural* names for arrays:

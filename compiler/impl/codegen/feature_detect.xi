@@ -155,15 +155,22 @@ predicate Program.progUsesAsDecode() {
     return false
 }
 
+// xi-query in use: std/query.xi is part of the program (its plan types exist).
+predicate Program.usesQuery() {
+    return this.isSumTypeC("QueryStage") and this.isTypeNameC("QueryPlan")
+}
+
 predicate Program.codecsEnabled() {
-    return this.webEnabled() or this.usesThreads() or this.usesConfig() or this.progUsesReadConfig() or this.progUsesAsDecode()
+    return this.webEnabled() or this.usesThreads() or this.usesConfig() or this.progUsesReadConfig() or this.progUsesAsDecode() or this.usesQuery()
 }
 
 // A JSON codec (xc_tojson_/xc_fromjson_) is emitted for this X type: every event
 // type, plus (when web or threading is in use, so channels can carry structured
-// payloads) every compound type.
+// payloads) every compound type and every sum type (encoded as a tagged object,
+// so trees like query plans serialize and round-trip).
 predicate Program.hasCodec(xn: String) {
     if this.isEventTypeC(xn) { return true }
     if this.isCompoundTypeC(xn) and this.codecsEnabled() { return true }
+    if this.isSumTypeC(xn) and this.codecsEnabled() { return true }
     return false
 }

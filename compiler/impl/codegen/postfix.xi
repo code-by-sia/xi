@@ -27,6 +27,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         }
         if k == 107 or k == 129 {
             let fld = toks.textAt(p + 1)
+            if typ.startsWith2("Query_") {
+                // xi-query chain: reify this stage onto the plan (queryreify.xi)
+                let qs = genQueryStage(toks, p, code, typ, ctx)
+                code = qs.code
+                typ = qs.xtyp
+                p = qs.pos
+            } else {
             if typ.isListXType() and fld == "asSequence" {
                 let fr = genSequenceChain(toks, p, code, typ.listElemXName(), ctx, false, "", "", "")
                 code = fr.code
@@ -461,6 +468,25 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     code = "__atom_" + an
                     typ = (ctx.prog).atomStateTypeName(an)
                 } else {
+                if typ.startsWith2("vpay:") {
+                    // sum-type variant payload (match binding): "vpay:<Sum>:<Variant>".
+                    // Resolve the field's X type from the variant's payload spec so a
+                    // container field (List<T>, T[]) keeps its element typing. A boxed
+                    // (self-referential) field is stored as a pointer — deref to value.
+                    let rest = string_slice(typ, 5, string_len(typ))
+                    let sep = findChar(rest, 58)                      // ':'
+                    let sumN = string_slice(rest, 0, sep)
+                    let varN = string_slice(rest, sep + 1, string_len(rest))
+                    if not (ctx.prog).variantHasFieldC(sumN, varN, fld) {
+                        diag_error(tokenArrGet(toks, p + 1).line, "variant '" + varN + "' of '" + sumN + "' has no field '" + fld + "'")
+                    }
+                    if (ctx.prog).variantFieldBoxed(sumN, varN, fld) {
+                        code = "(*" + code + "." + fld + ")"
+                    } else {
+                        code = code + "." + fld
+                    }
+                    typ = (ctx.prog).variantFieldXType(sumN, varN, fld)
+                } else {
                 if (ctx.prog).isMachineTypeC(typ) and fld == "state" {
                     code = "xc_" + typ + "__state(" + code + ")"
                     typ = "String"
@@ -505,7 +531,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 }
                 }
                 }
+                }
                 p = p + 2
+            }
             }
             }
             }
@@ -620,6 +648,19 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         typ = "Json"
                         p = p + 2
                     } else {
+                    if k == 209 and toks.kindAt(p + 1) == 1 and isInterface(ctx.prog, toks.textAt(p + 1)) {
+                        // `<classValue> as I` — view a class instance through one of
+                        // its interfaces (the generated caster builds the fat pointer).
+                        // The instance is copied to the heap so the view outlives the
+                        // expression (never freed — same rule as DI singletons).
+                        let ifn = toks.textAt(p + 1)
+                        let ct = "xc_" + typ + "_t"
+                        code = "({ " + ct + "* __iv" + int_to_string(p) + " = (" + ct + "*)malloc(sizeof(" + ct + ")); "
+                             + "*__iv" + int_to_string(p) + " = " + code + "; "
+                             + "xc_" + typ + "_as_" + ifn + "(__iv" + int_to_string(p) + "); })"
+                        typ = ifn
+                        p = p + 2
+                    } else {
                     if k == 209 and toks.kindAt(p + 1) == 1 and (ctx.prog).isTypeNameC(toks.textAt(p + 1)) {
                         // `<json> as T` — decode a Json value into a typed T (lenient
                         // coercion of string scalars). Reuses the derived JSON codec.
@@ -638,6 +679,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         // NOTE: a lone '?' (kind 127) is left unconsumed here so the
                         // statement layer can lower it as Result error-propagation.
                         cont = false
+                    }
                     }
                     }
                     }

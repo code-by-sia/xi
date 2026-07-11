@@ -55,6 +55,9 @@ just need a C compiler (`cc`) on `PATH`. Full steps:
   publish/subscribe with the `listener` kind, all as language features.
 - **Error handling** — `T!` result types, `ok`/`err`, and `?` propagation.
 - **Serialization** — a built-in [`std/json`](serialization.md) library.
+- **xi-query** — [reified query chains](query.md): `query.from<User>("users")
+  .filter { it.age >= 18 }.collect(db)` compiles to a typed plan a provider
+  runs in memory or renders to SQL.
 - **Native output** — compiles to a standalone binary via C; no VM, no GC.
 
 ## A taste

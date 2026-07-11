@@ -137,7 +137,13 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             let line = "    __auto_type " + tmp + " = " + e.code + ";\n"
                      + "    if (!" + tmp + ".ok) return (" + ctx.retCtype + "){ .ok = false, .err = " + tmp + ".err };\n"
                      + "    " + cdecl + " " + name + " = " + tmp + ".value;\n"
-            return StmtRes { code: line, ctx: ctx.addSym(name, ""), pos: e.pos + 1 }
+            // bind x to the Result's INNER type (res_<T> -> T), so the
+            // unwrapped value keeps full typing (concat, fields, chains).
+            let innerX = ""
+            if e.xtyp.startsWith2("res_") {
+                innerX = (ctx.prog).resolveX(string_slice(e.xtyp, 4, string_len(e.xtyp)).xnameFromArrSuffix())
+            }
+            return StmtRes { code: line, ctx: ctx.addSym(name, innerX), pos: e.pos + 1 }
         }
         let line = "    " + cdecl + " " + name + " = " + e.code + ";\n"
         return StmtRes { code: line, ctx: ctx.addSym(name, e.xtyp), pos: e.pos }
@@ -310,6 +316,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         let cond = ""
         let bindName = ""
         let bindExpr = subj
+        let bindXtype = ""
         if pt.kind == 223 {
             // `else -> ...` default arm (alias for `_`)
             isWild = true
@@ -341,6 +348,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
             let sumN = (ctx.prog).sumOfVariant(pt.text)
             cond = subj + ".tag == xc_" + sumN + "_" + pt.text
             bindExpr = subj + ".u." + pt.text
+            bindXtype = "vpay:" + sumN + ":" + pt.text
             p = p + 1
             if toks.kindAt(p) == 1 and toks.textAt(p) != "_" {
                 bindName = toks.textAt(p)
@@ -375,7 +383,7 @@ mapper genMatch(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         } } } } } } } }
         if toks.kindAt(p) == 109 { p = p + 1 }   // ->
         let bctx = ctx
-        if string_len(bindName) > 0 { bctx = ctx.addSym(bindName, "") }
+        if string_len(bindName) > 0 { bctx = ctx.addSym(bindName, bindXtype) }
         let bindLine = ""
         if string_len(bindName) > 0 {
             bindLine = "        __auto_type " + bindName + " = " + bindExpr + ";\n"

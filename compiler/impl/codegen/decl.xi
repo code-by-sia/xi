@@ -97,13 +97,34 @@ mapper sumBody(ts: TypeSpec) -> String {
             let vname = string_slice(v, 0, bar)
             let fstr = string_slice(v, bar + 1, string_len(v))
             if string_len(fstr) > 0 {
-                out = out + "        struct { " + fstr.sumFieldsToC() + "} " + vname + ";\n"
+                out = out + "        struct { " + fstr.sumFieldsToCFor(ts.name) + "} " + vname + ";\n"
             }
             vi = vi + 1
         }
         out = out + "    } u;\n"
     }
     return out + "};\n"
+}
+
+// Boxing helpers for recursive sum types: a variant field whose type is the
+// enclosing sum itself is stored as a pointer; construction goes through
+// xc_box_<Sum>, which copies the value to the heap. One helper per sum type
+// that has at least one self-referential payload field.
+mapper genSumBoxHelpers(prog: Program) -> String {
+    let out = ""
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if ts.isSum and prog.sumHasBoxedFields(ts.name) {
+            out = out + "static xc_" + ts.name + "_t* xc_box_" + ts.name + "(xc_" + ts.name + "_t v) {\n"
+                      + "    xc_" + ts.name + "_t* p = (xc_" + ts.name + "_t*)malloc(sizeof(v));\n"
+                      + "    if (!p) abort();\n    *p = v;\n    return p;\n}\n"
+        }
+        i = i + 1
+    }
+    if string_len(out) > 0 { out = "/* === Recursive sum-type boxing === */\n" + out + "\n" }
+    return out
 }
 
 // Tagged-union bodies for sum types: an int tag plus a union of the payload

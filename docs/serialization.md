@@ -119,6 +119,19 @@ arrays and round-trip back. Use `List<T>` when the field is also accumulated in
 memory (e.g. a service that `.push`es onto its state) — it stores *and*
 serializes, so no conversion is needed at the boundary.
 
+**Sum types** serialize as tagged objects — `{"tag":"Variant", ...payload}` —
+and round-trip back through `as`, recursion included. A whole tree (say, a
+[query plan](query.md)) is one `as Json` away from the wire:
+
+```x
+type Expr = | Lit { value: Integer } | Add { left: Expr, right: Expr }
+
+let e    = Add { left: Lit { value: 2 }, right: Lit { value: 3 } }
+let text = json.stringify(e as Json)
+// {"tag":"Add","left":{"tag":"Lit","value":2},"right":{"tag":"Lit","value":3}}
+let back = json.parse(text) as Expr
+```
+
 ```x
 type Address = { city: String, zip: Integer }
 type User    = { name: String, age: Integer, addr: Address }
