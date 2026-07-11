@@ -40,7 +40,9 @@ type QueryExpr =
 
 // A whole query: the source name plus its stages, in order. Order is the
 // plan's semantics — providers may fold stages but must preserve meaning.
-type QueryPlan = { source: String, stages: List<QueryStage> }
+// A list-rooted query (`someList.asQuery()`) has source "$inline" and carries
+// a snapshot of its rows in `rows`; named sources leave `rows` empty.
+type QueryPlan = { source: String, stages: List<QueryStage>, rows: Json }
 
 type QueryStage =
     | QFilter  { pred: QueryExpr }
@@ -296,7 +298,8 @@ class MemorySource implements QueryProvider, RowStore {
     }
 
     producer run(plan: QueryPlan) -> Json {
-        let cur = tableOf(plan.source)
+        let cur = json.array()
+        if plan.source == "$inline" { cur = plan.rows } else { cur = tableOf(plan.source) }
         for st in plan.stages { cur = applyStage(st, cur) }
         return cur
     }

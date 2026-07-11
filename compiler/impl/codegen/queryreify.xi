@@ -337,6 +337,13 @@ mapper qreifyLambda(toks: Token[], bo: Integer, ctx: GCtx, elem: String) -> QRes
     return QRes { code: body.code, pos: close + 1, xtyp: body.xtyp }
 }
 
+// The element behind a Query_/QueryL_ xtype ("" if neither).
+mapper qElemOf(typ: String) -> String {
+    if typ.startsWith2("QueryL_") { return string_slice(typ, 7, string_len(typ)) }
+    if typ.startsWith2("Query_") { return string_slice(typ, 6, string_len(typ)) }
+    return ""
+}
+
 // ── stage + plan emitters ───────────────────────────────────────────
 mapper qStageAppendC(recv: String, stage: String, u: String) -> String {
     return "({ xc_QueryPlan_t __qp" + u + " = " + recv + "; "
@@ -365,13 +372,37 @@ mapper genQueryFrom(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         if toks.kindAt(p) == 4 { src = toks.textAt(p)  p = p + 1 }
         if toks.kindAt(p) == 101 { p = p + 1 }
     }
-    let code = "(xc_QueryPlan_t){ .source = xc_string_from_cstr(\"" + src + "\"), .stages = xstd_list_new(sizeof(xc_QueryStage_t)) }"
+    let code = "(xc_QueryPlan_t){ .source = xc_string_from_cstr(\"" + src + "\"), .stages = xstd_list_new(sizeof(xc_QueryStage_t)), .rows = xstd_json_array() }"
     return ExprRes { code: code, pos: p, xtyp: "Query_" + tname, owned: false }
 }
 
-// One chained stage on a Query_<elem> receiver. p is at the '.'.
+// `someList.asQuery()` / `someArr.asQuery()` — root a plan at an in-memory
+// collection: the rows are snapshotted into the plan (source "$inline") and
+// the chain runs locally with `.toList()`. `recvTyp` is the List/array xtype;
+// p is at the '.' of `.asQuery`.
+mapper genListAsQuery(toks: Token[], p: Integer, recv: String, recvTyp: String, ctx: GCtx) -> ExprRes {
+    let line = tokenArrGet(toks, p + 1).line
+    if not (ctx.prog).isSumTypeC("QueryStage") {
+        diag_error(line, "asQuery requires the query library — add:  import \"std/query.xi\"")
+    }
+    let elem = ""
+    if recvTyp.isListXType() { elem = recvTyp.listElemXName() } else {
+        elem = string_slice(recvTyp, 4, string_len(recvTyp)).xnameFromArrSuffix()
+    }
+    let rowsC = jsonOfPayload(ctx.prog, recvTyp, recv)
+    let q = p + 2
+    if toks.kindAt(q) == 100 { q = q + 1  if toks.kindAt(q) == 101 { q = q + 1 } }   // ()
+    let code = "(xc_QueryPlan_t){ .source = xc_string_from_cstr(\"$inline\"), .stages = xstd_list_new(sizeof(xc_QueryStage_t)), .rows = " + rowsC + " }"
+    return ExprRes { code: code, pos: q, xtyp: "QueryL_" + elem, owned: false }
+}
+
+// One chained stage on a Query_<elem> / QueryL_<elem> receiver. p is at the
+// '.'; the QueryL_ prefix marks a list-rooted (local) query.
 mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: GCtx) -> ExprRes {
-    let elem = string_slice(typ, 6, string_len(typ))
+    let local = typ.startsWith2("QueryL_")
+    let pfx = "Query_"
+    if local { pfx = "QueryL_" }
+    let elem = string_slice(typ, string_len(pfx), string_len(typ))
     let fld = toks.textAt(p + 1)
     let u = int_to_string(p)
     let line = tokenArrGet(toks, p + 1).line
@@ -394,7 +425,7 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
         }
         if fld == "map" {
             stage = "(xc_QueryStage_t){ .tag = xc_QueryStage_QProject, .u.QProject = { .expr = " + body.code + " } }"
-            if string_len(body.xtyp) > 0 { newTyp = "Query_" + body.xtyp }
+            if string_len(body.xtyp) > 0 { newTyp = pfx + body.xtyp }
         }
         if fld == "sortedBy" {
             stage = "(xc_QueryStage_t){ .tag = xc_QueryStage_QSortBy, .u.QSortBy = { .key = " + body.code + ", .desc = 0 } }"
@@ -419,8 +450,8 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
         let ae = genExpr(toks, p + 3, ctx)
         let q = ae.pos
         if toks.kindAt(q) == 101 { q = q + 1 }
-        if ae.xtyp != typ {
-            diag_error(line, "xi-query: .concat expects another query of the same element type (" + typ + ", got " + ae.xtyp + ")")
+        if qElemOf(ae.xtyp) != elem {
+            diag_error(line, "xi-query: .concat expects another query of the same element type (" + elem + ", got " + qElemOf(ae.xtyp) + ")")
         }
         let stage = "(xc_QueryStage_t){ .tag = xc_QueryStage_QConcat, .u.QConcat = { .right = " + ae.code + " } }"
         return ExprRes { code: qStageAppendC(recv, stage, u), pos: q, xtyp: typ, owned: false }
@@ -435,7 +466,7 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
         let kx = key.xtyp
         if string_len(kx) == 0 { kx = "String" }
         let stage = "(xc_QueryStage_t){ .tag = xc_QueryStage_QGroupBy, .u.QGroupBy = { .key = " + key.code + " } }"
-        return ExprRes { code: qStageAppendC(recv, stage, u), pos: key.pos, xtyp: "Query_qgroup:" + elem + ":" + kx, owned: false }
+        return ExprRes { code: qStageAppendC(recv, stage, u), pos: key.pos, xtyp: pfx + "qgroup:" + elem + ":" + kx, owned: false }
     }
 
     if fld == "join" {
@@ -443,10 +474,10 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
             diag_error(line, "xi-query: .join on an already joined or grouped query isn't supported — project it with .map first")
         }
         let ae = genExpr(toks, p + 3, ctx)
-        if not ae.xtyp.startsWith2("Query_") {
+        if not (ae.xtyp.startsWith2("Query_") or ae.xtyp.startsWith2("QueryL_")) {
             diag_error(line, "xi-query: .join expects another query as its first argument")
         }
-        let relem = string_slice(ae.xtyp, 6, string_len(ae.xtyp))
+        let relem = qElemOf(ae.xtyp)
         if relem.startsWith2("qpair:") or relem.startsWith2("qgroup:") {
             diag_error(line, "xi-query: .join on an already joined or grouped query isn't supported — project it with .map first")
         }
@@ -465,7 +496,7 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
         q = rk.pos
         if toks.kindAt(q) == 101 { q = q + 1 }               // )
         let stage = "(xc_QueryStage_t){ .tag = xc_QueryStage_QJoin, .u.QJoin = { .right = " + ae.code + ", .leftKey = " + lk.code + ", .rightKey = " + rk.code + " } }"
-        return ExprRes { code: qStageAppendC(recv, stage, u), pos: q, xtyp: "Query_qpair:" + elem + ":" + relem, owned: false }
+        return ExprRes { code: qStageAppendC(recv, stage, u), pos: q, xtyp: pfx + "qpair:" + elem + ":" + relem, owned: false }
     }
 
     if fld == "collect" {
@@ -489,11 +520,36 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
         return ExprRes { code: code, pos: q, xtyp: "List_" + elem, owned: false }
     }
 
+    if fld == "toList" {
+        // run a list-rooted query locally: an ephemeral MemorySource interprets
+        // the plan's inline rows — no provider argument needed.
+        if not local {
+            diag_error(line, "xi-query: .toList runs a list-rooted query (someList.asQuery()...) locally — a source-rooted query needs .collect(provider)")
+        }
+        if elem.startsWith2("qpair:") or elem.startsWith2("qgroup:") {
+            diag_error(line, "xi-query: project joined/grouped rows with .map { ... } before .toList")
+        }
+        let q = p + 2
+        if toks.kindAt(q) == 100 { q = q + 1  if toks.kindAt(q) == 101 { q = q + 1 } }   // ()
+        let ct = elem.xnameToCtype()
+        let dec = jsonDecodeExpr(ctx.prog, ct, "xstd_json_at(__qr" + u + ", __qi" + u + ")")
+        if string_len(dec) == 0 {
+            diag_error(line, "xi-query: can't decode rows into element type '" + elem + "'")
+        }
+        let code = "({ xc_QueryProvider_t __qv" + u + " = xc_MemorySource_as_QueryProvider(xc_new_MemorySource()); "
+                 + "xc_Json_t __qr" + u + " = __qv" + u + ".vtable->run(__qv" + u + ".self, " + recv + "); "
+                 + "xc_List_t __ql" + u + " = xstd_list_new(sizeof(" + ct + ")); "
+                 + "for (xc_integer_t __qi" + u + " = 0; __qi" + u + " < xstd_json_length(__qr" + u + "); __qi" + u + "++) { "
+                 + ct + " __qe" + u + " = " + dec + "; "
+                 + "xstd_list_push(__ql" + u + ", (" + ct + "[]){ __qe" + u + " }); } __ql" + u + "; })"
+        return ExprRes { code: code, pos: q, xtyp: "List_" + elem, owned: false }
+    }
+
     if fld == "plan" {
         // escape hatch: the reified plan value itself (e.g. to pass around or log)
         return ExprRes { code: recv, pos: p + 2, xtyp: "QueryPlan", owned: false }
     }
 
-    diag_error(line, "xi-query: unknown stage '." + fld + "' — supported: filter, map, sortedBy, sortedByDescending, take, drop, concat, join, groupBy, collect, plan")
+    diag_error(line, "xi-query: unknown stage '." + fld + "' — supported: filter, map, sortedBy, sortedByDescending, take, drop, concat, join, groupBy, collect, toList, plan")
     return ExprRes { code: recv, pos: p + 2, xtyp: typ, owned: false }
 }

@@ -41,6 +41,41 @@ type automatically.
 `from` defaults its source to the type name: `query.from<User>()` queries
 `"User"` — providers map source names however they like.
 
+## Querying in-memory collections
+
+A plain `List<T>` (or `T[]`) roots a query too — `asQuery()` snapshots its
+rows into the plan, and `.toList()` runs the chain locally, no provider needed:
+
+```x
+let employees = empty List<User>
+…
+let picked = employees.asQuery()
+    .filter { it.active }
+    .take(5)
+    .toList()                    // -> List<User>
+```
+
+The eager list API already covers `filter/map/take`; what `asQuery` adds is
+the **query-only stages over ordinary collections** — equi-`join` between two
+lists, `groupBy` with aggregates into records — with the same syntax used
+against a provider:
+
+```x
+let spend = orders.asQuery()
+    .groupBy { it.userId }
+    .map { Spend { orders: it.count(), total: it.sum { x => x.amount } } }
+    .toList()
+
+let views = people.asQuery()
+    .join(orders.asQuery(), { it.id }, { it.userId })
+    .map { View { who: it.first.name, spent: it.second.amount } }
+    .toList()
+```
+
+`asQuery` copies the rows at that point (a snapshot); `.toList()` is only for
+list-rooted queries (a source-rooted query needs `.collect(provider)`), and a
+list-rooted plan can't render to SQL — both mistakes are clear errors.
+
 ## What a lambda may contain
 
 Query lambdas are **reified, not executed**, so they carry a closed set of

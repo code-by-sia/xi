@@ -186,6 +186,7 @@ runs it. See [xi-query](query.md).
 | `RowStore` | interface — `load(name: String, rows: Json)` |
 | `MemorySource` | class — the in-memory reference provider (implements both) |
 | `QueryPlan` / `QueryStage` / `QueryExpr` | the plan's types — walk with `match`; serialize with `as Json` |
+| `someList.asQuery()` … `.toList()` | root a query at a `List<T>`/`T[]` and run it locally |
 
 ### `sql` — `std/sql.xi`
 

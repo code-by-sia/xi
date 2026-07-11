@@ -82,3 +82,39 @@ test "the plan is data: it serializes and round-trips" {
     assertEq(back.source, "users")
     assertEq(back.stages.len(), 2)
 }
+
+test "asQuery roots a plan at a plain List; toList runs it locally" {
+    let employees = empty List<User>
+    employees.push(User { id: 1, name: "Cara", age: 44 })
+    employees.push(User { id: 2, name: "Abe",  age: 15 })
+    employees.push(User { id: 3, name: "Bea",  age: 30 })
+    let adults = employees.asQuery()
+        .filter { it.age >= 18 }
+        .sortedBy { it.name }
+        .take(2)
+        .toList()
+    assertEq(adults.len(), 2)
+    assertEq(adults.get(0).name, "Bea")
+}
+
+test "join and groupBy work between plain lists" {
+    let people = empty List<User>
+    people.push(User { id: 1, name: "Cara", age: 44 })
+    people.push(User { id: 3, name: "Bea",  age: 30 })
+    let orders = empty List<Order>
+    orders.push(Order { userId: 3, amount: 25 })
+    orders.push(Order { userId: 3, amount: 5 })
+    orders.push(Order { userId: 1, amount: 10 })
+    let spend = orders.asQuery()
+        .groupBy { it.userId }
+        .map { Spend { orders: it.count(), total: it.sum { x => x.amount } } }
+        .sortedByDescending { it.total }
+        .toList()
+    assertEq(spend.get(0).orders, 2)
+    assertClose(spend.get(0).total, 30.0, 1e-9)
+    let views = people.asQuery()
+        .join(orders.asQuery(), { it.id }, { it.userId })
+        .map { UserView { who: it.first.name, spent: it.second.amount } }
+        .toList()
+    assertEq(views.len(), 3)
+}

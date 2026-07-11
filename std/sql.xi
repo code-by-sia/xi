@@ -215,6 +215,9 @@ mapper sqlRender(plan: QueryPlan, d: SqlDialect) -> SqlStatement! {
 }
 
 mapper renderPlan(plan: QueryPlan, d: SqlDialect, params: Json) -> String! {
+    if plan.source == "$inline" {
+        return err("a list-rooted query (asQuery) has no SQL source — run it locally with .toList()")
+    }
     let fromSql = d.quoteIdent(plan.source)
     let joinSql = ""
     let joined = false

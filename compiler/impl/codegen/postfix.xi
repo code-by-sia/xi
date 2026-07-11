@@ -27,12 +27,19 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
         }
         if k == 107 or k == 129 {
             let fld = toks.textAt(p + 1)
-            if typ.startsWith2("Query_") {
+            if typ.startsWith2("Query_") or typ.startsWith2("QueryL_") {
                 // xi-query chain: reify this stage onto the plan (queryreify.xi)
                 let qs = genQueryStage(toks, p, code, typ, ctx)
                 code = qs.code
                 typ = qs.xtyp
                 p = qs.pos
+            } else {
+            if (typ.isListXType() or typ.startsWith2("arr_")) and fld == "asQuery" {
+                // root an xi-query plan at an in-memory collection (snapshot)
+                let qr = genListAsQuery(toks, p, code, typ, ctx)
+                code = qr.code
+                typ = qr.xtyp
+                p = qr.pos
             } else {
             if typ.isListXType() and fld == "asSequence" {
                 let fr = genSequenceChain(toks, p, code, typ.listElemXName(), ctx, false, "", "", "")
@@ -533,6 +540,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                 }
                 }
                 p = p + 2
+            }
             }
             }
             }
