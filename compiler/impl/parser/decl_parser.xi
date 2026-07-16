@@ -349,13 +349,30 @@ mapper parseIface(ps: PState) -> IfaceResult {
     let name = peek(ps2).text
     ps2 = advance(ps2)
 
+    // optional generic params:  interface Name<TKey, TEntity> { ... }
+    let typeParams: String[] = []
+    if peek(ps2).kind == 114 {   // '<'
+        ps2 = advance(ps2)
+        while peek(ps2).kind != 115 and peek(ps2).kind != 0 {
+            if peek(ps2).kind == 1 { typeParams = appendString(typeParams, peek(ps2).text) }
+            ps2 = advance(ps2)
+            if peek(ps2).kind == 106 { ps2 = advance(ps2) }   // ','
+        }
+        if peek(ps2).kind == 115 { ps2 = advance(ps2) }       // '>'
+    }
+
     let exNames: String[] = []
+    let exArgs: String[] = []
     if peek(ps2).kind == 204 {  // extends
         ps2 = advance(ps2)
         let running = true
         while running and peek(ps2).kind == 1 {
             exNames = appendString(exNames, peek(ps2).text)
             ps2 = advance(ps2)
+            // optional type args on the extended interface: extends Base<A, B>
+            let ar = parseTypeArgs(ps2)
+            exArgs = appendString(exArgs, ar.args)
+            ps2 = ar.ps
             if peek(ps2).kind == 106 { ps2 = advance(ps2) } else { running = false }
         }
     }
@@ -372,8 +389,9 @@ mapper parseIface(ps: PState) -> IfaceResult {
         if kr.ok {
             let sr = parseSig(ps2, isAsync)
             ps2 = sr.ps
-            // Optional default implementation: a `{ ... }` body after the
-            // signature. Classes that don't override the method use it.
+            // Optional default implementation: a `{ ... }` block or an `=> expr`
+            // inline body after the signature. Classes that don't override the
+            // method use it.
             let ms = sr.spec
             if peek(ps2).kind == 102 {
                 let br = parseBody(ps2)
@@ -384,6 +402,31 @@ mapper parseIface(ps: PState) -> IfaceResult {
                     hasWhere: false, whereTokens: [], fnDeps: ms.fnDeps
                 }
                 ps2 = br.ps
+            } else {
+            if peek(ps2).kind == 110 {   // `=> expr` — desugar to `return expr`
+                let ips = advance(ps2)
+                let ln0 = peek(ips).line
+                let bt: Token[] = []
+                bt = appendToken(bt, mkTok(221, "return", ln0))
+                let depth = 0
+                let running = true
+                while running and peek(ips).kind != 0 and peek(ips).line == ln0 {
+                    let ct = peek(ips)
+                    if ct.kind == 103 and depth == 0 { running = false } else {
+                        if ct.kind == 102 { depth = depth + 1 }
+                        if ct.kind == 103 { depth = depth - 1 }
+                        bt = appendToken(bt, ct)
+                        ips = advance(ips)
+                    }
+                }
+                ms = MethodSpec {
+                    isAsync: ms.isAsync, kind: ms.kind, name: ms.name,
+                    params: ms.params, retCtype: ms.retCtype,
+                    bodyTokens: bt, topic: ms.topic,
+                    hasWhere: false, whereTokens: [], fnDeps: ms.fnDeps
+                }
+                ps2 = ips
+            }
             }
             methList = appendMethodSpec(methList, ms)
         } else {
@@ -392,8 +435,26 @@ mapper parseIface(ps: PState) -> IfaceResult {
     }
     if peek(ps2).kind == 103 { ps2 = advance(ps2) }  // }
 
-    let spec = IfaceSpec { name: name, extendsNames: exNames, methList: methList }
+    let spec = IfaceSpec { name: name, extendsNames: exNames, methList: methList,
+                           typeParams: typeParams, extendsArgs: exArgs }
     return IfaceResult { spec: spec, ps: ps2 }
+}
+
+// Parse an optional `<Arg1, Arg2>` type-argument list; returns the comma-joined
+// args ("" if there was no `<`). Args are type names (concrete or type vars).
+type TypeArgsResult = { args: String, ps: PState }
+mapper parseTypeArgs(ps: PState) -> TypeArgsResult {
+    if peek(ps).kind != 114 { return TypeArgsResult { args: "", ps: ps } }   // no '<'
+    let ps2 = advance(ps)
+    let out = ""
+    // Capture each token's text (a type name may be an identifier like `User` or
+    // a primitive-type keyword like `Integer`/`String`); commas separate args.
+    while peek(ps2).kind != 115 and peek(ps2).kind != 0 {
+        if peek(ps2).kind == 106 { out = out + "," } else { out = out + peek(ps2).text }
+        ps2 = advance(ps2)
+    }
+    if peek(ps2).kind == 115 { ps2 = advance(ps2) }       // '>'
+    return TypeArgsResult { args: out, ps: ps2 }
 }
 
 // Parse one dependency:  name: Type [ [] | ? | where <cond> | or Alt ]
@@ -409,10 +470,20 @@ mapper parseDep(ps: PState) -> DepResult {
     if dtTok.kind == 1 { ifName = dtTok.text }
     let tr = parseTypeExpr(ps2)
     ps2 = tr.ps
+    let dctype = tr.ctype
+
+    // a generic interface dependency:  d: CrudRepository<Integer, User>
+    // -> resolve to the monomorphized concrete interface CrudRepository_Integer_User.
+    if peek(ps2).kind == 114 {   // '<'
+        let ga = parseTypeArgs(ps2)
+        ps2 = ga.ps
+        ifName = ifName + "_" + ga.args.replaceAll(",", "_")
+        dctype = "xc_" + ifName + "_t"
+    }
 
     let form = "single"
-    if tr.ctype.startsWith2("xc_arr_") { form = "list" }
-    if tr.ctype.startsWith2("xc_opt_") { form = "opt" }
+    if dctype.startsWith2("xc_arr_") { form = "list" }
+    if dctype.startsWith2("xc_opt_") { form = "opt" }
 
     // optional `as singleton` — mark this dependency's binding as a shared
     // singleton at the injection site (no module `bind ... as singleton` needed).
@@ -456,7 +527,7 @@ mapper parseDep(ps: PState) -> DepResult {
     if peek(ps2).kind == 106 { ps2 = advance(ps2) }  // optional ,
 
     let spec = DepSpec {
-        name: dname, ctype: tr.ctype, ifaceName: ifName, hasWhen: false,
+        name: dname, ctype: dctype, ifaceName: ifName, hasWhen: false,
         form: form, orAlt: orAlt, whereTokens: whereToks, scopeKind: scopeKind
     }
     return DepResult { spec: spec, ps: ps2 }
@@ -470,14 +541,18 @@ mapper parseClass(ps: PState) -> ClassResult {
     let name = peek(ps2).text
     ps2 = advance(ps2)
 
-    // implements
+    // implements  (each interface may carry type args: implements Base<Integer, User>)
     let implNames: String[] = []
+    let implArgs:  String[] = []
     if peek(ps2).kind == 203 {  // implements
         ps2 = advance(ps2)
         let running = true
         while running and peek(ps2).kind == 1 {
             implNames = appendString(implNames, peek(ps2).text)
             ps2 = advance(ps2)
+            let ar = parseTypeArgs(ps2)
+            implArgs = appendString(implArgs, ar.args)
+            ps2 = ar.ps
             if peek(ps2).kind == 106 { ps2 = advance(ps2) } else { running = false }
         }
     }
@@ -576,7 +651,7 @@ mapper parseClass(ps: PState) -> ClassResult {
     }
     if peek(ps2).kind == 103 { ps2 = advance(ps2) }  // }
 
-    let spec = ClassSpec { name: name, implNames: implNames, depList: depList, methList: methList, stateFields: stateFields, stateInit: stateInit }
+    let spec = ClassSpec { name: name, implNames: implNames, depList: depList, methList: methList, stateFields: stateFields, stateInit: stateInit, implArgs: implArgs }
     return ClassResult { spec: spec, ps: ps2 }
 }
 

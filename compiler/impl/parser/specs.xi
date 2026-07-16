@@ -38,7 +38,9 @@ type TypeSpec = {
 type IfaceSpec = {
     name:     String,
     extendsNames: String[],
-    methList: MethodSpec[]
+    methList: MethodSpec[],
+    typeParams:  String[],   // generic params, e.g. ["TKey","TEntity"] ("" list = plain)
+    extendsArgs: String[]    // parallel to extendsNames: "Arg1,Arg2" per extended iface
 }
 
 // A dep in a class or function.
@@ -61,7 +63,8 @@ type ClassSpec = {
     depList:     DepSpec[],
     methList:    MethodSpec[],
     stateFields: String[],    // "name:ctype" for mutable instance state
-    stateInit:   Token[]      // tokens inside `state { name: T = expr, ... }`
+    stateInit:   Token[],     // tokens inside `state { name: T = expr, ... }`
+    implArgs:    String[]     // parallel to implNames: "Arg1,Arg2" per implemented iface ("" = plain)
 }
 
 // A module binding

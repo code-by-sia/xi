@@ -152,6 +152,17 @@ predicate Program.progUsesAsDecode() {
         while mi < mn { if methodSpecGet(cs.methList, mi).bodyTokens.hasKind(209) { return true }  mi = mi + 1 }
         ci = ci + 1
     }
+    // interface default bodies (incl. monomorphized generic ones, e.g. a
+    // Repository's convertTo/convertFrom that decode via `as`)
+    let fi = 0
+    let fn2 = ifaceSpecLen(this.ifaces)
+    while fi < fn2 {
+        let is2 = ifaceSpecGet(this.ifaces, fi)
+        let mi = 0
+        let mn = methodSpecLen(is2.methList)
+        while mi < mn { if methodSpecGet(is2.methList, mi).bodyTokens.hasKind(209) { return true }  mi = mi + 1 }
+        fi = fi + 1
+    }
     return false
 }
 

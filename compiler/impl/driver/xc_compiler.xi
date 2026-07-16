@@ -32,6 +32,7 @@ class XcCompiler implements Compiler {
             prog = parser.parse(tokens2)
         }
 
+        prog = monomorphize(prog)        // expand generic interface instantiations
         checkMachines(prog)              // static machine-graph validation
         checkPurity(prog)                // pure-kind functions stay side-effect-free
 

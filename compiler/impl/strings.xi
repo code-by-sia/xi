@@ -18,6 +18,26 @@ predicate String.endsWith2(suffix: String) {
     return string_slice(this, n - sl, n) == suffix
 }
 
+// Replace every occurrence of `from` with `to`. Used by generic monomorphization
+// to substitute a type-parameter name (e.g. TEntity) inside a ctype string.
+mapper String.replaceAll(from: String, to: String) -> String {
+    let fl = string_len(from)
+    if fl == 0 { return this }
+    let out = ""
+    let n = string_len(this)
+    let i = 0
+    while i < n {
+        if i + fl <= n and string_slice(this, i, i + fl) == from {
+            out = out + to
+            i = i + fl
+        } else {
+            out = out + string_slice(this, i, i + 1)
+            i = i + 1
+        }
+    }
+    return out
+}
+
 // Does the name start with an ASCII uppercase letter? Type / event / variant
 // names are Capitalized by convention, so this gates type-shaped diagnostics.
 predicate String.startsUpper() {
