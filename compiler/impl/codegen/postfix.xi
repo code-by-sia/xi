@@ -506,6 +506,15 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         code = code + ".data"
                         typ = "ptr:" + string_slice(typ, 4, string_len(typ)).xnameFromArrSuffix()
                     } else {
+                        if typ.startsWith2("opt_") and fld == "value" {
+                            // T?.value -> the wrapped value, typed as inner T.
+                            code = code + ".value"
+                            typ = string_slice(typ, 4, string_len(typ)).xnameFromArrSuffix()
+                        } else {
+                        if typ.startsWith2("opt_") and fld == "has_value" {
+                            code = code + ".has_value"
+                            typ = "Bool"
+                        } else {
                         if typ.isPairXType() and (fld == "first" or fld == "second") {
                             // Pair<A,B>.first / .second — cast the stored value back to A/B.
                             let pex = typ.pairElem(0)
@@ -529,6 +538,8 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                             }
                             code = code + "." + fld
                             typ = ft
+                        }
+                        }
                         }
                         }
                     }

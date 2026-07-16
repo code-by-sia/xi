@@ -59,7 +59,9 @@ type QueryStage =
 // "run" means is entirely the provider's business. A provider that cannot
 // honor a stage or call should fail loudly, naming what it can't translate.
 interface QueryProvider {
-    producer run(plan: QueryPlan) -> Json
+    producer run(plan: QueryPlan) -> Json                  // read: run a plan, return rows
+    consumer insert(source: String, row: Json)             // write: add/replace a row (upsert by key)
+    consumer remove(source: String, key: String, id: Json) // write: delete rows where key == id
 }
 
 // Loading rows into an in-memory provider. MemorySource implements both
@@ -295,6 +297,36 @@ class MemorySource implements QueryProvider, RowStore {
             i = i + 1
         }
         return json.array()
+    }
+
+    // find the table index for `name`, creating an empty table if absent
+    producer indexOfTable(name: String) -> Integer {
+        let i = 0
+        while i < this.names.len() {
+            if this.names.get(i) == name { return i }
+            i = i + 1
+        }
+        this.names.push(name)
+        this.tables.push(json.array())
+        return this.names.len() - 1
+    }
+
+    consumer insert(source: String, row: Json) {
+        let idx = indexOfTable(source)
+        this.tables.set(idx, json.push(this.tables.get(idx), row))
+    }
+
+    consumer remove(source: String, key: String, id: Json) {
+        let idx = indexOfTable(source)
+        let t = this.tables.get(idx)
+        let kept = json.array()
+        let i = 0
+        while i < json.length(t) {
+            let r = json.at(t, i)
+            if jsonCmp(json.get(r, key), id) != 0 { kept = json.push(kept, r) }
+            i = i + 1
+        }
+        this.tables.set(idx, kept)
     }
 
     producer run(plan: QueryPlan) -> Json {

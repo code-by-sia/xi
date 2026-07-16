@@ -98,6 +98,7 @@ mapper genArrTypedefs(prog: Program) -> String {
         if not isCompositeAlias(ts) {
             out = out + "typedef struct { xc_" + ts.name + "_t* data; xc_size_t len; xc_size_t cap; } xc_arr_" + ts.name + "_t;\n"
             out = out + "typedef xc_List_t xc_List_" + ts.name + "_t;\n"   // List<ts> / Vec<ts>
+            if prog.usesQuery() { out = out + "typedef xc_QueryPlan_t xc_Query_" + ts.name + "_t;\n" }  // Query<ts>
             out = out + "typedef xc_Set_t xc_Set_" + ts.name + "_t;\n"     // Set<ts>
             out = out + "typedef xc_Stack_t xc_Stack_" + ts.name + "_t;\n" // Stack<ts>
             out = out + "typedef xc_Queue_t xc_Queue_" + ts.name + "_t;\n" // Queue<ts>

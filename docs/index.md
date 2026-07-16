@@ -58,6 +58,9 @@ just need a C compiler (`cc`) on `PATH`. Full steps:
 - **Query** - [reified query chains](query.md): `query.from<User>("users")
   .filter { it.age >= 18 }.collect(db)` compiles to a typed plan a provider
   runs in memory or renders to SQL.
+- **Repository** - [`std/data`](data.md) generic `Repository` / `CrudRepository`
+  interfaces bind to any provider: composable reads, provider-backed writes, and
+  overridable entity ↔ model mapping.
 - **Native output** - compiles to a standalone binary via C; no VM, no GC.
 
 ## A taste

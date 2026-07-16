@@ -47,6 +47,7 @@ const sidebars = {
     'events',
     'web',
     'query',
+    'data',
     {
       type: 'category',
       label: 'Reference',

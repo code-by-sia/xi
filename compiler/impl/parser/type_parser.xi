@@ -136,6 +136,13 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
                 if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
                 base = "xc_Future_" + ctypeSuffix(elem.ctype) + "_t"
             } else {
+            if t.text == "Query" and peekAt(ps, 1).kind == 114 {  // Query<T> — a reified query plan
+                let ep = advance(advance(ps))
+                let elem = parseTypeExpr(ep)
+                ps2 = elem.ps
+                if peek(ps2).kind == 115 { ps2 = advance(ps2) }  // `>`
+                base = "xc_Query_" + ctypeSuffix(elem.ctype) + "_t"
+            } else {
             if t.text == "Map" and peekAt(ps, 1).kind == 114 {   // Map<K, V>
                 let kp = advance(advance(ps))                    // past `Map` and `<`
                 let kt = parseTypeExpr(kp)
@@ -148,7 +155,7 @@ mapper parseTypeExpr(ps: PState) -> TypeResult {
             } else {
                 base = identToCtype(t.text)
                 ps2 = advance(ps)
-            } } } } } } } }
+            } } } } } } } } }
         } else {
             return TypeResult { ctype: "void", ps: ps }
         }

@@ -474,6 +474,35 @@ interface WebRequestHandler {
 }
 ```
 
+### Generics
+
+An interface may take **type parameters** in angle brackets, making it a
+template a class fills in when it implements a concrete instantiation:
+
+```x
+interface Repository<TKey, TEntity> {
+    producer findById(id: TKey) -> TEntity?
+    consumer save(e: TEntity)
+}
+
+class UserRepo implements Repository<Integer, User> {
+    deps {}
+    producer findById(id: Integer) -> User? { … }
+    consumer save(e: User) { … }
+}
+```
+
+Type parameters appear anywhere a type does - parameters, return types, and the
+arguments of an interface a template `extends`. A generic interface resolves by
+**monomorphization**: for each concrete `implements Repository<Integer, User>`,
+the compiler synthesizes a non-generic interface with the parameters
+substituted, so vtables, casters, and dependency injection (including resolving
+a generic interface from a class's `deps`) all work unchanged. Interfaces the
+template `extends` are flattened into the concrete interface as well.
+
+The standard [`Repository` / `CrudRepository`](data.md) interfaces are built this
+way.
+
 ### Steering with `bind` (optional)
 
 A `module` may `bind` an interface to a specific class, or mark a class as a

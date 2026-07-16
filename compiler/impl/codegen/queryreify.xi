@@ -366,13 +366,22 @@ mapper genQueryFrom(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
     }
     p = p + 2
     if toks.kindAt(p) == 115 { p = p + 1 }                   // '>'
-    let src = tname                                          // default source: the type name
+    // Source: a string literal, or any String expression (e.g. a repository's
+    // `this.source` field). Default to the type name if `()` is empty.
+    let srcC = "xc_string_from_cstr(\"" + tname + "\")"
     if toks.kindAt(p) == 100 {
         p = p + 1
-        if toks.kindAt(p) == 4 { src = toks.textAt(p)  p = p + 1 }
+        if toks.kindAt(p) == 4 {
+            srcC = "xc_string_from_cstr(\"" + toks.textAt(p) + "\")"
+            p = p + 1
+        } else { if toks.kindAt(p) != 101 {
+            let se = genExpr(toks, p, ctx)
+            srcC = se.code
+            p = se.pos
+        } }
         if toks.kindAt(p) == 101 { p = p + 1 }
     }
-    let code = "(xc_QueryPlan_t){ .source = xc_string_from_cstr(\"" + src + "\"), .stages = xstd_list_new(sizeof(xc_QueryStage_t)), .rows = xstd_json_array() }"
+    let code = "(xc_QueryPlan_t){ .source = " + srcC + ", .stages = xstd_list_new(sizeof(xc_QueryStage_t)), .rows = xstd_json_array() }"
     return ExprRes { code: code, pos: p, xtyp: "Query_" + tname, owned: false }
 }
 
@@ -521,11 +530,10 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
     }
 
     if fld == "toList" {
-        // run a list-rooted query locally: an ephemeral MemorySource interprets
-        // the plan's inline rows — no provider argument needed.
-        if not local {
-            diag_error(line, "xi-query: .toList runs a list-rooted query (someList.asQuery()...) locally — a source-rooted query needs .collect(provider)")
-        }
+        // run the query with no explicit provider. A list-rooted query uses an
+        // ephemeral MemorySource over its inline rows; a source-rooted query uses
+        // the module's bound QueryProvider (DI) — this is what lets a repository's
+        // findAll().filter{...}.toList() work.
         if elem.startsWith2("qpair:") or elem.startsWith2("qgroup:") {
             diag_error(line, "xi-query: project joined/grouped rows with .map { ... } before .toList")
         }
@@ -536,7 +544,9 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
         if string_len(dec) == 0 {
             diag_error(line, "xi-query: can't decode rows into element type '" + elem + "'")
         }
-        let code = "({ xc_QueryProvider_t __qv" + u + " = xc_MemorySource_as_QueryProvider(xc_new_MemorySource()); "
+        let providerC = "xc_resolve_QueryProvider()"
+        if local { providerC = "xc_MemorySource_as_QueryProvider(xc_new_MemorySource())" }
+        let code = "({ xc_QueryProvider_t __qv" + u + " = " + providerC + "; "
                  + "xc_Json_t __qr" + u + " = __qv" + u + ".vtable->run(__qv" + u + ".self, " + recv + "); "
                  + "xc_List_t __ql" + u + " = xstd_list_new(sizeof(" + ct + ")); "
                  + "for (xc_integer_t __qi" + u + " = 0; __qi" + u + " < xstd_json_length(__qr" + u + "); __qi" + u + "++) { "

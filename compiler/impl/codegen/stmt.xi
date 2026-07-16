@@ -158,6 +158,12 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         if rc == "{0}" {
             rc = "(" + ctx.retCtype + "){0}"
         }
+        // Returning a present optional: a value of type X where the function
+        // returns X? wraps into a `{ .has_value = 1, .value = <expr> }`.
+        if ctx.retCtype.startsWith2("xc_opt_") and string_len(e.xtyp) > 0 and e.xtyp != "none"
+           and ctx.retCtype == "xc_opt_" + e.xtyp.arrSuffixOf() + "_t" {
+            rc = "(" + ctx.retCtype + "){ .has_value = 1, .value = " + rc + " }"
+        }
         return StmtRes { code: "    return " + rc + ";\n", ctx: ctx, pos: e.pos }
     }
     if k == 222 {
