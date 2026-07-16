@@ -20,7 +20,7 @@ module Xi {
     id           = "xi"
     name         = "Xi REPL & Runner"
     description  = "The Xi REPL and run tool: run files, start a session, install, pack."
-    version      = "0.0.98"
+    version      = "0.0.99"
     license      = "Apache 2.0"
     includes     = []
     excludes     = []
