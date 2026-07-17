@@ -42,7 +42,13 @@ type QueryExpr =
 // plan's semantics — providers may fold stages but must preserve meaning.
 // A list-rooted query (`someList.asQuery()`) has source "$inline" and carries
 // a snapshot of its rows in `rows`; named sources leave `rows` empty.
-type QueryPlan = { source: String, stages: List<QueryStage>, rows: Json }
+// `providerSelf`/`providerVtable` optionally bind the query to a specific
+// provider (set by `.using`): when present the terminals (`toList` / `first` /
+// `collect()`) run against it instead of the module's DI-resolved one. They hold
+// the provider's fat-pointer halves as opaque handles (a `QueryProvider` field
+// would make QueryPlan and QueryProvider mutually recursive by value); they are
+// not part of the plan's data and are skipped by serialization.
+type QueryPlan = { source: String, stages: List<QueryStage>, rows: Json, providerSelf: Ptr, providerVtable: Ptr }
 
 type QueryStage =
     | QFilter  { pred: QueryExpr }
@@ -59,6 +65,7 @@ type QueryStage =
 // "run" means is entirely the provider's business. A provider that cannot
 // honor a stage or call should fail loudly, naming what it can't translate.
 interface QueryProvider {
+    mapper   name() -> String                              // identity, e.g. "sqlite" — for `where` selection
     producer run(plan: QueryPlan) -> Json                  // read: run a plan, return rows
     consumer insert(source: String, row: Json)             // write: add/replace a row (upsert by key)
     consumer remove(source: String, key: String, id: Json) // write: delete rows where key == id
@@ -284,6 +291,8 @@ mapper evalQ(e: QueryExpr, row: Json) -> Json {
 class MemorySource implements QueryProvider, RowStore {
     deps {}
     state { names: List<String> = empty List<String>, tables: List<Json> = empty List<Json> }
+
+    mapper name() -> String => "memory"
 
     consumer load(name: String, rows: Json) {
         this.names.push(name)

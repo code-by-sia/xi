@@ -35,11 +35,39 @@ type automatically.
 | `.concat(other)` | append another query's rows (same element type) | unchanged |
 | `.join(other, { lk }, { rk })` | pair rows whose keys agree | a pair - `it.first` / `it.second` |
 | `.groupBy { key }` | group rows by key | a group - `it.key` + aggregates |
-| `.collect(provider)` | run the plan | `List<element>` |
+| `.using(provider)` | bind a provider to the query (see below) | unchanged |
+| `.collect(provider)` | run the plan against `provider` | `List<element>` |
+| `.collect()` / `.toList()` | run against the bound (or resolved) provider | `List<element>` |
+| `.first()` | run and take the first row | `element?` |
 | `.plan` | the reified plan value itself | `QueryPlan` |
 
 `from` defaults its source to the type name: `query.from<User>()` queries
 `"User"` - providers map source names however they like.
+
+## Binding a provider with `.using`
+
+`.using(provider)` attaches a provider to any query value, so the terminals that
+follow run against it with no provider argument - even across a method boundary.
+It is a general query stage, useful wherever you want to hand a bound query
+around or pick the backend up front:
+
+```x
+let q = query.from<User>("users").using(db)     // q carries its provider
+
+let adults = q.filter { it.age >= 18 }.toList()   // runs against db
+let first  = q.filter { it.id == 1 }.first()      // User?
+```
+
+The bound provider rides along on the query, so a caller that receives it can
+compose more stages and finish with a plain `.toList()` / `.first()` /
+`.collect()`. With nothing bound, `.toList()` falls back to the module's
+DI-resolved `QueryProvider` (a named source) or an in-memory source (a
+list-rooted query). `.collect(provider)` always runs against the explicit
+`provider` you pass.
+
+A [repository](data.md) is one place this pays off: its `findAll()` returns
+`query.from<TEntity>(source()).using(getProvider())`, so callers filter and run
+the result without ever naming the provider.
 
 ## Querying in-memory collections
 

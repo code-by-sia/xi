@@ -508,47 +508,61 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
         return ExprRes { code: qStageAppendC(recv, stage, u), pos: q, xtyp: pfx + "qpair:" + elem + ":" + relem, owned: false }
     }
 
-    if fld == "collect" {
-        if elem.startsWith2("qpair:") or elem.startsWith2("qgroup:") {
-            diag_error(line, "xi-query: project joined/grouped rows with .map { ... } before .collect")
-        }
+    if fld == "using" {
+        // bind a provider to the query so the terminals run against it, no DI.
+        // Store the fat-pointer halves as opaque handles (see QueryPlan).
         let ae = genExpr(toks, p + 3, ctx)
         let q = ae.pos
         if toks.kindAt(q) == 101 { q = q + 1 }
-        let ct = elem.xnameToCtype()
-        let dec = jsonDecodeExpr(ctx.prog, ct, "xstd_json_at(__qr" + u + ", __qi" + u + ")")
-        if string_len(dec) == 0 {
-            diag_error(line, "xi-query: can't decode rows into element type '" + elem + "'")
-        }
-        let code = "({ xc_QueryProvider_t __qv" + u + " = " + ae.code + "; "
-                 + "xc_Json_t __qr" + u + " = __qv" + u + ".vtable->run(__qv" + u + ".self, " + recv + "); "
-                 + "xc_List_t __ql" + u + " = xstd_list_new(sizeof(" + ct + ")); "
-                 + "for (xc_integer_t __qi" + u + " = 0; __qi" + u + " < xstd_json_length(__qr" + u + "); __qi" + u + "++) { "
-                 + ct + " __qe" + u + " = " + dec + "; "
-                 + "xstd_list_push(__ql" + u + ", (" + ct + "[]){ __qe" + u + " }); } __ql" + u + "; })"
-        return ExprRes { code: code, pos: q, xtyp: "List_" + elem, owned: false }
+        let code = "({ xc_QueryPlan_t __qp" + u + " = " + recv + "; xc_QueryProvider_t __qpp" + u + " = " + ae.code + "; "
+                 + "__qp" + u + ".providerSelf = __qpp" + u + ".self; __qp" + u + ".providerVtable = (void*)__qpp" + u + ".vtable; __qp" + u + "; })"
+        return ExprRes { code: code, pos: q, xtyp: typ, owned: false }
     }
 
-    if fld == "toList" {
-        // run the query with no explicit provider. A list-rooted query uses an
-        // ephemeral MemorySource over its inline rows; a source-rooted query uses
-        // the module's bound QueryProvider (DI) — this is what lets a repository's
-        // findAll().filter{...}.toList() work.
+    if fld == "collect" or fld == "toList" or fld == "first" {
+        // Terminals. `collect(p)` runs against the explicit provider `p`.
+        // `collect()` / `toList()` / `first()` run against the query's bound
+        // provider (set by `.using`); with none bound they fall back to the
+        // module's DI-resolved provider (source-rooted) or an ephemeral
+        // MemorySource (list-rooted). `first` yields the first row as `T?`.
         if elem.startsWith2("qpair:") or elem.startsWith2("qgroup:") {
-            diag_error(line, "xi-query: project joined/grouped rows with .map { ... } before .toList")
+            diag_error(line, "xi-query: project joined/grouped rows with .map { ... } before ." + fld)
         }
-        let q = p + 2
-        if toks.kindAt(q) == 100 { q = q + 1  if toks.kindAt(q) == 101 { q = q + 1 } }   // ()
         let ct = elem.xnameToCtype()
+        // an explicit provider arg (collect(p)) — otherwise use the bound/fallback
+        let hasArg = false
+        let argCode = ""
+        let q = p + 2
+        if toks.kindAt(q) == 100 {
+            q = q + 1
+            if toks.kindAt(q) != 101 {
+                let ae = genExpr(toks, q, ctx)
+                hasArg = true  argCode = ae.code  q = ae.pos
+            }
+            if toks.kindAt(q) == 101 { q = q + 1 }
+        }
+        let fallback = "xc_resolve_QueryProvider()"
+        if local { fallback = "xc_MemorySource_as_QueryProvider(xc_new_MemorySource())" }
+        let bound = "(xc_QueryProvider_t){ .self = __qp" + u + ".providerSelf, .vtable = (const xc_QueryProvider_vtable_t*)__qp" + u + ".providerVtable }"
+        let pick = "(__qp" + u + ".providerVtable ? " + bound + " : (" + fallback + "))"
+        if hasArg { pick = argCode }
+        let head = "({ xc_QueryPlan_t __qp" + u + " = " + recv + "; "
+                 + "xc_QueryProvider_t __qv" + u + " = " + pick + "; "
+                 + "xc_Json_t __qr" + u + " = __qv" + u + ".vtable->run(__qv" + u + ".self, __qp" + u + "); "
+        if fld == "first" {
+            let dec0 = jsonDecodeExpr(ctx.prog, ct, "xstd_json_at(__qr" + u + ", 0)")
+            if string_len(dec0) == 0 {
+                diag_error(line, "xi-query: can't decode rows into element type '" + elem + "'")
+            }
+            let code = head + "xc_opt_" + elem + "_t __qo" + u + "; __qo" + u + ".has_value = 0; "
+                     + "if (xstd_json_length(__qr" + u + ") > 0) { __qo" + u + ".has_value = 1; __qo" + u + ".value = " + dec0 + "; } __qo" + u + "; })"
+            return ExprRes { code: code, pos: q, xtyp: "opt_" + elem, owned: false }
+        }
         let dec = jsonDecodeExpr(ctx.prog, ct, "xstd_json_at(__qr" + u + ", __qi" + u + ")")
         if string_len(dec) == 0 {
             diag_error(line, "xi-query: can't decode rows into element type '" + elem + "'")
         }
-        let providerC = "xc_resolve_QueryProvider()"
-        if local { providerC = "xc_MemorySource_as_QueryProvider(xc_new_MemorySource())" }
-        let code = "({ xc_QueryProvider_t __qv" + u + " = " + providerC + "; "
-                 + "xc_Json_t __qr" + u + " = __qv" + u + ".vtable->run(__qv" + u + ".self, " + recv + "); "
-                 + "xc_List_t __ql" + u + " = xstd_list_new(sizeof(" + ct + ")); "
+        let code = head + "xc_List_t __ql" + u + " = xstd_list_new(sizeof(" + ct + ")); "
                  + "for (xc_integer_t __qi" + u + " = 0; __qi" + u + " < xstd_json_length(__qr" + u + "); __qi" + u + "++) { "
                  + ct + " __qe" + u + " = " + dec + "; "
                  + "xstd_list_push(__ql" + u + ", (" + ct + "[]){ __qe" + u + " }); } __ql" + u + "; })"
@@ -560,6 +574,6 @@ mapper genQueryStage(toks: Token[], p: Integer, recv: String, typ: String, ctx: 
         return ExprRes { code: recv, pos: p + 2, xtyp: "QueryPlan", owned: false }
     }
 
-    diag_error(line, "xi-query: unknown stage '." + fld + "' — supported: filter, map, sortedBy, sortedByDescending, take, drop, concat, join, groupBy, collect, toList, plan")
+    diag_error(line, "xi-query: unknown stage '." + fld + "' — supported: filter, map, sortedBy, sortedByDescending, take, drop, concat, join, groupBy, using, collect, toList, first, plan")
     return ExprRes { code: recv, pos: p + 2, xtyp: typ, owned: false }
 }

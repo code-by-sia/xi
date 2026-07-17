@@ -184,7 +184,9 @@ runs it. See [Query](query.md).
 |------|------------------|
 | `query.from<T>("src")` | root a query at a named source |
 | `list.asQuery()` / `arr.asQuery()` | root a query at an in-memory collection; run with `.toList()` |
-| `QueryProvider` | interface - `run(plan) -> Json` (read) + `insert(source, row)` / `remove(source, key, id)` (write) |
+| `.using(p)` | bind a provider to the query so terminals run against it |
+| `.collect(p)` / `.collect()` / `.toList()` / `.first()` | run: explicit / bound / bound / first row (`T?`) |
+| `QueryProvider` | interface - `name() -> String` (identity, for `where` selection) + `run(plan) -> Json` (read) + `insert` / `remove` (write) |
 | `RowStore` | interface - `load(name: String, rows: Json)` |
 | `MemorySource` | class - the in-memory reference provider (implements both) |
 | `QueryPlan` / `QueryStage` / `QueryExpr` | the plan's types - walk with `match`; serialize with `as Json` |
@@ -204,14 +206,16 @@ an interface - three are bundled; add your own without touching std.
 
 ### `data` - `std/data.xi`
 
-Standard **repository** interfaces over any `QueryProvider`: reads return a
-composable [`Query`](query.md), writes go through the provider's write contract,
-and entity ↔ model conversion has overridable defaults. See [Repository](data.md).
+Standard **repository** interfaces over any `QueryProvider`. Implement
+`getProvider()` and `source()`; `findAll` / `findById` / `save` / `delete` /
+`deleteById` and entity ↔ model conversion are overridable defaults. Reads return
+a composable [`Query`](query.md) bound to the repo's provider. See
+[Repository](data.md).
 
 | Name | Kind / Signature |
 |------|------------------|
-| `Repository<TKey, TEntity, TModel>` | interface - `findAll() -> Query<TEntity>` / `findById(id) -> TEntity?` + `convertTo` / `convertFrom` defaults |
-| `CrudRepository<TKey, TEntity, TModel>` | interface - extends `Repository` with `save` / `delete` / `deleteById` |
+| `Repository<TKey, TEntity, TModel>` | interface - implement `getProvider()` / `source()`; default `findAll` / `findById` / `convertTo` / `convertFrom` |
+| `CrudRepository<TKey, TEntity, TModel>` | interface - extends `Repository` with default `save` / `delete` / `deleteById` |
 
 ### `thread` - `std/thread.xi`
 

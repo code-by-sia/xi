@@ -43,6 +43,7 @@ interface Db {
 class SqliteProvider implements QueryProvider, Db {
     deps {}
     state { db: Ptr = empty Ptr }
+    mapper name() -> String => "sqlite"
 
     consumer open(path: String) {
         let d = empty Ptr
@@ -135,21 +136,12 @@ class SqliteProvider implements QueryProvider, Db {
     }
 }
 
-// ── the repository: five methods, backend-agnostic ────────────────────
+// ── the repository: supply the provider + source, inherit the rest ────
 class UserRepo implements CrudRepository<Integer, User, UserApi> {
     deps { db: QueryProvider }
-    state { source: String = "users" }
-
-    producer findAll() -> Query<User> => query.from<User>(this.source)
-    producer findById(id: Integer) -> User? {
-        let rows = query.from<User>(this.source).filter { it.id == id }.take(1).toList()
-        if rows.len() > 0 { return rows.get(0) }
-        return none
-    }
-    consumer save(e: User)           { db.remove(this.source, "id", json.int(e.id))  db.insert(this.source, e as Json) }
-    consumer delete(e: User)         { deleteById(e.id) }
-    consumer deleteById(id: Integer) { db.remove(this.source, "id", json.int(id)) }
-    // convertTo / convertFrom inherited from Repository as defaults
+    producer getProvider() -> QueryProvider => db
+    mapper   source()      -> String        => "users"
+    // findAll, findById, save, delete, deleteById, convertTo/convertFrom: defaults
 }
 
 // A small driver: the repository is injected by its generic interface (a class's

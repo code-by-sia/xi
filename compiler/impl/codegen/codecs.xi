@@ -118,6 +118,10 @@ mapper jsonOfPayload(prog: Program, xtype: String, code: String) -> String {
              + " for (xc_integer_t __pi = 0; __pi < (xc_integer_t)__pv.len; __pi++)"
              + " xstd_json_push(__pa, " + encE + "); __pa; })"
     }
+    // scalar: a primitive (Integer/String/Number/Bool/Json) encodes directly, a
+    // compound routes through its derived codec — jsonEncodeExpr handles both.
+    let enc = jsonEncodeExpr(prog, xtype.xnameToCtype(), code)
+    if string_len(enc) > 0 { return enc }
     return "xc_tojson_" + xtype + "(" + code + ")"
 }
 

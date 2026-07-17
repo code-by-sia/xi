@@ -226,8 +226,40 @@ predicate Program.isGenericIfaceName(name: String) {
     return false
 }
 
+predicate matHasMethod(ms: MethodSpec[], name: String) {
+    let i = 0
+    while i < methodSpecLen(ms) { if methodSpecGet(ms, i).name == name { return true }  i = i + 1 }
+    return false
+}
+
+mapper ifaceByName(acc: IfaceSpec[], name: String) -> IfaceSpec {
+    let i = 0
+    while i < ifaceSpecLen(acc) {
+        if ifaceSpecGet(acc, i).name == name { return ifaceSpecGet(acc, i) }
+        i = i + 1
+    }
+    return IfaceSpec { name: "", extendsNames: [], methList: [], typeParams: [], extendsArgs: [] }
+}
+
+// A concrete interface method stripped of its default body — so the class that
+// implements it supplies the code (materialized, see below) and no shared
+// `_default_impl` is emitted for a body that may reach into `this`.
+mapper stripBody(ms: MethodSpec) -> MethodSpec {
+    return MethodSpec {
+        isAsync: ms.isAsync, kind: ms.kind, name: ms.name, params: ms.params,
+        retCtype: ms.retCtype, bodyTokens: [], topic: ms.topic,
+        hasWhere: ms.hasWhere, whereTokens: [], fnDeps: ms.fnDeps
+    }
+}
+
 // The whole pass: rewrite classes' generic implements to concrete names and
 // return a Program whose ifaces = (non-generic originals) + (synthesized).
+//
+// Generic interface defaults are **materialized** into each implementing class:
+// an un-overridden default method is copied (already type-substituted) into the
+// class's own methList, so its body dispatches to sibling methods on `this`
+// (getProvider / source / findAll ...) through normal class-method codegen. The
+// synthesized interface then carries the method as abstract.
 mapper monomorphize(prog: Program) -> Program {
     let synth: IfaceSpec[] = []
     let newClasses: ClassSpec[] = []
@@ -236,6 +268,7 @@ mapper monomorphize(prog: Program) -> Program {
     while ci < classSpecLen(prog.classes) {
         let cs = classSpecGet(prog.classes, ci)
         let newImpl: String[] = []
+        let matMeths: MethodSpec[] = []     // default methods materialized into this class
         let ii = 0
         while ii < stringArrLen(cs.implNames) {
             let ifn = stringArrGet(cs.implNames, ii)
@@ -252,19 +285,39 @@ mapper monomorphize(prog: Program) -> Program {
                     k = k + 1
                 }
                 synth = synthIface(prog, ifn, arg, synth)
+                // materialize un-overridden defaults from the top concrete interface
+                // (its methList already flattens every extended interface's methods)
+                let top = ifaceByName(synth, monoName(ifn, arg))
+                let tm = 0
+                while tm < methodSpecLen(top.methList) {
+                    let m = methodSpecGet(top.methList, tm)
+                    if tokenArrLen(m.bodyTokens) > 0 and countMethodName(cs, m.name) == 0
+                       and not matHasMethod(matMeths, m.name) {
+                        matMeths = appendMethodSpec(matMeths, m)
+                    }
+                    tm = tm + 1
+                }
             } else {
                 newImpl = appendString(newImpl, ifn)
             }
             ii = ii + 1
         }
+        let finalMeths = cs.methList
+        let mm = 0
+        while mm < methodSpecLen(matMeths) {
+            finalMeths = appendMethodSpec(finalMeths, methodSpecGet(matMeths, mm))
+            mm = mm + 1
+        }
         newClasses = appendClassSpec(newClasses, ClassSpec {
-            name: cs.name, implNames: newImpl, depList: cs.depList, methList: cs.methList,
+            name: cs.name, implNames: newImpl, depList: cs.depList, methList: finalMeths,
             stateFields: cs.stateFields, stateInit: cs.stateInit, implArgs: cs.implArgs
         })
         ci = ci + 1
     }
 
-    // final ifaces: keep non-generic originals, drop templates, add synthesized
+    // final ifaces: keep non-generic originals, drop templates, add synthesized.
+    // Synthesized interface methods are stripped to abstract — every implementing
+    // class carries the body (its own override or a materialized default).
     let newIfaces: IfaceSpec[] = []
     let fi = 0
     while fi < ifaceSpecLen(prog.ifaces) {
@@ -274,7 +327,17 @@ mapper monomorphize(prog: Program) -> Program {
     }
     let si = 0
     while si < ifaceSpecLen(synth) {
-        newIfaces = appendIfaceSpec(newIfaces, ifaceSpecGet(synth, si))
+        let sIf = ifaceSpecGet(synth, si)
+        let absMeths: MethodSpec[] = []
+        let am = 0
+        while am < methodSpecLen(sIf.methList) {
+            absMeths = appendMethodSpec(absMeths, stripBody(methodSpecGet(sIf.methList, am)))
+            am = am + 1
+        }
+        newIfaces = appendIfaceSpec(newIfaces, IfaceSpec {
+            name: sIf.name, extendsNames: sIf.extendsNames, methList: absMeths,
+            typeParams: [], extendsArgs: []
+        })
         si = si + 1
     }
 

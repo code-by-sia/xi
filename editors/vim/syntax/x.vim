@@ -31,6 +31,7 @@ syn keyword xBuiltin this input value thread Events
 " ── primitive & runtime types ─────────────────────────────────────
 syn keyword xType Number Integer Bool String Char Timestamp Void Size cstring Bytes Json
 syn keyword xType Channel Thread Event HttpRequest HttpResponse
+syn keyword xType Query QueryPlan QueryProvider Repository CrudRepository Logger Ptr
 
 " Uppercase-led identifiers read as type names (incl. sum-type variants).
 syn match xTypeName "\<\u\w*\>"

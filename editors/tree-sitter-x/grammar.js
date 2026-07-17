@@ -91,18 +91,24 @@ module.exports = grammar({
     // ── interfaces ──────────────────────────────────────────────
     interface_decl: $ => seq(
       'interface', field('name', $.identifier),
-      optional(seq('extends', commaSep1($.qualified_name))),
+      optional($.type_params),
+      optional(seq('extends', commaSep1(choice($.generic_type, $.qualified_name)))),
       '{', repeat($.method_sig), '}',
     ),
+    // generic type parameters on a declaration:  <TKey, TEntity, TModel>
+    type_params: $ => seq('<', commaSep1(field('param', $.identifier)), '>'),
     method_sig: $ => seq(
       optional('async'), $.function_kind, field('name', $.identifier),
       $.params, optional(seq('->', field('return', $._type))),
+      // interface methods may carry a default body (`{ … }` or `=> expr`)
+      optional(field('body', choice($.block, seq('=>', $._expression)))),
     ),
 
     // ── classes ─────────────────────────────────────────────────
     class_decl: $ => seq(
       'class', field('name', $.identifier),
-      'implements', optional(commaSep1($.qualified_name)),
+      optional(seq('extends', field('base', choice($.generic_type, $.qualified_name)))),
+      'implements', optional(commaSep1(choice($.generic_type, $.qualified_name))),
       '{', optional($.deps_block), optional($.state_block), repeat($._class_member), '}',
     ),
     deps_block: $ => seq('deps', '{', repeat($.dep), '}'),
@@ -208,11 +214,16 @@ module.exports = grammar({
 
     // ── expressions ─────────────────────────────────────────────
     _expression: $ => choice(
-      $.binary_expr, $.unary_expr, $.try_expr, $.call_expr, $.member_expr,
+      $.binary_expr, $.unary_expr, $.cast_expr, $.try_expr, $.call_expr, $.member_expr,
       $.index_expr, $.type_literal, $.array_literal, $.paren_expr, $.empty_expr,
       $.identifier, $.self, $.input, $.value,
       $.number, $.string, $.char, $.boolean, 'none', $.regex,
     ),
+
+    // `x as T` — cross-type view / codec cast (e.g. `e as Json`, `j as User`).
+    cast_expr: $ => prec.left(PREC.typecheck, seq(
+      field('value', $._expression), 'as', field('type', $._type),
+    )),
 
     // empty collection literal:  empty List<Item>, empty Map<String, Integer>, …
     empty_expr: $ => prec.right(seq('empty', field('type', $._type))),

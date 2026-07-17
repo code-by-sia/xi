@@ -500,6 +500,12 @@ substituted, so vtables, casters, and dependency injection (including resolving
 a generic interface from a class's `deps`) all work unchanged. Interfaces the
 template `extends` are flattened into the concrete interface as well.
 
+A generic interface's **default methods** are *materialized* into each
+implementing class: an un-overridden default is copied (type-substituted) into
+your class, so its body can call sibling methods on `this` - which is how a
+repository's default `findById` calls `findAll`, and `findAll` calls
+`getProvider`. Supply only the methods left abstract; override any default.
+
 The standard [`Repository` / `CrudRepository`](data.md) interfaces are built this
 way.
 

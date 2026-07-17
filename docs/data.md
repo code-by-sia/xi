@@ -1,13 +1,11 @@
 # Repository - persistence over any provider
 
 A repository is the persistence boundary for one entity type. `std/data` gives
-you two generic interfaces to implement on a small class:
-`Repository<TKey, TEntity, TModel>` for the read side, and
-`CrudRepository<TKey, TEntity, TModel>` which adds writes. The reads return a
-[`Query`](query.md) you compose with the full query API, and the writes go
-through the same [`QueryProvider`](query.md) contract, so one repository runs
-against an in-memory source in tests and a real database in production without
-changing a line.
+you two generic interfaces: `Repository<TKey, TEntity, TModel>` for the read
+side, and `CrudRepository<TKey, TEntity, TModel>` which adds writes. To use one,
+implement it on a small class and supply just two things - which provider backs
+it (`getProvider`) and the source name (`source`). Everything else is an
+overridable default.
 
 ```x
 import "std/data.xi"
@@ -17,87 +15,132 @@ type UserApi = { id: Integer, name: String, age: Integer }   // no pw on the wir
 
 class UserRepo implements CrudRepository<Integer, User, UserApi> {
     deps { db: QueryProvider }
-    state { source: String = "users" }
-
-    producer findAll() -> Query<User> => query.from<User>(this.source)
-    producer findById(id: Integer) -> User? {
-        let rows = query.from<User>(this.source).filter { it.id == id }.take(1).toList()
-        if rows.len() > 0 { return rows.get(0) }
-        return none
-    }
-    consumer save(e: User)           { db.remove(this.source, "id", json.int(e.id))  db.insert(this.source, e as Json) }
-    consumer delete(e: User)         { deleteById(e.id) }
-    consumer deleteById(id: Integer) { db.remove(this.source, "id", json.int(id)) }
-    // convertTo / convertFrom inherited as defaults (override to customize)
+    producer getProvider() -> QueryProvider => db
+    mapper   source()      -> String        => "users"
 }
 ```
 
-`findAll()` returns a query, not a list, so callers compose before running:
+That is the whole repository. `findAll`, `findById`, `save`, `delete`,
+`deleteById`, and `convertTo` / `convertFrom` are inherited defaults.
 
 ```x
-let adults = repo.findAll()
-    .filter { it.age >= 18 }
-    .sortedBy { it.name }
-    .toList()                     // runs through the bound provider
+let adults = repo.findAll().filter { it.age >= 18 }.sortedBy { it.name }.toList()
+let one    = repo.findById(1)            // User?
+repo.save(User { id: 1, name: "Cara", age: 44, pw: "s1" })
+repo.delete(existing)
 ```
+
+## How findAll knows its provider
+
+`findAll()` binds the repository's own provider to the query with `.using`:
+
+```x
+producer findAll() -> Query<TEntity> => query.from<TEntity>(source()).using(getProvider())
+```
+
+`.using(provider)` attaches a provider to the query value, so the composable
+chain that follows runs against *that* provider when you call a terminal - no
+globally-resolved provider, no magic. `findById` is then just a filtered
+`findAll`:
+
+```x
+producer findById(id: TKey) -> TEntity? => findAll().filter { it.id == id }.first()
+```
+
+Because the provider rides along on the query, `findById` never mentions a
+provider itself - it inherits the one `findAll` bound.
 
 ## The interfaces
 
 ```x
 interface Repository<TKey, TEntity, TModel> {
-    producer findAll() -> Query<TEntity>
-    producer findById(id: TKey) -> TEntity?
+    producer getProvider() -> QueryProvider     // you implement
+    mapper   source()      -> String            // you implement
+
+    producer findAll() -> Query<TEntity> => query.from<TEntity>(source()).using(getProvider())
+    producer findById(id: TKey) -> TEntity? => findAll().filter { it.id == id }.first()
 
     mapper convertTo(e: TEntity) -> TModel   => (e as Json) as TModel
     mapper convertFrom(m: TModel) -> TEntity => (m as Json) as TEntity
 }
 
 interface CrudRepository<TKey, TEntity, TModel> extends Repository<TKey, TEntity, TModel> {
-    consumer save(e: TEntity)
-    consumer delete(e: TEntity)
-    consumer deleteById(id: TKey)
+    consumer save(e: TEntity) {
+        getProvider().remove(source(), "id", e.id as Json)   // upsert: replace by key
+        getProvider().insert(source(), e as Json)
+    }
+    consumer delete(e: TEntity)   => deleteById(e.id)
+    consumer deleteById(id: TKey) => getProvider().remove(source(), "id", id as Json)
 }
 ```
 
 The three type parameters are the key type, the stored entity type, and an
-external **model** type (a DTO) used at the boundary.
+external **model** type (a DTO) used at the boundary. Every method above except
+`getProvider` / `source` has a default - override any of them.
 
 | Method | Kind | Purpose |
 |---|---|---|
-| `findAll()` | read | a `Query<TEntity>` over the whole source, ready to filter |
-| `findById(id)` | read | one entity or `none` |
-| `save(e)` | write | insert or replace by key |
-| `delete(e)` / `deleteById(id)` | write | remove by key |
-| `convertTo(e)` | map | entity to model |
-| `convertFrom(m)` | map | model to entity |
+| `getProvider()` | you implement | the provider backing this repo |
+| `source()` | you implement | the source name to query and write |
+| `findAll()` | default | a provider-bound `Query<TEntity>`, ready to filter |
+| `findById(id)` | default | `findAll().filter { it.id == id }.first()` |
+| `save(e)` | default | insert or replace by key |
+| `delete(e)` / `deleteById(id)` | default | remove by key |
+| `convertTo(e)` / `convertFrom(m)` | default | entity ↔ model mapping |
+
+Entities are keyed by an `id` field (that is the convention `findById` /
+`deleteById` rely on).
 
 ## Entity and model conversion
 
-`convertTo` / `convertFrom` come with default bodies: a field-matched projection
-through the derived JSON codecs. Fields present in the target are copied by name,
-extras are dropped, and anything missing is zeroed. This is how a `User` with a
-`pw` field becomes a `UserApi` without it:
+`convertTo` / `convertFrom` default to a field-matched projection through the
+derived JSON codecs. Fields present in the target are copied by name, extras are
+dropped, and anything missing is zeroed - so a `User` with a `pw` field becomes a
+`UserApi` without it:
 
 ```x
 let api = repo.convertTo(user)          // pw dropped
 ```
 
-Override either method when the mapping is not a straight field match:
+Override either when the mapping is not a straight field match:
 
 ```x
 mapper convertTo(e: User) -> UserApi => UserApi { id: e.id, name: e.name.toUpper(), age: e.age }
 ```
 
+The JSON at the provider boundary stays inside these defaults; your repository
+class and its callers work in entity types, not `Json`.
+
 ## Binding a provider
 
-The repository holds a `QueryProvider` and calls `run` / `insert` / `remove` on
-it. Bind whichever provider you want; the repository does not change.
+`getProvider()` returns a `QueryProvider`; bind whichever one you want. The
+repository does not change.
 
 ```x
 module App {
     bind QueryProvider -> SqliteProvider as singleton   // or MemorySource in tests
 }
 ```
+
+### Selecting a provider by name
+
+When several providers are in scope, a dependency guard picks one by identity -
+`QueryProvider` reports a `name()` (like `SqlDialect.name()`), so a repository can
+ask for a specific backend without a `bind`:
+
+```x
+class UserRepo implements CrudRepository<Integer, User, UserApi> {
+    deps { db: QueryProvider where db.name() == "sqlite" }
+    producer getProvider() -> QueryProvider => db
+    mapper   source()      -> String        => "users"
+}
+```
+
+The guard is evaluated over each candidate in scope (the bundled `MemorySource`
+names itself `"memory"`); the first match is injected. See
+[`examples/data/provider_where_test.xi`](https://github.com/code-by-sia/xi/tree/main/examples/data).
+
+### Testing with MemorySource
 
 `MemorySource` from `std/query` implements the full read and write contract, so
 tests need no database:
@@ -120,9 +163,10 @@ through a real `libsqlite3` connection.
 
 ## Generics
 
-`Repository` and `CrudRepository` are **generic interfaces** - the first in the
-standard library. Xi resolves them by monomorphization: for each concrete
+`Repository` and `CrudRepository` are **generic interfaces** with default method
+bodies. Xi resolves them by monomorphization: for each concrete
 `implements CrudRepository<Integer, User, UserApi>`, the compiler synthesizes a
-non-generic interface with the type parameters substituted, so vtables, casters,
-and dependency injection all work unchanged. See
-[Generics](language-guide.md#generics) in the language guide.
+non-generic interface with the type parameters substituted, and **materializes**
+each un-overridden default into your class so its body can call sibling methods
+on `this` (`getProvider`, `source`, `findAll`). Vtables, casters, and dependency
+injection all work unchanged. See [Generics](language-guide.md#generics).

@@ -50,6 +50,7 @@ interface Db {
 class SqliteProvider implements QueryProvider, Db {
     deps {}
     state { db: Ptr = empty Ptr }
+    mapper name() -> String => "sqlite"
 
     consumer open(path: String) {
         let d = empty Ptr

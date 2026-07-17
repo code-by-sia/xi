@@ -126,7 +126,7 @@ class XcCompiler implements Compiler {
         }
         let srcPath = cliSource(args)
         if srcPath == "version" or srcPath == "--version" or srcPath == "-v" {
-            system.stdout.writeln("xc " + xcVersion())
+            system.stdout.writeln("xc " + xcVersion() + " \"" + xcCodename() + "\"")
             return 0
         }
         if srcPath == "--all" { return buildAll() }

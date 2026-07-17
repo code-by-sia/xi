@@ -2,7 +2,7 @@
   "name": "x-language",
   "displayName": "X Programming Language",
   "description": "Syntax highlighting, snippets, and completion for the X programming language.",
-  "version": "0.0.7",
+  "version": "0.1.0",
   "publisher": "code-by-sia",
   "license": "Apache-2.0",
   "repository": {

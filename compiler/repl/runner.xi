@@ -88,7 +88,10 @@ mapper buildProgram(decls: String, stmts: String) -> String {
 }
 
 // The toolchain version. Bump this when cutting a release (matches the tag).
-mapper xiVersion() -> String { return "0.0.99" }
+mapper xiVersion() -> String { return "0.1.0" }
+
+// The release codename, shown alongside the version.
+mapper xiCodename() -> String { return "Berlin" }
 
 // Directory part of a path (everything before the last '/'); "." if none.
 mapper dirOf(path: String) -> String {

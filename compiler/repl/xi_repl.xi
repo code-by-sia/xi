@@ -7,7 +7,7 @@ class XiRepl implements Repl {
         if args.len >= 2 {
             let sub = args.data[1]
             if sub == "version" or sub == "--version" or sub == "-v" {
-                system.stdout.writeln("xi " + xiVersion())
+                system.stdout.writeln("xi " + xiVersion() + " \"" + xiCodename() + "\"")
                 return 0
             }
             if sub == "update" {
