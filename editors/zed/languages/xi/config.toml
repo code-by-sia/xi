@@ -1,5 +1,5 @@
-name = "X"
-grammar = "x"
+name = "Xi"
+grammar = "xi"
 path_suffixes = ["xi", "x"]
 line_comments = ["// "]
 block_comment = ["/* ", " */"]

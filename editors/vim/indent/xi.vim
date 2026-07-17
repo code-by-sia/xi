@@ -1,4 +1,4 @@
-" Indentation for X — brace-based, C-like.
+" Indentation for Xi — brace-based, C-like.
 if exists("b:did_indent")
   finish
 endif

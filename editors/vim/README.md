@@ -44,5 +44,5 @@ $ ln -s "$PWD/editors/vim" ~/.vim/pack/x/start/x
 ```
 
 Open any `.xi` file to get highlighting. For richer, tree-based highlighting in
-Neovim, you can instead register the Tree-sitter grammar in `../tree-sitter-x`
+Neovim, you can instead register the Tree-sitter grammar in `../tree-sitter-xi`
 with `nvim-treesitter`.

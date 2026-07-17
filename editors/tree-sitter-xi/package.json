@@ -1,7 +1,7 @@
 {
-  "name": "tree-sitter-x",
-  "version": "0.1.0",
-  "description": "Tree-sitter grammar for the X programming language",
+  "name": "tree-sitter-xi",
+  "version": "0.1.1",
+  "description": "Tree-sitter grammar for the Xi programming language",
   "license": "Apache-2.0",
   "scripts": {
     "generate": "tree-sitter generate",
@@ -11,8 +11,9 @@
   },
   "tree-sitter": [
     {
-      "scope": "source.x",
+      "scope": "source.xi",
       "file-types": [
+        "xi",
         "x"
       ],
       "highlights": [

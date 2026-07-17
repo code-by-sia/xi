@@ -1,15 +1,15 @@
-id = "x"
-name = "X"
-version = "0.1.0"
+id = "xi"
+name = "Xi"
+version = "0.1.1"
 schema_version = 1
-authors = ["The X programming language"]
-description = "Syntax highlighting and language support for the X programming language."
+authors = ["The Xi programming language"]
+description = "Syntax highlighting and language support for the Xi programming language."
 repository = "https://github.com/code-by-sia/xi"
 
-# The grammar lives in this same repo under editors/tree-sitter-x (Zed's `path`
+# The grammar lives in this same repo under editors/tree-sitter-xi (Zed's `path`
 # points at the subdirectory). `commit` is a commit SHA of THIS repo — update it
 # whenever the grammar changes (and re-install the extension).
-[grammars.x]
+[grammars.xi]
 repository = "https://github.com/code-by-sia/xi"
 commit = "9c42b511c65ea830dd0095bb4621f89af915c16d"  # <- set to `git rev-parse HEAD`
-path = "editors/tree-sitter-x"
+path = "editors/tree-sitter-xi"

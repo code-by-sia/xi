@@ -1,6 +1,6 @@
 # Editor support for Xi
 
-- **`tree-sitter-x/`** — a Tree-sitter grammar for Xi (syntax tree + highlight
+- **`tree-sitter-xi/`** — a Tree-sitter grammar for Xi (syntax tree + highlight
   queries). Used by Zed, Neovim, Helix, and any Tree-sitter-based editor.
 - **`zed/`** — a Zed extension that wires the grammar + queries into Zed.
 - **`vim/`** — a Vim / Neovim plugin (syntax, filetype detection, indentation).
@@ -14,7 +14,7 @@ standard library, and the compiler's own sources — with no errors.
 ## Zed
 
 Zed fetches the grammar from a git repo at a pinned commit. The grammar lives in
-this same repo under `editors/tree-sitter-x` (the extension uses Zed's `path` to
+this same repo under `editors/tree-sitter-xi` (the extension uses Zed's `path` to
 point at the subdirectory), so no separate repository is needed.
 
 1. **Push the repo and get the commit.**
@@ -28,10 +28,10 @@ point at the subdirectory), so no separate repository is needed.
    (the `repository` and `path` are already filled in):
 
    ```toml
-   [grammars.x]
+   [grammars.xi]
    repository = "https://github.com/code-by-sia/xi"
    commit = "<sha from step 1>"
-   path = "editors/tree-sitter-x"
+   path = "editors/tree-sitter-xi"
    ```
 
    Update this commit (and re-install) whenever you change `grammar.js`.
@@ -42,7 +42,7 @@ point at the subdirectory), so no separate repository is needed.
 Open any `.xi` file and you'll get syntax highlighting, an outline (types,
 interfaces, classes, functions), comment toggling, and bracket auto-close.
 
-What the extension provides (`editors/zed/languages/x/`):
+What the extension provides (`editors/zed/languages/xi/`):
 
 | File | Purpose |
 |------|---------|
@@ -53,10 +53,10 @@ What the extension provides (`editors/zed/languages/x/`):
 
 ## Regenerating the grammar
 
-After editing `editors/tree-sitter-x/grammar.js`:
+After editing `editors/tree-sitter-xi/grammar.js`:
 
 ```console
-$ cd editors/tree-sitter-x
+$ cd editors/tree-sitter-xi
 $ npx tree-sitter-cli generate --no-bindings   # regenerate src/parser.c only
 $ npx tree-sitter-cli parse ../../examples/showcase/main.xi   # sanity-check
 ```
@@ -70,4 +70,4 @@ Then commit the updated `src/` and bump the `commit` in `extension.toml`.
 
 The grammar's `queries/highlights.scm` works directly with Neovim
 (`nvim-treesitter`) and Helix — register the grammar and copy the queries into
-the editor's runtime, associating the `x` filetype with `source.xi`.
+the editor's runtime, associating the `xi` filetype with `source.xi`.

@@ -1,4 +1,4 @@
-// Lightweight completion for X: keywords / function kinds / types globally,
+// Lightweight completion for Xi: keywords / function kinds / types globally,
 // and standard-library members after a namespace dot. No dependencies beyond
 // the VS Code API (syntax highlighting comes from the TextMate grammar).
 const vscode = require("vscode");
@@ -38,7 +38,7 @@ function items(names, kind) {
 
 function activate(context) {
   const provider = vscode.languages.registerCompletionItemProvider(
-    "x",
+    "xi",
     {
       provideCompletionItems(document, position) {
         const prefix = document.lineAt(position).text.slice(0, position.character);

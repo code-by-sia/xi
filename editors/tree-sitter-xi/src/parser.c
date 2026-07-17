@@ -41290,7 +41290,7 @@ extern "C" {
 #define TS_PUBLIC __attribute__((visibility("default")))
 #endif
 
-TS_PUBLIC const TSLanguage *tree_sitter_x(void) {
+TS_PUBLIC const TSLanguage *tree_sitter_xi(void) {
   static const TSLanguage language = {
     .abi_version = LANGUAGE_VERSION,
     .symbol_count = SYMBOL_COUNT,

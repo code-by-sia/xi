@@ -1,4 +1,4 @@
-" Filetype settings for X.
+" Filetype settings for Xi.
 if exists("b:did_ftplugin")
   finish
 endif

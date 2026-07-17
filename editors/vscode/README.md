@@ -25,7 +25,7 @@ This extension is not yet on the Marketplace. To use it locally:
 code editors/vscode      # then press F5
 
 # Option B — install into your VS Code extensions folder
-cp -R editors/vscode ~/.vscode/extensions/x-language-0.0.3
+cp -R editors/vscode ~/.vscode/extensions/xi-language-0.1.1
 # then reload VS Code
 ```
 
@@ -36,5 +36,5 @@ cd editors/vscode && npx @vscode/vsce package
 ```
 
 Highlighting uses a TextMate grammar (VS Code does not use the Tree-sitter
-grammar in `editors/tree-sitter-x`). Completion is keyword/snippet/namespace
+grammar in `editors/tree-sitter-xi`). Completion is keyword/snippet/namespace
 based; a full language server (diagnostics, go-to-definition) is future work.

@@ -1,8 +1,8 @@
 {
-  "name": "x-language",
-  "displayName": "X Programming Language",
-  "description": "Syntax highlighting, snippets, and completion for the X programming language.",
-  "version": "0.1.0",
+  "name": "xi-language",
+  "displayName": "Xi Programming Language",
+  "description": "Syntax highlighting, snippets, and completion for the Xi programming language.",
+  "version": "0.1.1",
   "publisher": "code-by-sia",
   "license": "Apache-2.0",
   "repository": {
@@ -18,28 +18,28 @@
   ],
   "main": "./extension.js",
   "activationEvents": [
-    "onLanguage:x"
+    "onLanguage:xi"
   ],
   "contributes": {
     "languages": [
       {
-        "id": "x",
-        "aliases": ["X", "x"],
+        "id": "xi",
+        "aliases": ["Xi", "xi"],
         "extensions": [".xi", ".x"],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "x",
-        "scopeName": "source.x",
-        "path": "./syntaxes/x.tmLanguage.json"
+        "language": "xi",
+        "scopeName": "source.xi",
+        "path": "./syntaxes/xi.tmLanguage.json"
       }
     ],
     "snippets": [
       {
-        "language": "x",
-        "path": "./snippets/x.json"
+        "language": "xi",
+        "path": "./snippets/xi.json"
       }
     ]
   }

@@ -1,5 +1,5 @@
-" Vim syntax file for the X (Xi) programming language.
-" Language: X / Xi
+" Vim syntax file for the Xi programming language.
+" Language: Xi
 " Works in Vim and Neovim (legacy syntax).
 
 if exists("b:current_syntax")
@@ -79,4 +79,4 @@ hi def link xChar         Character
 hi def link xLineComment  Comment
 hi def link xBlockComment Comment
 
-let b:current_syntax = "x"
+let b:current_syntax = "xi"

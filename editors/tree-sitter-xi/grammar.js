@@ -12,7 +12,7 @@ const PREC = {
 };
 
 module.exports = grammar({
-  name: 'x',
+  name: 'xi',
 
   word: $ => $.identifier,
 
