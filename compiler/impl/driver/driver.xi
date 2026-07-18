@@ -532,7 +532,7 @@ producer packLibrary(srcPath: String) -> Integer {
 }
 
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
-mapper xcVersion() -> String { return "0.1.3" }
+mapper xcVersion() -> String { return "0.1.4" }
 
 // The release codename, shown alongside the version.
 mapper xcCodename() -> String { return "Berlin" }
@@ -549,23 +549,44 @@ mapper argTarget(args: String[]) -> String {
     return ""
 }
 
-// The first positional argument (subcommand or source path), skipping over a
-// `--target <t>` pair so `xc --target wasm app.xi` resolves `app.xi`.
-mapper cliSource(args: String[]) -> String {
+// Is a bare flag present anywhere in the argument list?
+predicate argHas(args: String[], flag: String) {
+    let i = 1
+    while i < args.len {
+        if args.data[i] == flag { return true }
+        i = i + 1
+    }
+    return false
+}
+
+// Every positional argument (subcommand or source paths), skipping flags: a
+// `--target <t>` pair and bare `--…` switches. `xc a.xi b.xi` yields both, so
+// one invocation can build several modules.
+mapper cliSources(args: String[]) -> String[] {
+    let out: String[] = []
     let i = 1
     while i < args.len {
         let a = args.data[i]
         if a == "--target" {
             i = i + 2
         } else {
-            if a.startsWith2("--target=") {
+            if a.startsWith2("--target=") or a == "--verbose" {
                 i = i + 1
             } else {
-                return a
+                out = appendString(out, a)
+                i = i + 1
             }
         }
     }
-    return ""
+    return out
+}
+
+// The first positional argument (subcommand or source path), skipping over a
+// `--target <t>` pair so `xc --target wasm app.xi` resolves `app.xi`.
+mapper cliSource(args: String[]) -> String {
+    let srcs = cliSources(args)
+    if stringArrLen(srcs) == 0 { return "" }
+    return stringArrGet(srcs, 0)
 }
 
 

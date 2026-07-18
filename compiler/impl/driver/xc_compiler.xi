@@ -1,15 +1,22 @@
 class XcCompiler implements Compiler {
     deps { lexer: Lexer, parser: Parser, codegen: Codegen, host: Host, diag: Diagnostics, text: Text, arrays: TokenArrays, loader: ModuleLoader }
 
+    // Progress output is opt-in: a successful build says nothing, so `xc` is
+    // quiet in scripts and only failures reach the terminal. `--verbose` (or
+    // XC_VERBOSE=1) restores the step-by-step trace. Errors always print.
+    consumer vlog(msg: String) {
+        if text.len(host.env("XC_VERBOSE", "")) > 0 { system.stdout.writeln(msg) }
+    }
+
     // Compile one source file (resolving imports + module source sets) to a
     // native binary. Returns 0 on success.
     producer build(srcPath: String) -> Integer {
-        system.stdout.writeln("xc: loading + lexing " + srcPath + " ...")
+        vlog("xc: loading + lexing " + srcPath + " ...")
         let lr = loader.load(srcPath, emptyStrings())
         let collapsed = collapseQualified(lr.tokens, lr.qnames, lr.qrepl)
         let tokens = appendToken(collapsed, Token { kind: 0, text: "", line: 0 })
 
-        system.stdout.writeln("xc: parsing ...")
+        vlog("xc: parsing ...")
         diag.setFile(srcPath)           // parse errors report the main source
         let prog = parser.parse(tokens)
 
@@ -24,7 +31,7 @@ class XcCompiler implements Compiler {
         if dirHasXi(modBase + "/modules") { inc = arrays.pushString(inc, "modules/**") }
         if arrays.stringLen(inc) > 0 or arrays.stringLen(exc) > 0 {
             if arrays.stringLen(inc) == 0 { inc = ["./**"] }   // default when only excludes given
-            system.stdout.writeln("xc: gathering module sources ...")
+            vlog("xc: gathering module sources ...")
             let lr2 = loader.gather(srcPath, inc, exc)
             let collapsed2 = collapseQualified(lr2.tokens, lr2.qnames, lr2.qrepl)
             let tokens2 = appendToken(collapsed2, Token { kind: 0, text: "", line: 0 })
@@ -36,7 +43,7 @@ class XcCompiler implements Compiler {
         checkMachines(prog)              // static machine-graph validation
         checkPurity(prog)                // pure-kind functions stay side-effect-free
 
-        system.stdout.writeln("xc: generating C ...")
+        vlog("xc: generating C ...")
         let cSource = codegen.generate(prog, srcPath)
 
         let outDir = host.env("XC_OUT", "build")
@@ -49,7 +56,7 @@ class XcCompiler implements Compiler {
         host.writeFile(outPath, cSource)
         let binPath = outDir + "/" + base
 
-        system.stdout.writeln("xc: compiling C to native binary ...")
+        vlog("xc: compiling C to native binary ...")
         let rc = host.compileC(outPath, binPath)
         if rc == 0 {
             // Drop the generated C once it's built (XC_KEEP_C=1 retains it).
@@ -57,10 +64,10 @@ class XcCompiler implements Compiler {
                 host.exec("rm -f '" + outPath + "'")
             }
             if host.env("XC_TARGET", "") == "wasm" {
-                system.stdout.writeln("xc: built WebAssembly " + binPath + ".{html,js,wasm}")
-                system.stdout.writeln("xc: serve it, e.g.  python3 -m http.server -d " + outDir + "  then open " + base + ".html")
+                vlog("xc: built WebAssembly " + binPath + ".{html,js,wasm}")
+                vlog("xc: serve it, e.g.  python3 -m http.server -d " + outDir + "  then open " + base + ".html")
             } else {
-                system.stdout.writeln("xc: built executable " + binPath)
+                vlog("xc: built executable " + binPath)
             }
             return 0
         }
@@ -99,7 +106,7 @@ class XcCompiler implements Compiler {
             // xc_helpers.c is the compiler/tooling, which links private FFI via
             // XC_HELPERS and is built by bootstrap.sh, not `xc --all`.
             if isBuildable(f) and not host.fileExists(dirOf(f) + "/xc_helpers.c") {
-                system.stdout.writeln("=== xc --all: building " + f + " ===")
+                vlog("=== xc --all: building " + f + " ===")
                 built = built + 1
                 if build(f) != 0 { fails = fails + 1 }
             }
@@ -113,9 +120,10 @@ class XcCompiler implements Compiler {
     // CLI dispatch — the body that `entry main` used to run directly.
     producer run(args: String[]) -> Integer {
         if args.len < 2 {
-            system.stdout.writeln("Usage: xc <source.xi>   (or: xc --all, xc --target wasm <source.xi>, xc version)")
+            system.stdout.writeln("Usage: xc <source.xi> [more.xi ...]   (or: xc --all, xc --target wasm <source.xi>, xc --verbose <source.xi>, xc version)")
             return 1
         }
+        if argHas(args, "--verbose") { host.setEnv("XC_VERBOSE", "1") }
         let tgt = argTarget(args)
         if text.len(tgt) > 0 {
             if tgt != "wasm" and tgt != "native" {
@@ -138,7 +146,22 @@ class XcCompiler implements Compiler {
             if args.len >= 3 { return packLibrary(args.data[2]) }
             return packLibrary("")
         }
-        return build(srcPath)
+        // One or more source files: build each, keep going after a failure so
+        // every module's errors surface in one run. Non-zero if any failed.
+        let srcs = cliSources(args)
+        let fails = 0
+        let si = 0
+        while si < arrays.stringLen(srcs) {
+            let f = arrays.stringAt(srcs, si)
+            if arrays.stringLen(srcs) > 1 { vlog("=== xc: building " + f + " ===") }
+            if build(f) != 0 {
+                fails = fails + 1
+                system.stderr.writeln("xc: failed to build " + f)
+            }
+            si = si + 1
+        }
+        if fails > 0 { return 1 }
+        return 0
     }
 }
 

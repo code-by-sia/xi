@@ -17,7 +17,7 @@ own manifest + `module` (`Compile`, `Xi`, `Test`, `LoadTest`):
 ## `xc` - the compiler
 
 ```console
-$ xc <source.xi>
+$ xc <source.xi> [more.xi ...]
 ```
 
 Pipeline: resolve `import`s → lex → parse → generate C → invoke `cc` →
@@ -27,10 +27,32 @@ Pipeline: resolve `import`s → lex → parse → generate C → invoke `cc` →
 in which case `id` is used. The intermediate generated C is deleted after a successful
 build - set `XC_KEEP_C=1` to keep it for inspection.
 
+A successful build is **silent** - `xc` prints only errors, so it composes
+cleanly in scripts and CI. Exit status is `0` on success, `1` if anything failed.
+
 ```console
-$ xc greeting.xi     # -> build/greeting
+$ xc greeting.xi     # -> build/greeting  (no output)
 $ ./build/greeting
 Good day, Ada.
+```
+
+Pass **several sources** to build several modules in one invocation. Each is
+built independently; a failure doesn't stop the rest, so one run surfaces every
+module's errors, and the exit status is non-zero if any failed:
+
+```console
+$ xc server.xi client.xi worker.xi      # -> build/server, build/client, build/worker
+```
+
+`--verbose` restores the step-by-step trace (also via `XC_VERBOSE=1`):
+
+```console
+$ xc --verbose greeting.xi
+xc: loading + lexing greeting.xi ...
+xc: parsing ...
+xc: generating C ...
+xc: compiling C to native binary ...
+xc: built executable build/greeting
 ```
 
 `xc --all` discovers every **buildable module** under the current directory (a
@@ -39,10 +61,6 @@ file with both an `entry` and a `module`) and builds each into its own binary
 
 ```console
 $ xc --all
-=== xc --all: building ./server.xi ===
-xc: built executable build/server
-=== xc --all: building ./client.xi ===
-xc: built executable build/client
 xc --all: built 2 module(s), 0 failed
 ```
 
