@@ -221,6 +221,24 @@ module `bind … as singleton` still takes precedence). This is the idiomatic wa
 to give a **stateful service** one shared instance: without it the service is
 transient and, being reconstructed per use, silently never accumulates state.
 
+### A module-wide default
+
+When most of a module's binds share one scope, set it once with the `scope`
+field (`singleton`, `transient`, or `scoped`) and state only the exceptions:
+
+```x
+module App {
+    scope = singleton                    // default for every bare bind below
+    bind Cache  -> LruCache
+    bind Store  -> DbStore
+    bind Mailer -> SmtpMailer as transient   // exception
+}
+```
+
+A bare `bind I -> C` takes the module default; an explicit `as …` always wins.
+The field applies to that module's binds - auto-resolved interfaces (no `bind`
+line) stay transient unless a dependency site marks them.
+
 Singletons live for the whole process (and are never freed by design); transients
 are created where needed.
 

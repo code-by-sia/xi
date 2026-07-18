@@ -22,6 +22,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
     let mIncludes: String[] = []    // unset -> file+imports only; set -> glob-gather
     let mExcludes: String[] = []
     let mDeps: String[] = []        // dependency archive URLs (xi install)
+    let mScope = ""                 // `scope = singleton|transient|scoped` — default for bare binds
     let constNames: String[] = []   // module-scoped `const` values ("name:ctype")
     let constInit: Token[] = []     // tokens: `NAME = expr` per const
     let mEntry = FuncSpec {
@@ -71,7 +72,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
                     } else {
                         let concName = peek(ps2).text
                         ps2 = advance(ps2)
-                        let scopeVal = "transient"
+                        let scopeVal = ""           // unset -> module default (see mScope)
                         if peek(ps2).kind == 209 {  // as
                             ps2 = advance(ps2)
                             let scopeTok = peek(ps2)
@@ -147,6 +148,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
                     if key == "description" { mDesc = val }
                     if key == "version"     { mVer = val }
                     if key == "license"     { mLic = val }
+                    if key == "scope"       { mScope = val }   // default bind scope
                     ps2 = advance(advance(advance(ps2)))     // key = value
                 } else {
                     ps2 = advance(ps2)
@@ -159,6 +161,25 @@ mapper parseModule(ps: PState) -> ModuleResult {
         }
     }
     if peek(ps2).kind == 103 { ps2 = advance(ps2) }  // }
+
+    // Resolve bind scopes: a bare `bind I -> C` takes the module's `scope = ...`
+    // default (transient when unset); an explicit `as ...` is the exception and
+    // was recorded as written. The field may appear anywhere in the module, so
+    // this runs after the whole body is parsed.
+    if string_len(mScope) == 0 { mScope = "transient" }
+    let normBinds: BindSpec[] = []
+    let nb = 0
+    while nb < bindSpecLen(bindings) {
+        let b0 = bindSpecGet(bindings, nb)
+        let sk = b0.scopeKind
+        if string_len(sk) == 0 { sk = mScope }
+        normBinds = appendBindSpec(normBinds, BindSpec {
+            ifaceName: b0.ifaceName, concreteName: b0.concreteName,
+            scopeKind: sk, configPath: b0.configPath
+        })
+        nb = nb + 1
+    }
+    bindings = normBinds
 
     let spec = ModuleSpec {
         name: name, bindings: bindings,

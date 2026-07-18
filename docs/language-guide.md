@@ -523,6 +523,19 @@ module App {
 }
 ```
 
+A module can change the **default scope** for its binds with a `scope` field -
+`singleton`, `transient`, or `scoped`. Bare binds take the default; an explicit
+`as ...` is the per-bind exception:
+
+```x
+module App {
+    scope = singleton                    // every bare bind below is a singleton
+    bind Logger   -> ConsoleLogger
+    bind Store    -> DbStore
+    bind Reporter -> HtmlReporter as transient   // exception: fresh per resolve
+}
+```
+
 ### Mutable class state
 
 Alongside its injected `deps`, a class may hold **mutable instance data** in a
