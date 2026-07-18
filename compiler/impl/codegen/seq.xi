@@ -165,7 +165,7 @@ mapper sortStmtExpr(declSv: String, sv: String, rv: String, iv: String, u: Strin
     return "({ " + declSv
         + "xc_integer_t " + nN + " = xstd_list_len(" + sv + ");\n"
         + "      xc_List_t " + rv + " = xstd_list_new(sizeof(" + elem + "));\n"
-        + "      " + keyC + "* " + ks + " = (" + keyC + "*)malloc((" + nN + " > 0 ? " + nN + " : 1) * sizeof(" + keyC + "));\n"
+        + "      " + keyC + "* " + ks + " = (" + keyC + "*)xc_obj_alloc((" + nN + " > 0 ? " + nN + " : 1) * sizeof(" + keyC + "));\n"
         + "      for (xc_integer_t " + iv + " = 0; " + iv + " < " + nN + "; " + iv + " = " + iv + " + 1) { "
         + elem + " " + evar + " = *(" + elem + "*)xstd_list_at(" + sv + ", " + iv + "); xstd_list_push(" + rv + ", &" + evar + "); " + ks + "[" + iv + "] = (" + keyExpr + "); }\n"
         + "      for (xc_integer_t " + iv + " = 1; " + iv + " < " + nN + "; " + iv + " = " + iv + " + 1) {\n"

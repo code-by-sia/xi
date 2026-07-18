@@ -154,8 +154,22 @@ xc_bool_t xc_string_matches(xc_string_t s, const char* pattern) {
 
 /* FFI bridge: Xi String <-> C cstring (const char*). Non-inline so user `extern
    "C"` declarations can link against them. xstd_cstr returns a NUL-terminated
-   copy (heap); xstd_from_cstr copies the C string into a managed Xi string. */
-const char* xstd_cstr(xc_string_t s) { return xc_string_to_cstr(s); }
+   copy (heap); xstd_from_cstr copies the C string into a managed Xi string.
+
+   xstd_cstr allocates from the *active arena* (per-request / per-thread / scope)
+   like every other Xi value, so the copy is reclaimed in bulk when that arena is
+   destroyed. It previously used plain malloc with no owner, which leaked one
+   buffer per call — a server doing `toCString(sql)` on every query grew without
+   bound under load. Callers must NOT free() the result; it is arena-owned.
+   (The internal xc_string_to_cstr below stays plain malloc: its callers free it
+   explicitly, and freeing an arena pointer would corrupt the heap.) */
+const char* xstd_cstr(xc_string_t s) {
+    char* buf = (char*)xc_heap_alloc(s.len + 1);
+    if (!buf) abort();
+    if (s.len) memcpy(buf, s.data, s.len);
+    buf[s.len] = '\0';
+    return buf;
+}
 xc_string_t xstd_from_cstr(const char* p) { return xc_string_from_cstr(p ? p : ""); }
 
 xc_string_t file_read_all(xc_string_t path) {
@@ -172,7 +186,7 @@ xc_string_t file_read_all(xc_string_t path) {
     long size = ftell(fp);
     if (size < 0) abort();
     rewind(fp);
-    char* buf = (char*)malloc((size_t)size + 1);
+    char* buf = (char*)xc_heap_alloc((size_t)size + 1);
     if (!buf) abort();
     (void)fread(buf, 1, (size_t)size, fp);
     buf[size] = '\0';
@@ -402,7 +416,7 @@ xc_integer_t xstd_sock_send(xc_integer_t fd, xc_bytes_t data) {
 
 xc_bytes_t xstd_sock_recv(xc_integer_t fd, xc_integer_t max) {
     if (max <= 0) return bytes_empty();
-    unsigned char* buf = (unsigned char*)malloc((size_t)max);
+    unsigned char* buf = (unsigned char*)xc_heap_alloc((size_t)max);
     if (!buf) abort();
     ssize_t n = recv((int)fd, buf, (size_t)max, 0);
     if (n <= 0) { free(buf); return bytes_empty(); }
@@ -426,7 +440,7 @@ xc_string_t read_line(void) {
     }
     size_t n = strlen(buf);
     if (n && buf[n-1] == '\n') buf[--n] = '\0';
-    char* c = (char*)malloc(n + 1);
+    char* c = (char*)xc_heap_alloc(n + 1);
     if (!c) abort();
     memcpy(c, buf, n + 1);
     return (xc_string_t){ .data = c, .len = n };
@@ -545,7 +559,7 @@ xc_string_t xstd_substring(xc_string_t s, xc_integer_t from, xc_integer_t to) {
     if (to > (xc_integer_t)s.len) to = (xc_integer_t)s.len;
     if (from >= to) return (xc_string_t){ .data = "", .len = 0 };
     xc_size_t n = (xc_size_t)(to - from);
-    char* b = (char*)malloc(n + 1);
+    char* b = (char*)xc_heap_alloc(n + 1);
     if (!b) abort();
     memcpy(b, s.data + from, n); b[n] = '\0';
     return (xc_string_t){ .data = b, .len = n };
@@ -588,20 +602,20 @@ xc_integer_t xstd_index_of_char(xc_string_t s, xc_integer_t c) {
 }
 /* One-character string from a char code. */
 xc_string_t xstd_from_char(xc_integer_t c) {
-    char* b = (char*)malloc(2);
+    char* b = (char*)xc_heap_alloc(2);
     if (!b) abort();
     b[0] = (char)c; b[1] = '\0';
     return (xc_string_t){ .data = b, .len = 1 };
 }
 
 xc_string_t xstd_to_upper(xc_string_t s) {
-    char* b = (char*)malloc(s.len + 1); if (!b) abort();
+    char* b = (char*)xc_heap_alloc(s.len + 1); if (!b) abort();
     for (xc_size_t i = 0; i < s.len; i++) b[i] = (char)toupper((unsigned char)s.data[i]);
     b[s.len] = '\0';
     return (xc_string_t){ .data = b, .len = s.len };
 }
 xc_string_t xstd_to_lower(xc_string_t s) {
-    char* b = (char*)malloc(s.len + 1); if (!b) abort();
+    char* b = (char*)xc_heap_alloc(s.len + 1); if (!b) abort();
     for (xc_size_t i = 0; i < s.len; i++) b[i] = (char)tolower((unsigned char)s.data[i]);
     b[s.len] = '\0';
     return (xc_string_t){ .data = b, .len = s.len };
@@ -609,7 +623,7 @@ xc_string_t xstd_to_lower(xc_string_t s) {
 xc_string_t xstd_repeat(xc_string_t s, xc_integer_t n) {
     if (n <= 0) return (xc_string_t){ .data = "", .len = 0 };
     xc_size_t total = s.len * (xc_size_t)n;
-    char* b = (char*)malloc(total + 1); if (!b) abort();
+    char* b = (char*)xc_heap_alloc(total + 1); if (!b) abort();
     for (xc_integer_t i = 0; i < n; i++) memcpy(b + i * s.len, s.data, s.len);
     b[total] = '\0';
     return (xc_string_t){ .data = b, .len = total };
@@ -624,7 +638,7 @@ xc_string_t xstd_replace(xc_string_t s, xc_string_t a, xc_string_t b) {
     if (count == 0) return s;
     xc_size_t out_len = s.len + count * (b.len > a.len ? (b.len - a.len) : 0)
                               - count * (a.len > b.len ? (a.len - b.len) : 0);
-    char* out = (char*)malloc(out_len + 1); if (!out) abort();
+    char* out = (char*)xc_heap_alloc(out_len + 1); if (!out) abort();
     xc_size_t oi = 0;
     for (xc_size_t i = 0; i < s.len; ) {
         if (i + a.len <= s.len && memcmp(s.data + i, a.data, a.len) == 0) {
@@ -683,6 +697,35 @@ static void* xc_arena_regrow(void* old, size_t oldn, size_t newn) {
     if (!xc_tls_arena) return realloc(old, newn);
     void* p = xc_arena_alloc(newn);
     if (old && oldn) memcpy(p, old, oldn);
+    return p;
+}
+/* ── Container buffer allocation (List/Stack/Queue/SortedQueue/Set/Map) ──────
+ * Provenance follows the *container*, decided at construction: a container
+ * created inside a request/thread/scope arena keeps its backing storage in the
+ * (current) arena — so per-request collections are reclaimed in bulk instead of
+ * leaking — while a container created outside any arena (module singletons,
+ * main-thread state) stays on plain malloc/realloc forever, so mutating it from
+ * inside a request never moves its storage into memory that dies with the
+ * request. If an arena-born container is grown when no arena is active, its
+ * buffer is copied out to malloc and the container becomes malloc-owned from
+ * then on (flag flips) — the old block belongs to its (gone) arena.        */
+static void* xc_cbuf_grow(int* arena_flag, void* old, size_t oldn, size_t newn) {
+    if (!*arena_flag) { void* p = realloc(old, newn); if (!p) abort(); return p; }
+    if (xc_tls_arena) {
+        void* p = xc_arena_alloc(newn);
+        if (old && oldn) memcpy(p, old, oldn);
+        return p;
+    }
+    void* p = malloc(newn); if (!p) abort();
+    if (old && oldn) memcpy(p, old, oldn);
+    *arena_flag = 0;                     /* copied out: malloc-owned from now on */
+    return p;
+}
+/* zeroed variant for hash tables; same provenance rules */
+static void* xc_cbuf_alloc0(int* arena_flag, size_t n) {
+    if (*arena_flag && xc_tls_arena) { void* p = xc_arena_alloc(n); memset(p, 0, n); return p; }
+    void* p = calloc(n, 1); if (!p) abort();
+    *arena_flag = 0;
     return p;
 }
 /* ── Reference counting (Phase 3; opt-in via -DXC_ARC) ───────────────────────
@@ -761,7 +804,7 @@ static xc_string_t xc_str_copy(const char* p, xc_size_t n) {
 xc_arr_string_t xstd_split(xc_string_t s, xc_string_t sep) {
     xc_arr_string_t out = { NULL, 0, 0 };
     if (sep.len == 0) {                 /* empty separator -> [s] */
-        out.data = (xc_string_t*)malloc(sizeof(xc_string_t)); if (!out.data) abort();
+        out.data = (xc_string_t*)xc_heap_alloc(sizeof(xc_string_t)); if (!out.data) abort();
         out.data[0] = xc_str_copy(s.data, s.len); out.len = 1; out.cap = 1;
         return out;
     }
@@ -769,7 +812,7 @@ xc_arr_string_t xstd_split(xc_string_t s, xc_string_t sep) {
     for (xc_size_t i = 0; i + sep.len <= s.len; ) {
         if (memcmp(s.data + i, sep.data, sep.len) == 0) { count++; i += sep.len; } else i++;
     }
-    out.data = (xc_string_t*)malloc(count * sizeof(xc_string_t)); if (!out.data) abort();
+    out.data = (xc_string_t*)xc_heap_alloc(count * sizeof(xc_string_t)); if (!out.data) abort();
     out.cap = count;
     xc_size_t start = 0, idx = 0;
     for (xc_size_t i = 0; i + sep.len <= s.len; ) {
@@ -788,7 +831,7 @@ xc_string_t xstd_join(xc_arr_string_t parts, xc_string_t sep) {
     xc_size_t total = 0;
     for (xc_size_t i = 0; i < parts.len; i++) total += parts.data[i].len;
     total += sep.len * (parts.len - 1);
-    char* buf = (char*)malloc(total + 1); if (!buf) abort();
+    char* buf = (char*)xc_heap_alloc(total + 1); if (!buf) abort();
     xc_size_t oi = 0;
     for (xc_size_t i = 0; i < parts.len; i++) {
         if (i) { memcpy(buf + oi, sep.data, sep.len); oi += sep.len; }
@@ -918,7 +961,11 @@ xc_Json_t xstd_json_set(xc_Json_t obj, xc_string_t key, xc_Json_t v) {
     if (!obj || obj->kind != XJ_OBJECT) return obj;
     char* k = xj_adup_n(key.data, key.len);
     for (long i = 0; i < obj->len; i++) {       /* replace existing key */
-        if (strcmp(obj->keys[i], k) == 0) { obj->items[i] = v; free(k); return obj; }
+        if (strcmp(obj->keys[i], k) == 0) {
+            obj->items[i] = v;
+            if (!xc_tls_arena) free(k);         /* arena-owned copies are reclaimed in bulk */
+            return obj;
+        }
     }
     xj_grow(obj);
     obj->keys[obj->len] = k;
@@ -969,18 +1016,15 @@ xc_string_t xstd_json_as_string(xc_Json_t v) {
     if (v->kind == XJ_BOOL) return v->b ? xc_str_copy("true", 4) : xc_str_copy("false", 5);
     return xc_str_copy("", 0);
 }
-/* Like xstd_json_as_string, but the returned buffer is always heap-owned (plain
- * malloc), never request/thread-arena scoped. A value deserialized inside a web
- * request or spawned thread (which runs in an arena that is freed when the
- * request/thread ends) can then be safely stored somewhere longer-lived — e.g. a
- * singleton service's state — without its strings dangling. Used by the
- * generated fromjson_* codecs so `req.parse(T)` / `json as T` results are safe
- * to keep. (The transient copy leaks under the default no-XC_ARC build if never
- * stored; that is the deliberate trade for correctness — arena scoping silently
- * corrupted escaped data.) */
+/* Like xstd_json_as_string, but the returned buffer is a fresh copy detached
+ * from the JSON node. Allocated like every other Xi string (the active
+ * request/thread/scope arena when one is installed, else rc/malloc), so decoded
+ * rows are reclaimed with their request instead of leaking one copy per field
+ * per request. Same share-nothing rule as all string values: a decoded value
+ * that must outlive the request/thread has to be copied into the owner. */
 xc_string_t xstd_json_as_string_owned(xc_Json_t v) {
     xc_string_t s = xstd_json_as_string(v);
-    char* buf = (char*)malloc(s.len + 1);
+    char* buf = (char*)xc_heap_alloc(s.len + 1);
     if (!buf) abort();
     if (s.len) memcpy(buf, s.data, s.len);
     buf[s.len] = '\0';
@@ -1557,7 +1601,7 @@ xc_Json_t xstd_xml_parse(xc_string_t src) {
  * Operate on xc_bytes_t; digests are heap-allocated fresh buffers.
  */
 static xc_bytes_t xc_bytes_new(const unsigned char* p, size_t n) {
-    unsigned char* b = (unsigned char*)malloc(n ? n : 1);
+    unsigned char* b = (unsigned char*)xc_heap_alloc(n ? n : 1);
     if (!b) abort();
     if (n && p) memcpy(b, p, n);
     return (xc_bytes_t){ .data = b, .len = n };
@@ -1679,13 +1723,13 @@ xc_bytes_t xstd_hmac_sha256(xc_bytes_t key, xc_bytes_t msg){
 /* ---- hex ---- */
 xc_string_t xstd_hex(xc_bytes_t b){
     static const char* H="0123456789abcdef";
-    char* s=(char*)malloc(b.len*2+1); if(!s) abort();
+    char* s=(char*)xc_heap_alloc(b.len*2+1); if(!s) abort();
     for(size_t i=0;i<b.len;i++){ s[i*2]=H[b.data[i]>>4]; s[i*2+1]=H[b.data[i]&15]; }
     s[b.len*2]='\0'; return (xc_string_t){ .data=s, .len=b.len*2 };
 }
 static int xhexv(char c){ if(c>='0'&&c<='9')return c-'0'; if(c>='a'&&c<='f')return c-'a'+10; if(c>='A'&&c<='F')return c-'A'+10; return -1; }
 xc_bytes_t xstd_unhex(xc_string_t s){
-    size_t n=s.len/2; unsigned char* b=(unsigned char*)malloc(n?n:1); if(!b) abort();
+    size_t n=s.len/2; unsigned char* b=(unsigned char*)xc_heap_alloc(n?n:1); if(!b) abort();
     for(size_t i=0;i<n;i++){ int hi=xhexv(s.data[i*2]); int lo=xhexv(s.data[i*2+1]); b[i]=(unsigned char)(((hi<0?0:hi)<<4)|(lo<0?0:lo)); }
     return (xc_bytes_t){ .data=b, .len=n };
 }
@@ -1693,7 +1737,7 @@ xc_bytes_t xstd_unhex(xc_string_t s){
 /* ---- base64 (standard alphabet, padded) ---- */
 xc_string_t xstd_base64(xc_bytes_t in){
     static const char* A="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    size_t olen=((in.len+2)/3)*4; char* o=(char*)malloc(olen+1); if(!o) abort();
+    size_t olen=((in.len+2)/3)*4; char* o=(char*)xc_heap_alloc(olen+1); if(!o) abort();
     size_t j=0; size_t i=0;
     while(i+3<=in.len){ uint32_t v=(in.data[i]<<16)|(in.data[i+1]<<8)|in.data[i+2];
         o[j++]=A[(v>>18)&63];o[j++]=A[(v>>12)&63];o[j++]=A[(v>>6)&63];o[j++]=A[v&63]; i+=3; }
@@ -1703,7 +1747,7 @@ xc_string_t xstd_base64(xc_bytes_t in){
 }
 static int xb64v(char c){ if(c>='A'&&c<='Z')return c-'A'; if(c>='a'&&c<='z')return c-'a'+26; if(c>='0'&&c<='9')return c-'0'+52; if(c=='+')return 62; if(c=='/')return 63; return -1; }
 xc_bytes_t xstd_unbase64(xc_string_t s){
-    unsigned char* o=(unsigned char*)malloc(s.len/4*3+3); if(!o) abort();
+    unsigned char* o=(unsigned char*)xc_heap_alloc(s.len/4*3+3); if(!o) abort();
     size_t j=0; int q[4]; int qn=0;
     for(size_t i=0;i<s.len;i++){ char c=s.data[i]; if(c=='='||c=='\n'||c=='\r'||c==' ') continue; int v=xb64v(c); if(v<0) continue;
         q[qn++]=v; if(qn==4){ o[j++]=(unsigned char)((q[0]<<2)|(q[1]>>4)); o[j++]=(unsigned char)((q[1]<<4)|(q[2]>>2)); o[j++]=(unsigned char)((q[2]<<6)|q[3]); qn=0; } }
@@ -1713,7 +1757,7 @@ xc_bytes_t xstd_unbase64(xc_string_t s){
 
 /* ---- CSPRNG bytes (/dev/urandom) ---- */
 xc_bytes_t xstd_random_bytes(xc_integer_t n){
-    if(n<0) n=0; unsigned char* b=(unsigned char*)malloc((size_t)(n?n:1)); if(!b) abort();
+    if(n<0) n=0; unsigned char* b=(unsigned char*)xc_heap_alloc((size_t)(n?n:1)); if(!b) abort();
     FILE* f=fopen("/dev/urandom","rb");
     if(f){ size_t got=fread(b,1,(size_t)n,f); fclose(f); if(got==(size_t)n) return (xc_bytes_t){ .data=b, .len=(size_t)n }; }
     for(xc_integer_t i=0;i<n;i++) b[i]=(unsigned char)(rand()&0xff);   /* fallback */
@@ -1869,6 +1913,7 @@ void xstd_web_set_dispatch(xc_Response_t (*fn)(xc_Request_t)) { xc_web_dispatch_
 /* Handler-interface model: a mutable response the handler fills in. */
 void xstd_resp_set(xc_HttpResponse_t r, xc_integer_t status, xc_string_t body, xc_string_t ctype) {
     r->status = (int)status; r->blen = body.len;
+    if (r->body) free(r->body);                  /* a handler may set the response twice */
     r->body = (char*)malloc(body.len ? body.len : 1); if (!r->body) abort();
     if (body.len) memcpy(r->body, body.data, body.len);
     if (r->ctype) free(r->ctype);
@@ -2498,18 +2543,19 @@ xc_bool_t xstd_thread_stopped(void) {
 /* ─── List<T> (std/collections) ───────────────────────────────────────────────
  * Element-type-erased growable list; the compiler supplies element size and
  * casts. Stores cells contiguously (like a typed array) so iteration is tight. */
-struct xc_list { char* data; xc_size_t len, cap, elem; };
+struct xc_list { char* data; xc_size_t len, cap, elem; int arena; };
 
 xc_List_t xstd_list_new(xc_size_t elem) {
-    struct xc_list* l = (struct xc_list*)malloc(sizeof(*l)); if (!l) abort();
+    struct xc_list* l = (struct xc_list*)xc_heap_alloc(sizeof(*l)); if (!l) abort();
     l->data = NULL; l->len = 0; l->cap = 0; l->elem = elem ? elem : 1;
+    l->arena = xc_tls_arena != NULL;
     return l;
 }
 static void xc_list_grow(struct xc_list* l, xc_size_t need) {
     if (need <= l->cap) return;
     xc_size_t cap = l->cap ? l->cap * 2 : 8;
     if (cap < need) cap = need;
-    l->data = (char*)realloc(l->data, cap * l->elem); if (!l->data) abort();
+    l->data = (char*)xc_cbuf_grow(&l->arena, l->data, l->len * l->elem, cap * l->elem);
     l->cap = cap;
 }
 void xstd_list_push(xc_List_t l, const void* e) {
@@ -2555,16 +2601,17 @@ void xstd_list_swap(xc_List_t l, xc_integer_t i, xc_integer_t j) {
 void xstd_list_clear(xc_List_t l) { l->len = 0; }
 
 /* ─── Stack<T>: LIFO over a growable array ──────────────────────────────────── */
-struct xc_stack { char* data; xc_size_t len, cap, elem; };
+struct xc_stack { char* data; xc_size_t len, cap, elem; int arena; };
 xc_Stack_t xstd_stack_new(xc_size_t elem) {
-    struct xc_stack* s = (struct xc_stack*)malloc(sizeof(*s)); if (!s) abort();
+    struct xc_stack* s = (struct xc_stack*)xc_heap_alloc(sizeof(*s)); if (!s) abort();
     s->data = NULL; s->len = 0; s->cap = 0; s->elem = elem ? elem : 1;
+    s->arena = xc_tls_arena != NULL;
     return s;
 }
 void xstd_stack_push(xc_Stack_t s, const void* e) {
     if (s->len + 1 > s->cap) {
         xc_size_t cap = s->cap ? s->cap * 2 : 8;
-        s->data = (char*)realloc(s->data, cap * s->elem); if (!s->data) abort();
+        s->data = (char*)xc_cbuf_grow(&s->arena, s->data, s->len * s->elem, cap * s->elem);
         s->cap = cap;
     }
     memcpy(s->data + s->len * s->elem, e, s->elem);
@@ -2583,10 +2630,11 @@ xc_integer_t xstd_stack_len(xc_Stack_t s) { return (xc_integer_t)s->len; }
 void xstd_stack_clear(xc_Stack_t s) { s->len = 0; }
 
 /* ─── Queue<T>: FIFO with a head index (amortised O(1) dequeue) ─────────────── */
-struct xc_queue { char* data; xc_size_t head, len, cap, elem; };
+struct xc_queue { char* data; xc_size_t head, len, cap, elem; int arena; };
 xc_Queue_t xstd_queue_new(xc_size_t elem) {
-    struct xc_queue* q = (struct xc_queue*)malloc(sizeof(*q)); if (!q) abort();
+    struct xc_queue* q = (struct xc_queue*)xc_heap_alloc(sizeof(*q)); if (!q) abort();
     q->data = NULL; q->head = 0; q->len = 0; q->cap = 0; q->elem = elem ? elem : 1;
+    q->arena = xc_tls_arena != NULL;
     return q;
 }
 void xstd_queue_enqueue(xc_Queue_t q, const void* e) {
@@ -2597,7 +2645,7 @@ void xstd_queue_enqueue(xc_Queue_t q, const void* e) {
         }
         if (q->len + 1 > q->cap) {
             xc_size_t cap = q->cap ? q->cap * 2 : 8;
-            q->data = (char*)realloc(q->data, cap * q->elem); if (!q->data) abort();
+            q->data = (char*)xc_cbuf_grow(&q->arena, q->data, q->len * q->elem, cap * q->elem);
             q->cap = cap;
         }
     }
@@ -2618,7 +2666,7 @@ xc_integer_t xstd_queue_len(xc_Queue_t q) { return (xc_integer_t)q->len; }
 void xstd_queue_clear(xc_Queue_t q) { q->len = 0; q->head = 0; }
 
 /* ─── SortedQueue<T>: priority queue (binary min-heap) ──────────────────────── */
-struct xc_pqueue { char* data; xc_size_t len, cap, elem; int cmp; };
+struct xc_pqueue { char* data; xc_size_t len, cap, elem; int cmp; int arena; };
 /* a < b under the queue's ordering? cmp: 0 int/char/bool, 1 number, 2 String. */
 static int xc_pq_less(struct xc_pqueue* h, const void* a, const void* b) {
     if (h->cmp == 1) { double x, y; memcpy(&x, a, sizeof(x)); memcpy(&y, b, sizeof(y)); return x < y; }
@@ -2626,8 +2674,9 @@ static int xc_pq_less(struct xc_pqueue* h, const void* a, const void* b) {
     long long x, y; memcpy(&x, a, sizeof(x)); memcpy(&y, b, sizeof(y)); return x < y;
 }
 xc_SortedQueue_t xstd_pqueue_new(xc_size_t elem, int cmp) {
-    struct xc_pqueue* h = (struct xc_pqueue*)malloc(sizeof(*h)); if (!h) abort();
+    struct xc_pqueue* h = (struct xc_pqueue*)xc_heap_alloc(sizeof(*h)); if (!h) abort();
     h->data = NULL; h->len = 0; h->cap = 0; h->elem = elem ? elem : 1; h->cmp = cmp;
+    h->arena = xc_tls_arena != NULL;
     return h;
 }
 static void xc_pq_swap(struct xc_pqueue* h, xc_size_t i, xc_size_t j, char* tmp) {
@@ -2637,7 +2686,7 @@ static void xc_pq_swap(struct xc_pqueue* h, xc_size_t i, xc_size_t j, char* tmp)
 void xstd_pqueue_push(xc_SortedQueue_t h, const void* e) {
     if (h->len + 1 > h->cap) {
         xc_size_t cap = h->cap ? h->cap * 2 : 8;
-        h->data = (char*)realloc(h->data, cap * h->elem); if (!h->data) abort();
+        h->data = (char*)xc_cbuf_grow(&h->arena, h->data, h->len * h->elem, cap * h->elem);
         h->cap = cap;
     }
     memcpy(h->data + h->len * h->elem, e, h->elem);
@@ -2697,12 +2746,13 @@ static int xc_key_eq(const void* a, const void* b, xc_size_t sz, int is_str) {
 
 /* ─── Set<T> ─────────────────────────────────────────────────────────────────
  * Open-addressed hash set: state[i] is 0 empty, 1 full, 2 tombstone.           */
-struct xc_set { char* slots; unsigned char* state; xc_size_t cap, len, used, elem; int is_str; };
+struct xc_set { char* slots; unsigned char* state; xc_size_t cap, len, used, elem; int is_str; int arena; };
 
 xc_Set_t xstd_set_new(xc_size_t elem, int is_str) {
-    struct xc_set* s = (struct xc_set*)malloc(sizeof(*s)); if (!s) abort();
+    struct xc_set* s = (struct xc_set*)xc_heap_alloc(sizeof(*s)); if (!s) abort();
     s->slots = NULL; s->state = NULL; s->cap = 0; s->len = 0; s->used = 0;
     s->elem = elem ? elem : 1; s->is_str = is_str;
+    s->arena = xc_tls_arena != NULL;
     return s;
 }
 /* Slot for e: returns its index; *found=1 if present, else first free/tombstone. */
@@ -2719,15 +2769,16 @@ static xc_size_t xc_set_probe(struct xc_set* s, const void* e, int* found) {
 }
 static void xc_set_resize(struct xc_set* s, xc_size_t ncap) {
     char* os = s->slots; unsigned char* ost = s->state; xc_size_t ocap = s->cap;
-    s->slots = (char*)calloc(ncap, s->elem); s->state = (unsigned char*)calloc(ncap, 1);
-    if (!s->slots || !s->state) abort();
+    int wasMalloc = !s->arena;                  /* old tables malloc-owned? */
+    s->slots = (char*)xc_cbuf_alloc0(&s->arena, ncap * s->elem);
+    s->state = (unsigned char*)xc_cbuf_alloc0(&s->arena, ncap);
     s->cap = ncap; s->len = 0; s->used = 0;
     for (xc_size_t i = 0; i < ocap; i++) if (ost[i] == 1) {
         int f; xc_size_t j = xc_set_probe(s, os + i * s->elem, &f);
         memcpy(s->slots + j * s->elem, os + i * s->elem, s->elem);
         s->state[j] = 1; s->len++; s->used++;
     }
-    free(os); free(ost);
+    if (wasMalloc) { free(os); free(ost); }     /* arena-owned old tables die with their arena */
 }
 void xstd_set_add(xc_Set_t s, const void* e) {
     if (s->cap == 0) xc_set_resize(s, 8);
@@ -2755,14 +2806,15 @@ xc_List_t xstd_set_items(xc_Set_t s) {
  * Parallel-array open-addressed hash map sharing Set's hashing helpers.         */
 struct xc_map {
     char* kslots; char* vslots; unsigned char* state;
-    xc_size_t cap, len, used, ksize, vsize; int kis_str;
+    xc_size_t cap, len, used, ksize, vsize; int kis_str; int arena;
 };
 
 xc_Map_t xstd_map_new(xc_size_t ks, xc_size_t vs, int kis_str) {
-    struct xc_map* m = (struct xc_map*)malloc(sizeof(*m)); if (!m) abort();
+    struct xc_map* m = (struct xc_map*)xc_heap_alloc(sizeof(*m)); if (!m) abort();
     m->kslots = NULL; m->vslots = NULL; m->state = NULL;
     m->cap = 0; m->len = 0; m->used = 0;
     m->ksize = ks ? ks : 1; m->vsize = vs ? vs : 1; m->kis_str = kis_str;
+    m->arena = xc_tls_arena != NULL;
     return m;
 }
 static xc_size_t xc_map_probe(struct xc_map* m, const void* k, int* found) {
@@ -2778,9 +2830,10 @@ static xc_size_t xc_map_probe(struct xc_map* m, const void* k, int* found) {
 }
 static void xc_map_resize(struct xc_map* m, xc_size_t ncap) {
     char* ok = m->kslots; char* ov = m->vslots; unsigned char* ost = m->state; xc_size_t ocap = m->cap;
-    m->kslots = (char*)calloc(ncap, m->ksize); m->vslots = (char*)calloc(ncap, m->vsize);
-    m->state = (unsigned char*)calloc(ncap, 1);
-    if (!m->kslots || !m->vslots || !m->state) abort();
+    int wasMalloc = !m->arena;                  /* old tables malloc-owned? */
+    m->kslots = (char*)xc_cbuf_alloc0(&m->arena, ncap * m->ksize);
+    m->vslots = (char*)xc_cbuf_alloc0(&m->arena, ncap * m->vsize);
+    m->state = (unsigned char*)xc_cbuf_alloc0(&m->arena, ncap);
     m->cap = ncap; m->len = 0; m->used = 0;
     for (xc_size_t i = 0; i < ocap; i++) if (ost[i] == 1) {
         int f; xc_size_t j = xc_map_probe(m, ok + i * m->ksize, &f);
@@ -2788,7 +2841,7 @@ static void xc_map_resize(struct xc_map* m, xc_size_t ncap) {
         memcpy(m->vslots + j * m->vsize, ov + i * m->vsize, m->vsize);
         m->state[j] = 1; m->len++; m->used++;
     }
-    free(ok); free(ov); free(ost);
+    if (wasMalloc) { free(ok); free(ov); free(ost); }   /* arena-owned old tables die with their arena */
 }
 void xstd_map_put(xc_Map_t m, const void* k, const void* v) {
     if (m->cap == 0) xc_map_resize(m, 8);

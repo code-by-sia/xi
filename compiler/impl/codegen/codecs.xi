@@ -160,7 +160,7 @@ class JsonCodecs implements Codecs {
                     fr = fr + "    { xc_Json_t __a" + sx + " = xstd_json_get(j, " + key + ");\n"
                        + "      xc_integer_t __n" + sx + " = xstd_json_length(__a" + sx + ");\n"
                        + "      " + fct + " __r" + sx + "; __r" + sx + ".len = (xc_size_t)__n" + sx + "; __r" + sx + ".cap = (xc_size_t)__n" + sx + ";\n"
-                       + "      __r" + sx + ".data = __n" + sx + " > 0 ? (" + ec + "*)malloc((xc_size_t)__n" + sx + " * sizeof(" + ec + ")) : (" + ec + "*)0;\n"
+                       + "      __r" + sx + ".data = __n" + sx + " > 0 ? (" + ec + "*)xc_obj_alloc((xc_size_t)__n" + sx + " * sizeof(" + ec + ")) : (" + ec + "*)0;\n"
                        + "      for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < __n" + sx + "; __i" + sx + "++)\n"
                        + "          __r" + sx + ".data[__i" + sx + "] = " + decE + ";\n"
                        + "      v." + fname + " = __r" + sx + "; }\n"
@@ -279,7 +279,7 @@ class JsonCodecs implements Codecs {
                             fj = fj + "        { xc_Json_t __a" + sx + " = xstd_json_get(j, " + key + ");\n"
                                     + "          xc_integer_t __n" + sx + " = xstd_json_length(__a" + sx + ");\n"
                                     + "          " + fct + " __r" + sx + "; __r" + sx + ".len = (xc_size_t)__n" + sx + "; __r" + sx + ".cap = (xc_size_t)__n" + sx + ";\n"
-                                    + "          __r" + sx + ".data = __n" + sx + " > 0 ? (" + ec + "*)malloc((xc_size_t)__n" + sx + " * sizeof(" + ec + ")) : (" + ec + "*)0;\n"
+                                    + "          __r" + sx + ".data = __n" + sx + " > 0 ? (" + ec + "*)xc_obj_alloc((xc_size_t)__n" + sx + " * sizeof(" + ec + ")) : (" + ec + "*)0;\n"
                                     + "          for (xc_integer_t __i" + sx + " = 0; __i" + sx + " < __n" + sx + "; __i" + sx + "++)\n"
                                     + "              __r" + sx + ".data[__i" + sx + "] = " + decE + ";\n"
                                     + "          " + acc + " = __r" + sx + "; }\n"
@@ -405,7 +405,7 @@ class JsonCodecs implements Codecs {
         while i < ne {
             let t = stringArrGet(prog.eventTypes, i)
             out = out + "static xc_Event_t xc_wrap_" + t + "(xc_string_t topic, xc_" + t + "_t v) {\n"
-            out = out + "    xc_" + t + "_t* p = (xc_" + t + "_t*)malloc(sizeof(xc_" + t + "_t));\n"
+            out = out + "    xc_" + t + "_t* p = (xc_" + t + "_t*)xc_obj_alloc(sizeof(xc_" + t + "_t));\n"
             out = out + "    if (!p) abort();\n    *p = v;\n"
             out = out + "    return xstd_event_make(topic, xc_string_from_cstr(\"" + t + "\"), (void*)p);\n}\n"
             i = i + 1

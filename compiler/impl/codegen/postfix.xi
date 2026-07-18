@@ -674,7 +674,7 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         // expression (never freed — same rule as DI singletons).
                         let ifn = toks.textAt(p + 1)
                         let ct = "xc_" + typ + "_t"
-                        code = "({ " + ct + "* __iv" + int_to_string(p) + " = (" + ct + "*)malloc(sizeof(" + ct + ")); "
+                        code = "({ " + ct + "* __iv" + int_to_string(p) + " = (" + ct + "*)xc_obj_alloc(sizeof(" + ct + ")); "
                              + "*__iv" + int_to_string(p) + " = " + code + "; "
                              + "xc_" + typ + "_as_" + ifn + "(__iv" + int_to_string(p) + "); })"
                         typ = ifn

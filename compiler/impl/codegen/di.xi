@@ -13,7 +13,7 @@ mapper wireDep(prog: Program, dep: DepSpec, target: String) -> String {
         if nimp == 0 {
             out = out + "      _a.data = (xc_" + j + "_t*)0;\n"
         } else {
-            out = out + "      _a.data = (xc_" + j + "_t*)malloc(" + int_to_string(nimp) + " * sizeof(xc_" + j + "_t));\n"
+            out = out + "      _a.data = (xc_" + j + "_t*)xc_obj_alloc(" + int_to_string(nimp) + " * sizeof(xc_" + j + "_t));\n"
             let k = 0
             while k < nimp {
                 let impl = stringArrGet(impls, k)
@@ -412,7 +412,7 @@ mapper genFactories(prog: Program) -> String {
                 }
             } else {
                 // Transient: heap-allocate and wire deps
-                out = out + "    xc_" + cn + "_t* _obj = (xc_" + cn + "_t*)malloc(sizeof(xc_" + cn + "_t));\n"
+                out = out + "    xc_" + cn + "_t* _obj = (xc_" + cn + "_t*)xc_obj_alloc(sizeof(xc_" + cn + "_t));\n"
                 out = out + "    if (!_obj) abort();\n"
                 out = out + "    memset(_obj, 0, sizeof(xc_" + cn + "_t));\n"
                 // Wire deps
@@ -428,7 +428,7 @@ mapper genFactories(prog: Program) -> String {
                             if depScope == "singleton" {
                                 out = out + "    _obj->" + dep.name + " = xc_" + depConc + "_as_" + dep.ifaceName + "(&xc_singleton_" + depConc + ");\n"
                             } else {
-                                out = out + "    xc_" + depConc + "_t* _dep_" + dep.name + " = (xc_" + depConc + "_t*)malloc(sizeof(xc_" + depConc + "_t));\n"
+                                out = out + "    xc_" + depConc + "_t* _dep_" + dep.name + " = (xc_" + depConc + "_t*)xc_obj_alloc(sizeof(xc_" + depConc + "_t));\n"
                                 out = out + "    memset(_dep_" + dep.name + ", 0, sizeof(xc_" + depConc + "_t));\n"
                                 out = out + "    _obj->" + dep.name + " = xc_" + depConc + "_as_" + dep.ifaceName + "(_dep_" + dep.name + ");\n"
                             }

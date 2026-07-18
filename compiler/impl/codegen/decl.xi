@@ -118,7 +118,7 @@ mapper genSumBoxHelpers(prog: Program) -> String {
         let ts = typeSpecGet(prog.types, i)
         if ts.isSum and prog.sumHasBoxedFields(ts.name) {
             out = out + "static xc_" + ts.name + "_t* xc_box_" + ts.name + "(xc_" + ts.name + "_t v) {\n"
-                      + "    xc_" + ts.name + "_t* p = (xc_" + ts.name + "_t*)malloc(sizeof(v));\n"
+                      + "    xc_" + ts.name + "_t* p = (xc_" + ts.name + "_t*)xc_obj_alloc(sizeof(v));\n"
                       + "    if (!p) abort();\n    *p = v;\n    return p;\n}\n"
         }
         i = i + 1

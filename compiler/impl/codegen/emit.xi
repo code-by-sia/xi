@@ -359,7 +359,7 @@ mapper genDecisionTables(prog: Program) -> String {
             } else {
                 // raw collect -> fixed-capacity list of element values
                 out = out + "    long __M = " + int_to_string(nr) + ";\n"
-                out = out + "    " + t.retElem + "* __buf = __M > 0 ? (" + t.retElem + "*)malloc((xc_size_t)__M * sizeof(" + t.retElem + ")) : (" + t.retElem + "*)0;\n"
+                out = out + "    " + t.retElem + "* __buf = __M > 0 ? (" + t.retElem + "*)xc_obj_alloc((xc_size_t)__M * sizeof(" + t.retElem + ")) : (" + t.retElem + "*)0;\n"
                 out = out + "    xc_size_t __n = 0;\n"
                 let r = 0
                 while r < nr {

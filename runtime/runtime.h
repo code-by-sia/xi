@@ -172,7 +172,7 @@ static inline xc_bytes_t bytes_slice(xc_bytes_t b, xc_integer_t from, xc_integer
 
 static inline xc_bytes_t bytes_concat(xc_bytes_t a, xc_bytes_t b) {
     xc_size_t len = a.len + b.len;
-    unsigned char* buf = (unsigned char*)malloc(len ? len : 1);
+    unsigned char* buf = (unsigned char*)xc_heap_alloc(len ? len : 1);
     if (!buf) abort();
     if (a.len) memcpy(buf, a.data, a.len);
     if (b.len) memcpy(buf + a.len, b.data, b.len);
@@ -181,14 +181,14 @@ static inline xc_bytes_t bytes_concat(xc_bytes_t a, xc_bytes_t b) {
 
 /* Copy a string's bytes into a fresh Bytes buffer (and vice versa). */
 static inline xc_bytes_t bytes_from_string(xc_string_t s) {
-    unsigned char* buf = (unsigned char*)malloc(s.len ? s.len : 1);
+    unsigned char* buf = (unsigned char*)xc_heap_alloc(s.len ? s.len : 1);
     if (!buf) abort();
     if (s.len) memcpy(buf, s.data, s.len);
     return (xc_bytes_t){ .data = buf, .len = s.len };
 }
 
 static inline xc_string_t bytes_to_string(xc_bytes_t b) {
-    char* buf = (char*)malloc(b.len + 1);
+    char* buf = (char*)xc_heap_alloc(b.len + 1);
     if (!buf) abort();
     if (b.len) memcpy(buf, b.data, b.len);
     buf[b.len] = '\0';
@@ -524,7 +524,7 @@ static inline xc_opt_string_t xc_stdin_readline(void) {
         return (xc_opt_string_t){ .has_value = false };
     xc_size_t len = strlen(buf);
     if (len > 0 && buf[len-1] == '\n') buf[--len] = '\0';
-    char* copy = (char*)malloc(len + 1);
+    char* copy = (char*)xc_heap_alloc(len + 1);
     memcpy(copy, buf, len + 1);
     return (xc_opt_string_t){ .has_value = true,
                                .value = { .data = copy, .len = len } };

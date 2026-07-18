@@ -14,7 +14,7 @@ module Test {
     id           = "xt"
     name         = "Xi Test Runner"
     description  = "Compiles and runs *_test.xi files in test mode, reporting pass/fail."
-    version      = "0.1.1"
+    version      = "0.1.2"
     license      = "Apache 2.0"
     includes     = []
     excludes     = []
