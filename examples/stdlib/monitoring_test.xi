@@ -1,10 +1,12 @@
-// std/monitoring: the mechanism — process readings, reported status/gauges, and
-// MonitorableResource collection. Nothing here imports web or query: monitoring
-// is decoupled from the subsystems that contribute to it.
+// std/monitoring: several Monitoring implementations, looped over by the
+// registry, and off until enabled. Nothing here imports web or query —
+// monitoring is decoupled from the subsystems that contribute to it.
+import "std/monitoring/memory.xi"
+import "std/monitoring/cpu.xi"
 import "std/monitoring.xi"
 import "std/json.xi"
 
-class CacheResource implements MonitorableResource {
+class CacheMonitoring implements Monitoring {
     deps {}
     state { started: Bool = false }
     mapper    name() -> String => "cache"
@@ -12,20 +14,18 @@ class CacheResource implements MonitorableResource {
     producer  healthy() -> Bool => this.started      // only healthy once started
     producer  metrics() -> Json {
         let o = json.object()
-        o = json.set(o, "entries", json.int(7))
-        return o
+        return json.set(o, "entries", json.int(7))
     }
 }
 
-class QueueResource implements MonitorableResource {
+class QueueMonitoring implements Monitoring {
     deps {}
     mapper    name() -> String => "queue"
     consumer  startMonitor() { }
     producer  healthy() -> Bool => true
     producer  metrics() -> Json {
         let o = json.object()
-        o = json.set(o, "depth", json.int(3))
-        return o
+        return json.set(o, "depth", json.int(3))
     }
 }
 
@@ -35,7 +35,7 @@ module App {
     version = "5.5.5"
 }
 
-test "process readings are present and sane" {
+test "process readings are available directly" {
     assert monitor.rss() > 0
     assert monitor.peakRss() >= monitor.rss()
     assert monitor.uptimeMs() >= 0
@@ -47,36 +47,42 @@ test "module identity comes from the module block" {
     assertEq(monitor.info(2), "5.5.5")
 }
 
-test "reported gauges join the report" (mon: Monitoring as singleton) {
-    monitor.gauge("widgets", 12)
-    let r = mon.report()
-    assertEq(json.asNumber(json.get(r, "widgets")), 12.0)
-    monitor.gauge("widgets", 30)                 // same name updates in place
-    assertEq(json.asNumber(json.get(mon.report(), "widgets")), 30.0)
+test "monitoring is off until enabled" (mon: MonitoringRegistry as singleton) {
+    assert not mon.isEnabled()
+    assertEq(json.getString(mon.health(), "status"), "DISABLED")
+    assertEq(json.length(mon.report()), 0)       // reports nothing while off
 }
 
-test "every resource contributes its metrics" (mon: Monitoring as singleton) {
+test "enable starts every monitor and the registry loops them" (mon: MonitoringRegistry as singleton) {
+    mon.enable()
+    assert mon.isEnabled()
     let r = mon.report()
+    // each implementation contributes under its own name
     assertEq(json.asNumber(json.get(json.get(r, "cache"), "entries")), 7.0)
     assertEq(json.asNumber(json.get(json.get(r, "queue"), "depth")), 3.0)
-    assert json.has(r, "rssBytes")               // process readings still there
+    assert json.asNumber(json.get(json.get(r, "memory"), "rssBytes")) > 0.0
+    assert json.has(json.get(r, "cpu"), "userMs")
+    assert json.has(r, "uptimeMs")
 }
 
-test "startMonitor starts every resource" (mon: Monitoring as singleton) {
-    // CacheResource reports unhealthy until started, so this proves the call
-    // reached it — and that one shared registry is doing the reporting.
-    mon.startMonitor()
+test "startMonitor reaches every monitor" (mon: MonitoringRegistry as singleton) {
+    // CacheMonitoring is unhealthy until started, so UP proves the loop ran it —
+    // and that one shared registry is doing the reporting.
+    mon.enable()
     assert mon.healthy()
-    assertEq(json.getString(mon.health(), "status"), "UP")
     assertEq(json.getString(json.get(mon.health(), "checks"), "cache"), "UP")
 }
 
-test "a reported status can take health down" (mon: Monitoring as singleton) {
-    mon.startMonitor()
-    monitor.status("migrations", false)
+test "reported gauges and statuses join the reports" (mon: MonitoringRegistry as singleton) {
+    mon.enable()
+    monitor.gauge("widgets", 12)
+    assertEq(json.asNumber(json.get(mon.report(), "widgets")), 12.0)
+    monitor.gauge("widgets", 30)                 // same name updates in place
+    assertEq(json.asNumber(json.get(mon.report(), "widgets")), 30.0)
+
+    monitor.status("migrations", false)          // a status can take health down
     assert not mon.healthy()
     assertEq(json.getString(mon.health(), "status"), "DOWN")
-    assertEq(json.getString(json.get(mon.health(), "checks"), "migrations"), "DOWN")
-    monitor.status("migrations", true)           // recovers
+    monitor.status("migrations", true)
     assert mon.healthy()
 }

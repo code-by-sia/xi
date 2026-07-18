@@ -27,6 +27,29 @@ standard library automatically, so `import "std/..."` just works:
 $ xc myapp.xi
 ```
 
+## Which module do I want?
+
+This page is the **API reference** - every module and its functions. Several
+modules have a guide of their own that explains the design; start there if you
+are learning, and come back here to look up a signature.
+
+| I want to… | Module | Guide |
+|---|---|---|
+| work with lists, sets, maps, sequences | `collections` | [Collections](collections.md) |
+| read or write JSON / YAML / XML | `json`, `yaml`, `xml` | [Serialization](serialization.md) |
+| query a data source | `query`, `sql` | [Query](query.md) |
+| put a repository over a data source | `data` | [Repository](data.md) |
+| serve HTTP | `web` | [Web](web.md) |
+| publish and subscribe to events | `events` | [Events](events.md) |
+| report health and metrics | `monitoring` | [Monitoring](monitoring.md) |
+| run work concurrently | `thread` | [Threading](threading.md) |
+| hash, sign, encode | `crypto` | - |
+| read files, paths, env, processes | `fs`, `path`, `process` | - |
+| make HTTP calls / open sockets | `http`, `net` | - |
+| numbers, text, bytes, time, conversion | `math`, `text`, `bytes`, `time`, `convert` | - |
+| print and read from the console | `io` | - |
+| call C | (`extern "C"`) | [FFI](ffi.md) |
+
 ## Modules
 
 ### `math` - `std/math.xi`
@@ -220,22 +243,22 @@ a composable [`Query`](query.md) bound to the repo's provider. See
 ### `monitoring` - `std/monitoring.xi`
 
 A **mechanism** for monitoring, decoupled from what it watches: implement
-`MonitorableResource` and it joins the reports. Opt in from `main` with
-`startMonitor()`. Bridges live beside their subsystem - `std/monitoring/web.xi`
-(+ `/monitor/*` endpoints), `std/monitoring/database.xi`,
-`std/monitoring/thread.xi`. See [Monitoring](monitoring.md).
+`Monitoring` and the registry loops over it. **Off by default** - enable it from
+`main`. Each subsystem is a separate import beside its own module. See
+[Monitoring](monitoring.md).
 
 | Name | Kind / Signature |
 |------|------------------|
-| `MonitorableResource` | interface - `name()` / `startMonitor()` / `healthy() -> Bool` / `metrics() -> Json` |
-| `Monitoring` | interface - `startMonitor()` / `report() -> Json` / `health() -> Json` / `healthy() -> Bool` |
+| `Monitoring` | interface - `name()` / `startMonitor()` / `healthy() -> Bool` / `metrics() -> Json` |
+| `MonitoringRegistry` | interface - `enable()` / `isEnabled()` / `report() -> Json` / `health() -> Json` / `healthy() -> Bool` |
 | `monitor.rss()` / `monitor.peakRss()` | `() -> Integer` - resident / peak bytes |
 | `monitor.uptimeMs()` | `() -> Integer` - since process start |
 | `monitor.info(n)` | `(Integer) -> String` - module id (0) / name (1) / version (2) |
 | `monitor.status(name, up)` / `monitor.gauge(name, n)` | report a status / number directly |
-| `monitor.snapshot()` | `() -> Json` - process readings + reported gauges |
-| `WebMonitoring` / `DatabaseMonitoring` / `ThreadMonitoring` | bundled resources (one import each) |
-| `MonitorController` | class - optional `/monitor/*` endpoints (auto-registered) |
+| `monitor.snapshot()` | `() -> Json` - uptime + reported gauges |
+| `MemoryMonitoring` / `CpuMonitoring` | `std/monitoring/memory.xi` / `.../cpu.xi` |
+| `WebMonitoring` + `MonitorController` | `std/monitoring/web.xi` - numbers + `/monitor/*` endpoints |
+| `QueryMonitoring` / `ThreadMonitoring` | `std/monitoring/query.xi` / `.../thread.xi` |
 
 ### `thread` - `std/thread.xi`
 

@@ -89,6 +89,38 @@ module App {}
 $ xc greeting.xi && ./build/greeting
 ```
 
+## Where to go next
+
+The docs are ordered as a path. If you are new, read down this list; each page
+assumes the ones above it.
+
+| # | Read | To learn |
+|---|---|---|
+| 1 | [Getting started](getting-started.md) · [CLI](cli.md) | install the toolchain, compile and run a file |
+| 2 | [Language guide](language-guide.md) | types, refined types, the function kinds, interfaces, generics |
+| 3 | [Error handling](error-handling.md) · [Decision tables](decisions.md) | `T!` results, `?` propagation, business rules as tables |
+| 4 | [Dependency injection](dependency-injection.md) | `deps`, `module`, binds and scopes - the heart of how Xi apps are wired |
+| 5 | [Multi-file projects](multi-file.md) · [Config](config.md) · [Testing](testing.md) | modules, imports, typed config, `xt` |
+| 6 | [Atoms](atoms.md) · [Machines](machines.md) · [Interrupts](interrupts.md) · [Events](events.md) | state that accumulates, state machines, resumable conditions, pub/sub |
+| 7 | [Threading](threading.md) · [Memory](memory.md) | share-nothing threads, channels, how allocation works |
+| 8 | [Standard library](stdlib.md) | every module, with links to the guides below |
+
+## The standard library
+
+| Module | Guide | What it gives you |
+|---|---|---|
+| `std/collections` | [Collections](collections.md) | `List`, `Set`, `Map`, `Stack`, sequences, ranges |
+| `std/json`, `yaml`, `xml` | [Serialization](serialization.md) | a `Json` tree, derived codecs, `as Json` |
+| `std/query`, `std/sql` | [Query](query.md) | reified query chains that a provider runs or renders to SQL |
+| `std/data` | [Repository](data.md) | `Repository` / `CrudRepository` over any provider |
+| `std/web` | [Web](web.md) | a REST framework: controllers, routing, HTTPS/HTTP-2 |
+| `std/events` | [Events](events.md) | typed publish/subscribe with `listener` |
+| `std/monitoring` | [Monitoring](monitoring.md) | health and metrics, decoupled from what it watches |
+| `std/thread` | [Threading](threading.md) | threads and channels |
+| plus | [stdlib reference](stdlib.md) | `math`, `text`, `bytes`, `crypto`, `fs`, `net`, `http`, `time`, `io`, … |
+
+Interop lives in [FFI](ffi.md) (calling C) and [WebAssembly](wasm.md).
+
 ## Showcase
 
 See Xi in a real application: **[eXstream](https://github.com/code-by-sia/eXstream)**

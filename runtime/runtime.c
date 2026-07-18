@@ -978,6 +978,19 @@ xc_integer_t xstd_mem_peak(void) {
 #endif
 }
 
+/* CPU time consumed by this process, in milliseconds (user and system). Read
+   from getrusage, so it is real accounting rather than a sampled guess. */
+xc_integer_t xstd_cpu_user_ms(void) {
+    struct rusage ru;
+    if (getrusage(RUSAGE_SELF, &ru) != 0) return 0;
+    return (xc_integer_t)ru.ru_utime.tv_sec * 1000 + (xc_integer_t)(ru.ru_utime.tv_usec / 1000);
+}
+xc_integer_t xstd_cpu_system_ms(void) {
+    struct rusage ru;
+    if (getrusage(RUSAGE_SELF, &ru) != 0) return 0;
+    return (xc_integer_t)ru.ru_stime.tv_sec * 1000 + (xc_integer_t)(ru.ru_stime.tv_usec / 1000);
+}
+
 xc_integer_t xstd_uptime_ms(void) {
     xc_integer_t now = xstd_now_nanos() / 1000000;
     if (xw_started_ms == 0) xw_started_ms = now;

@@ -67,7 +67,7 @@ producer body(req: HttpRequest) -> Json    { return xstd_json_parse(xstd_req_bod
 producer serve(port: Integer) { xstd_web_serve(port) }
 
 // Requests this server has served. Exposed here because the count is the web
-// layer's own number; std/monitoring/web.xi reports it as a MonitorableResource,
+// layer's own number; std/monitoring/web.xi reports it as a Monitoring implementation,
 // so monitoring never has to know that HTTP exists.
 mapper requestCount() -> Integer => xstd_request_count()
 

@@ -21,7 +21,7 @@ extern "C" {
     mapper xstd_thread_live_count() -> Integer
 }
 
-class ThreadMonitoring implements MonitorableResource {
+class ThreadMonitoring implements Monitoring {
     deps {}
     // 0 = no ceiling: report the numbers, never claim unhealthy.
     state { maxLive: Integer = 0 }

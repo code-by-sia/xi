@@ -1,10 +1,10 @@
-// std/monitoring/database — monitoring for the bound QueryProvider.
+// std/monitoring/query — monitoring for the bound QueryProvider.
 //
 // Knows about both monitoring and query, so neither has to know about the other:
-// std/monitoring never mentions a database, and std/query never mentions
-// monitoring. Import this when your app has a data source:
+// std/monitoring never mentions a data source, and std/query never mentions
+// monitoring. Import this when your app queries something:
 //
-//     import "std/monitoring/database.xi"
+//     import "std/monitoring/query.xi"
 //
 //     entry (mon: Monitoring) main(args: String[]) -> Integer {
 //         mon.startMonitor()
@@ -14,16 +14,16 @@
 // Health is a real round trip: it runs the cheapest possible query against the
 // bound provider and reports DOWN if that fails. `queries` counts the checks
 // this resource has performed — a provider that wants to report its own numbers
-// can implement MonitorableResource itself instead.
+// can implement Monitoring itself instead.
 import "std/monitoring.xi"
 import "std/query.xi"
 import "std/json.xi"
 
-class DatabaseMonitoring implements MonitorableResource {
+class QueryMonitoring implements Monitoring {
     deps { db: QueryProvider }
     state { probes: Integer = 0, failures: Integer = 0, ready: Bool = false }
 
-    mapper name() -> String => "database"
+    mapper name() -> String => "query"
 
     // Take one probe up front, so a provider that is unreachable at startup is
     // reported rather than looking healthy until the first request.

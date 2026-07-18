@@ -1,13 +1,18 @@
-// Monitoring a service. Each subsystem contributes through the
-// MonitorableResource interface, so std/monitoring never has to know that HTTP
-// or a database exists — you import the bridge for what you actually use.
+// Monitoring a service. Each subsystem implements the same `Monitoring`
+// interface and the registry loops over them, so std/monitoring never has to
+// know that HTTP or a query provider exists — you import what you use.
 //
-//   xc examples/web/monitor_demo.xi && ./build/monitor-demo
-//   curl localhost:4080/monitor/health
-//   curl localhost:4080/monitor/metrics
-import "std/monitoring/web.xi"        // WebMonitoring + the /monitor/* endpoints
-import "std/monitoring/database.xi"   // DatabaseMonitoring (probes the provider)
-import "std/monitoring/thread.xi"     // ThreadMonitoring (spawned / live)
+// Monitoring is off until `enable()` runs; pass any argument to switch it on and
+// watch the endpoints go from 404 to live.
+//
+//   xc examples/web/monitor_demo.xi
+//   ./build/monitor-demo            # monitoring off  -> /monitor/* is 404
+//   ./build/monitor-demo --monitor  # monitoring on   -> reports
+import "std/monitoring/memory.xi"
+import "std/monitoring/cpu.xi"
+import "std/monitoring/web.xi"
+import "std/monitoring/query.xi"
+import "std/monitoring/thread.xi"
 import "std/query.xi"
 import "std/web.xi"
 
@@ -20,8 +25,8 @@ class Api implements WebRequestHandler {
     }
 }
 
-// Anything can be a resource — implement the same interface the bundled ones do.
-class CacheMonitoring implements MonitorableResource {
+// Anything can be a monitor — implement the same interface the bundled ones do.
+class CacheMonitoring implements Monitoring {
     deps {}
     state { started: Bool = false }
     mapper    name() -> String => "cache"
@@ -29,8 +34,7 @@ class CacheMonitoring implements MonitorableResource {
     producer  healthy() -> Bool => this.started
     producer  metrics() -> Json {
         let o = json.object()
-        o = json.set(o, "entries", json.int(42))
-        return o
+        return json.set(o, "entries", json.int(42))
     }
 }
 
@@ -40,10 +44,9 @@ module App {
     version = "1.0.0"
     bind QueryProvider -> MemorySource as singleton
 
-    // Monitoring is opt-in: nothing runs until `startMonitor()` is called.
-    entry (mon: Monitoring as singleton) main(args: String[]) -> Integer {
-        mon.startMonitor()
-        monitor.gauge("workers", 4)      // report a number the app already knows
+    entry (mon: MonitoringRegistry as singleton) main(args: String[]) -> Integer {
+        if args.len >= 2 { mon.enable() }     // off unless asked
+        monitor.gauge("workers", 4)           // a number the app already knows
         web.serve(4080)
         return 0
     }

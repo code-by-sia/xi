@@ -2,12 +2,12 @@
 //
 // Split from std/monitoring.xi because these live under a namespace
 // (`monitor.rss()`), while the interfaces there keep bare names so user code can
-// `implements MonitorableResource` without a prefix. Import std/monitoring.xi —
+// `implements Monitoring` without a prefix. Import std/monitoring.xi —
 // it pulls this in.
 //
 // Everything here is about *this process*: memory, uptime, and whatever the app
 // chooses to report. No subsystem — HTTP, database, threads — appears at this
-// layer; each of those contributes through MonitorableResource.
+// layer; each of those contributes through the Monitoring interface.
 import "std/json.xi"
 
 namespace monitor
@@ -55,7 +55,7 @@ consumer markStart() { xstd_mark_start() }
 //     monitor.gauge("queueDepth", n)
 //
 // For something that should be evaluated on every report, implement
-// `MonitorableResource` (std/monitoring.xi) instead.
+// `Monitoring` (std/monitoring.xi) instead.
 consumer status(name: String, up: Bool) { xstd_mon_set_status(name, up) }
 consumer gauge(name: String, n: Integer) { xstd_mon_set_gauge(name, n) }
 
@@ -67,12 +67,11 @@ mapper    gaugeCount() -> Integer => xstd_mon_gauge_count()
 mapper    gaugeName(i: Integer) -> String => xstd_mon_gauge_name(i)
 mapper    gaugeValue(i: Integer) -> Integer => xstd_mon_gauge_value(i)
 
-// Process readings plus every reported gauge. The registry in std/monitoring.xi
-// adds each resource's own metrics on top.
+// Uptime plus every reported gauge. Memory is not included here — it comes from
+// MemoryMonitoring, so it is opt-in like every other subsystem. The registry in
+// std/monitoring.xi adds each monitor's metrics on top.
 producer snapshot() -> Json {
     let o = json.object()
-    o = json.set(o, "rssBytes", json.int(rss()))
-    o = json.set(o, "peakRssBytes", json.int(peakRss()))
     o = json.set(o, "uptimeMs", json.int(uptimeMs()))
     let i = 0
     while i < gaugeCount() {

@@ -1,10 +1,11 @@
 // @ts-check
 
-// Learning-oriented order: a new developer can read top to bottom to go from
-// "what is Xi" through the core language, how to structure programs, and on to
-// the domain features, concurrency/memory, and the standard library. The
-// headline domain features — Collections, Events, Web and Query — sit at the
-// sidebar root, just above the Reference section.
+// Ordered as a learning path: what Xi is, how to run it, the language itself,
+// how to structure a program, then the domain features, and finally reference.
+//
+// Everything that ships in `std/` lives under "Standard library" — previously
+// several of those pages (collections, events, web, query, data) sat loose at
+// the sidebar root, which made it hard to tell language from library.
 
 /** @type {import('@docusaurus/plugin-content-docs').SidebarsConfig} */
 const sidebars = {
@@ -24,31 +25,34 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: 'Dependency injection & projects',
+      label: 'Structuring a program',
       collapsed: false,
       items: ['dependency-injection', 'multi-file', 'config', 'testing'],
     },
     {
       type: 'category',
-      label: 'State & interrupts',
-      items: ['atoms', 'machines', 'interrupts'],
+      label: 'State, events & concurrency',
+      items: ['atoms', 'machines', 'interrupts', 'events', 'threading', 'memory'],
     },
     {
       type: 'category',
-      label: 'Concurrency & memory',
-      items: ['threading', 'memory'],
+      label: 'Standard library',
+      collapsed: false,
+      items: [
+        'stdlib',        // the index / API reference for every module
+        'collections',
+        'serialization',
+        'query',
+        'data',
+        'web',
+        'monitoring',
+      ],
     },
     {
       type: 'category',
-      label: 'Standard library & interop',
-      items: ['stdlib', 'serialization', 'ffi', 'wasm'],
+      label: 'Interop & targets',
+      items: ['ffi', 'wasm'],
     },
-    'collections',
-    'events',
-    'web',
-    'query',
-    'data',
-    'monitoring',
     {
       type: 'category',
       label: 'Reference',
