@@ -16,22 +16,22 @@ class Xi < Formula
   on_macos do
     on_arm do
       url "https://github.com/code-by-sia/xi/releases/download/v0.1.4/xi-v0.1.4-macos-arm64.tar.gz"
-      sha256 "a42bee7cddcde52a40931f765d573380e39b422ac66da99febc81dddfe9ac62a"
+      sha256 "afef25b96ba2db6e67c5f77b82a7a361adaee6612d4bab8cd14d0203405e6de4"
     end
     on_intel do
       url "https://github.com/code-by-sia/xi/releases/download/v0.1.4/xi-v0.1.4-macos-x86_64.tar.gz"
-      sha256 "a55eb1fc6e1486ae22518e662e4dff6a9fb39c48c5419121d76c4f4c692c2235"
+      sha256 "461a7e32dc7b92c8b32fc8870b2abb4faf796ac245d9a8adc6936ab6eb4f746c"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/code-by-sia/xi/releases/download/v0.1.4/xi-v0.1.4-linux-arm64.tar.gz"
-      sha256 "6dfe5bb7d9b2c5f71fbb5fe21102205dcadb4440250931abe62728e0e1fff60f"
+      sha256 "3ae9930ff7dee6a7831c6ea21f89b780d62b724251a9895ec4923ab2b31ae83d"
     end
     on_intel do
       url "https://github.com/code-by-sia/xi/releases/download/v0.1.4/xi-v0.1.4-linux-x86_64.tar.gz"
-      sha256 "d6d667ac0ee980f2ee03e623d7bb6e0beadfd991850ff31a76bc8bd807b520e3"
+      sha256 "142807dc8ffb5fec66cb92d675084b9acbbe3605da546f4f52c8c352aad4b374"
     end
   end
 
