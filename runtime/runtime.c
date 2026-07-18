@@ -893,6 +893,63 @@ void xstd_exit(xc_integer_t code) { exit((int)code); }
 static xc_integer_t xw_started_ms = 0;      /* set on first use / server start */
 static xc_integer_t xw_request_count = 0;   /* bumped per served request */
 
+/* User-registered health statuses and gauges (std/monitor).
+ *
+ * A HealthCheck implementor is the pull model: monitor calls it per request.
+ * These are the push model, for anything the app already knows — set a status
+ * or a number from wherever you detect it and the endpoints report it. Nothing
+ * about a database (or any other subsystem) is assumed by the runtime; the app
+ * decides what exists. Entries are keyed by name and updated in place.
+ * Single-writer, like the rest of the built-in server. */
+#define XM_MAX 64
+typedef struct { char* name; int up; } xm_status;
+typedef struct { char* name; xc_integer_t value; } xm_gauge;
+static xm_status xm_statuses[XM_MAX]; static int xm_status_n = 0;
+static xm_gauge  xm_gauges[XM_MAX];   static int xm_gauge_n  = 0;
+
+static char* xm_dup(xc_string_t s) {
+    char* p = (char*)malloc(s.len + 1); if (!p) abort();
+    if (s.len) memcpy(p, s.data, s.len);
+    p[s.len] = '\0'; return p;
+}
+static int xm_same(const char* a, xc_string_t b) {
+    return strlen(a) == b.len && memcmp(a, b.data, b.len) == 0;
+}
+
+void xstd_mon_set_status(xc_string_t name, xc_bool_t up) {
+    for (int i = 0; i < xm_status_n; i++)
+        if (xm_same(xm_statuses[i].name, name)) { xm_statuses[i].up = up ? 1 : 0; return; }
+    if (xm_status_n >= XM_MAX) return;
+    xm_statuses[xm_status_n].name = xm_dup(name);
+    xm_statuses[xm_status_n].up = up ? 1 : 0;
+    xm_status_n++;
+}
+xc_integer_t xstd_mon_status_count(void)          { return xm_status_n; }
+xc_string_t  xstd_mon_status_name(xc_integer_t i) {
+    if (i < 0 || i >= xm_status_n) return xc_str_copy("", 0);
+    return xc_string_from_cstr(xm_statuses[i].name);
+}
+xc_bool_t    xstd_mon_status_up(xc_integer_t i)   {
+    return (i >= 0 && i < xm_status_n) ? (xc_bool_t)xm_statuses[i].up : (xc_bool_t)0;
+}
+
+void xstd_mon_set_gauge(xc_string_t name, xc_integer_t value) {
+    for (int i = 0; i < xm_gauge_n; i++)
+        if (xm_same(xm_gauges[i].name, name)) { xm_gauges[i].value = value; return; }
+    if (xm_gauge_n >= XM_MAX) return;
+    xm_gauges[xm_gauge_n].name = xm_dup(name);
+    xm_gauges[xm_gauge_n].value = value;
+    xm_gauge_n++;
+}
+xc_integer_t xstd_mon_gauge_count(void)           { return xm_gauge_n; }
+xc_string_t  xstd_mon_gauge_name(xc_integer_t i)  {
+    if (i < 0 || i >= xm_gauge_n) return xc_str_copy("", 0);
+    return xc_string_from_cstr(xm_gauges[i].name);
+}
+xc_integer_t xstd_mon_gauge_value(xc_integer_t i) {
+    return (i >= 0 && i < xm_gauge_n) ? xm_gauges[i].value : 0;
+}
+
 xc_integer_t xstd_mem_rss(void) {
 #if defined(__APPLE__)
     mach_task_basic_info_data_t info;
@@ -2515,6 +2572,8 @@ static pthread_key_t xc_thread_key;
 static pthread_once_t xc_thread_key_once = PTHREAD_ONCE_INIT;
 static void xc_thread_key_init(void) { pthread_key_create(&xc_thread_key, NULL); }
 
+static volatile xc_integer_t xc_thread_spawned = 0;   /* std/monitoring/thread */
+static volatile xc_integer_t xc_thread_live = 0;
 static void* xc_thread_trampoline(void* p) {
     struct xc_thread* t = (struct xc_thread*)p;
     pthread_setspecific(xc_thread_key, t);
@@ -2524,6 +2583,7 @@ static void* xc_thread_trampoline(void* p) {
     xc_tls_arena = NULL;
     xc_arena_destroy(arena);            /* free everything the thread allocated */
     t->done = 1;
+    xc_thread_live--;
     return NULL;
 }
 xc_Thread_t xstd_thread_spawn(void* (*fn)(void*), void* arg) {
@@ -2531,8 +2591,15 @@ xc_Thread_t xstd_thread_spawn(void* (*fn)(void*), void* arg) {
     struct xc_thread* t = (struct xc_thread*)calloc(1, sizeof(*t)); if (!t) abort();
     t->fn = fn; t->arg = arg;
     if (pthread_create(&t->tid, NULL, xc_thread_trampoline, t) != 0) { free(t); return NULL; }
+    xc_thread_spawned++;
+    xc_thread_live++;
     return t;
 }
+
+/* Thread counts, for std/monitoring/thread. Plain counters bumped either side of
+   a spawn; `live` drops when the trampoline finishes. */
+xc_integer_t xstd_thread_spawned_count(void) { return xc_thread_spawned; }
+xc_integer_t xstd_thread_live_count(void)    { return xc_thread_live < 0 ? 0 : xc_thread_live; }
 void xstd_thread_stop(xc_Thread_t t) { if (t) t->stop = 1; }
 void xstd_thread_wait(xc_Thread_t t) { if (t) pthread_join(t->tid, NULL); }
 

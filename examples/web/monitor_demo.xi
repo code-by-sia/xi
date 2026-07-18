@@ -1,11 +1,14 @@
-// Actuator-style monitoring: import std/monitor and the endpoints mount
-// themselves — MonitorController is a WebRequestHandler, and controllers
-// auto-register, so there is no bind and no handler code to write.
+// Monitoring a service. Each subsystem contributes through the
+// MonitorableResource interface, so std/monitoring never has to know that HTTP
+// or a database exists — you import the bridge for what you actually use.
 //
 //   xc examples/web/monitor_demo.xi && ./build/monitor-demo
 //   curl localhost:4080/monitor/health
 //   curl localhost:4080/monitor/metrics
-import "std/monitor.xi"
+import "std/monitoring/web.xi"        // WebMonitoring + the /monitor/* endpoints
+import "std/monitoring/database.xi"   // DatabaseMonitoring (probes the provider)
+import "std/monitoring/thread.xi"     // ThreadMonitoring (spawned / live)
+import "std/query.xi"
 import "std/web.xi"
 
 // Your own controller sits alongside the monitor endpoints; each request goes
@@ -17,20 +20,30 @@ class Api implements WebRequestHandler {
     }
 }
 
-// Any HealthCheck implementor is folded into /monitor/health automatically.
-// Return false here and health reports DOWN with a 503.
-class DiskCheck implements HealthCheck {
+// Anything can be a resource — implement the same interface the bundled ones do.
+class CacheMonitoring implements MonitorableResource {
     deps {}
-    mapper    name() -> String => "disk"
-    predicate healthy() -> Bool => true
+    state { started: Bool = false }
+    mapper    name() -> String => "cache"
+    consumer  startMonitor() { this.started = true }
+    producer  healthy() -> Bool => this.started
+    producer  metrics() -> Json {
+        let o = json.object()
+        o = json.set(o, "entries", json.int(42))
+        return o
+    }
 }
 
 module App {
     id = "monitor-demo"
     name = "Monitor Demo"
     version = "1.0.0"
+    bind QueryProvider -> MemorySource as singleton
 
-    entry main(args: String[]) -> Integer {
+    // Monitoring is opt-in: nothing runs until `startMonitor()` is called.
+    entry (mon: Monitoring as singleton) main(args: String[]) -> Integer {
+        mon.startMonitor()
+        monitor.gauge("workers", 4)      // report a number the app already knows
         web.serve(4080)
         return 0
     }
