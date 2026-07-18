@@ -621,10 +621,18 @@ xc_string_t xstd_to_lower(xc_string_t s) {
     return (xc_string_t){ .data = b, .len = s.len };
 }
 xc_string_t xstd_repeat(xc_string_t s, xc_integer_t n) {
-    if (n <= 0) return (xc_string_t){ .data = "", .len = 0 };
+    if (n <= 0 || s.len == 0) return (xc_string_t){ .data = "", .len = 0 };
+    /* `s.len * n` is attacker-reachable whenever the count comes from input. An
+       overflowing product used to wrap to a small size, under-allocate, and then
+       let the copy loop write far past the block — refuse it instead. */
+    if ((xc_size_t)n > ((xc_size_t)-1 - 1) / s.len) {
+        fprintf(stderr, "xc: repeat(): result too large (%llu x %llu)\n",
+                (unsigned long long)s.len, (unsigned long long)n);
+        abort();
+    }
     xc_size_t total = s.len * (xc_size_t)n;
     char* b = (char*)xc_heap_alloc(total + 1); if (!b) abort();
-    for (xc_integer_t i = 0; i < n; i++) memcpy(b + i * s.len, s.data, s.len);
+    for (xc_integer_t i = 0; i < n; i++) memcpy(b + (xc_size_t)i * s.len, s.data, s.len);
     b[total] = '\0';
     return (xc_string_t){ .data = b, .len = total };
 }
@@ -1119,7 +1127,11 @@ xc_string_t xstd_json_pretty(xc_Json_t v) {
 }
 
 /* ── parse ── */
-typedef struct { const char* p; const char* end; int err; } xj_parser;
+/* `depth` bounds nesting: xj_parse_value recurses per `[`/`{`, so a deeply
+   nested document from an untrusted source (a request body, a config file)
+   would otherwise exhaust the C stack and crash the process. */
+#define XJ_MAX_DEPTH 200
+typedef struct { const char* p; const char* end; int err; int depth; } xj_parser;
 static void xj_skip_ws(xj_parser* P) {
     while (P->p < P->end && (*P->p == ' ' || *P->p == '\t' || *P->p == '\n' || *P->p == '\r')) P->p++;
 }
@@ -1163,16 +1175,17 @@ static char* xj_parse_raw_string(xj_parser* P, size_t* outn) {
 static struct xc_json_node* xj_parse_value(xj_parser* P) {
     xj_skip_ws(P);
     if (P->p >= P->end) { P->err = 1; return xj_alloc(XJ_ERROR); }
+    if (P->depth >= XJ_MAX_DEPTH) { P->err = 1; return xj_alloc(XJ_ERROR); }
     char c = *P->p;
     if (c == '"') {
         size_t n; char* str = xj_parse_raw_string(P, &n);
         struct xc_json_node* node = xj_alloc(XJ_STRING); node->str = str; return node;
     }
     if (c == '{') {
-        P->p++;
+        P->p++; P->depth++;
         struct xc_json_node* obj = xj_alloc(XJ_OBJECT);
         xj_skip_ws(P);
-        if (P->p < P->end && *P->p == '}') { P->p++; return obj; }
+        if (P->p < P->end && *P->p == '}') { P->p++; P->depth--; return obj; }
         while (P->p < P->end) {
             xj_skip_ws(P);
             if (*P->p != '"') { P->err = 1; break; }
@@ -1186,13 +1199,14 @@ static struct xc_json_node* xj_parse_value(xj_parser* P) {
             if (P->p < P->end && *P->p == '}') { P->p++; break; }
             P->err = 1; break;
         }
+        P->depth--;
         return obj;
     }
     if (c == '[') {
-        P->p++;
+        P->p++; P->depth++;
         struct xc_json_node* arr = xj_alloc(XJ_ARRAY);
         xj_skip_ws(P);
-        if (P->p < P->end && *P->p == ']') { P->p++; return arr; }
+        if (P->p < P->end && *P->p == ']') { P->p++; P->depth--; return arr; }
         while (P->p < P->end) {
             struct xc_json_node* val = xj_parse_value(P);
             xj_grow(arr); arr->keys[arr->len] = NULL; arr->items[arr->len] = val; arr->len++;
@@ -1201,6 +1215,7 @@ static struct xc_json_node* xj_parse_value(xj_parser* P) {
             if (P->p < P->end && *P->p == ']') { P->p++; break; }
             P->err = 1; break;
         }
+        P->depth--;
         return arr;
     }
     if (c == 't') { if (P->end - P->p >= 4 && memcmp(P->p, "true", 4) == 0)  { P->p += 4; struct xc_json_node* n = xj_alloc(XJ_BOOL); n->b = true; return n; } P->err = 1; return xj_alloc(XJ_ERROR); }
@@ -1217,7 +1232,7 @@ static struct xc_json_node* xj_parse_value(xj_parser* P) {
     P->err = 1; return xj_alloc(XJ_ERROR);
 }
 xc_Json_t xstd_json_parse(xc_string_t s) {
-    xj_parser P; P.p = s.data; P.end = s.data + s.len; P.err = 0;
+    xj_parser P; P.p = s.data; P.end = s.data + s.len; P.err = 0; P.depth = 0;
     struct xc_json_node* v = xj_parse_value(&P);
     xj_skip_ws(&P);
     if (P.err) { v->kind = XJ_ERROR; }
@@ -1925,6 +1940,10 @@ static void (*xc_web_handler_fn)(xc_HttpRequest_t, xc_HttpResponse_t) = NULL;
 void xstd_web_set_handler(void (*fn)(xc_HttpRequest_t, xc_HttpResponse_t)) { xc_web_handler_fn = fn; }
 
 /* Content-Length from a complete header block (case-insensitive, portable). */
+/* Largest request the built-in server will buffer (headers + body). Beyond this
+   the connection is dropped rather than grown without bound. */
+#define XW_MAX_REQUEST (32u * 1024u * 1024u)
+
 static long xw_content_length(const char* hdr) {
     const char* p = hdr;
     while (*p) {
@@ -1953,9 +1972,21 @@ typedef long (*xw_wr_fn)(void* conn, const char* buf, long n);
 
 static void xw_serve_conn(void* conn, xw_rd_fn rd, xw_wr_fn wr) {
     size_t cap = 8192, len = 0; char* buf = (char*)malloc(cap);
+    if (!buf) abort();
     long need_total = -1; size_t hdr_end = 0;
     while (1) {
-        if (len + 4096 > cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
+        /* Keep room for the read AND the NUL terminator written below: the old
+           `len + 4096 > cap` allowed len to reach exactly cap, so `buf[len]`
+           wrote one byte past the block on a request with >=8 KB of headers. */
+        if (len + 4096 + 1 > cap) {
+            cap *= 2;
+            char* nb = (char*)realloc(buf, cap);
+            if (!nb) { free(buf); return; }
+            buf = nb;
+        }
+        /* Bound the request: an attacker-supplied Content-Length (or a socket
+           that never closes) otherwise grows this buffer until the process dies. */
+        if (len > XW_MAX_REQUEST) { free(buf); return; }
         long n = rd(conn, buf + len, 4096);
         if (n <= 0) break;
         len += (size_t)n;
@@ -1965,6 +1996,7 @@ static void xw_serve_conn(void* conn, xw_rd_fn rd, xw_wr_fn wr) {
             if (h) {
                 hdr_end = (size_t)(h - buf) + 4;
                 long clen = xw_content_length(buf);
+                if (clen > (long)XW_MAX_REQUEST) { free(buf); return; }
                 need_total = (long)hdr_end + (clen > 0 ? clen : 0);
             }
         }

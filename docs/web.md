@@ -265,5 +265,9 @@ one open transport.
 - HTTPS / HTTP/2 need OpenSSL (and nghttp2) at build time (`XC_TLS=1` /
   `XC_HTTP2=1`). **HTTP/3** is the one remaining transport (QUIC).
 - No `%`-decoding of query values yet; no multipart parsing.
+- A request (headers + body) is capped at **32 MB**; larger ones, and a
+  `Content-Length` above that, are dropped rather than buffered. JSON parsing
+  rejects nesting deeper than **200** levels, so an untrusted body cannot
+  exhaust the stack. Both limits return an error rather than failing the process.
 
 See `examples/web/web_demo.xi`.

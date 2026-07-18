@@ -10,27 +10,27 @@
 class Xi < Formula
   desc "The Ξ (Xi) programming language toolchain (compiler + REPL)"
   homepage "https://github.com/code-by-sia/xi"
-  version "0.1.5"
+  version "0.1.6"
   license "Apache-2.0"
 
   on_macos do
     on_arm do
-      url "https://github.com/code-by-sia/xi/releases/download/v0.1.5/xi-v0.1.5-macos-arm64.tar.gz"
+      url "https://github.com/code-by-sia/xi/releases/download/v0.1.6/xi-v0.1.6-macos-arm64.tar.gz"
       sha256 "dc0be0a48882c3c6a09497e71c93027d9b91b2364684b2e0184899e5dfb321b4"
     end
     on_intel do
-      url "https://github.com/code-by-sia/xi/releases/download/v0.1.5/xi-v0.1.5-macos-x86_64.tar.gz"
+      url "https://github.com/code-by-sia/xi/releases/download/v0.1.6/xi-v0.1.6-macos-x86_64.tar.gz"
       sha256 "8824866feb45467ad52402ce30d13b750ce742c1415fc59599b730539b49d6e6"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/code-by-sia/xi/releases/download/v0.1.5/xi-v0.1.5-linux-arm64.tar.gz"
+      url "https://github.com/code-by-sia/xi/releases/download/v0.1.6/xi-v0.1.6-linux-arm64.tar.gz"
       sha256 "f290e8c1c3313ea87a4dbca1829c8edd15d8108a98bd011d33fcb78f65ffd3dc"
     end
     on_intel do
-      url "https://github.com/code-by-sia/xi/releases/download/v0.1.5/xi-v0.1.5-linux-x86_64.tar.gz"
+      url "https://github.com/code-by-sia/xi/releases/download/v0.1.6/xi-v0.1.6-linux-x86_64.tar.gz"
       sha256 "0fd60442b7a51700d5f639a3f8759d590f6a755993e278c3ece5bb75d53c6d7b"
     end
   end
