@@ -143,6 +143,9 @@ Everything a `module` block can contain:
 | `includes` | string[] | `["./**"]` when set | globs of files that belong to this module |
 | `excludes` | string[] | `[]` | globs to drop from the include set |
 | `dependencies` | string[] | `[]` | URLs to source archives, fetched by `xi install` (see below) |
+| `scope` | keyword | `transient` | default DI scope for the whole program ([DI](dependency-injection.md#a-module-wide-default)) |
+| `maxRequestBytes` | number | `33554432` (32 MB) | largest request the built-in server buffers ([web](web.md)) |
+| `jsonMaxDepth` | number | `200` | deepest JSON nesting accepted ([serialization](serialization.md)) |
 | `bind I -> Impl [as singleton]` | - | auto | DI override / scope ([DI](dependency-injection.md)) |
 | `bind I -> readConfig("file")` | - | - | config-backed binding ([config](config.md)) |
 | `[async] entry [(deps)] main(...) { … }` | - | - | the module's entry point (may also be top-level) |
@@ -155,7 +158,12 @@ module App {
     license     = "Apache 2.0"
     includes    = ["./**"]
     excludes    = ["scratch/**"]
-    bind Clock  -> SystemClock as singleton
+
+    scope           = singleton      // default DI scope for the program
+    maxRequestBytes = 1048576        // 1 MB: this service takes no uploads
+    jsonMaxDepth    = 64
+
+    bind Clock  -> SystemClock as transient   // the exception to `scope`
 
     async entry (logger: Logger) main(args: String[]) -> Integer {
         logger.info("billing up")
@@ -163,6 +171,12 @@ module App {
     }
 }
 ```
+
+`maxRequestBytes` and `jsonMaxDepth` set this service's runtime limits at build
+time; the matching environment variables (`XI_MAX_REQUEST`, `XI_JSON_MAX_DEPTH`)
+still override them at deploy time, so ops can retune without a rebuild. Both are
+clamped either way - see [web limits](web.md#notes--limits).
+
 
 The `entry` may live **inside** the module (as above) or stay at the top level
 with a separate `module App { … }` block - both are supported. Putting it inside

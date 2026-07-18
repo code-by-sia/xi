@@ -217,6 +217,24 @@ a composable [`Query`](query.md) bound to the repo's provider. See
 | `Repository<TKey, TEntity, TModel>` | interface - implement `getProvider()` / `source()`; default `findAll` / `findById` / `convertTo` / `convertFrom` |
 | `CrudRepository<TKey, TEntity, TModel>` | interface - extends `Repository` with default `save` / `delete` / `deleteById` |
 
+### `monitor` - `std/monitor.xi`
+
+Process **health, memory and metrics**, actuator style. Importing it mounts
+`/monitor/health|info|memory|metrics` in a web app (controllers auto-register -
+no bind); every `HealthCheck` implementor is folded into health automatically.
+See [Monitor](monitor.md).
+
+| Name | Kind / Signature |
+|------|------------------|
+| `monitor.rss()` / `monitor.peakRss()` | `() -> Integer` - resident / peak bytes |
+| `monitor.uptimeMs()` | `() -> Integer` - since process start |
+| `monitor.requests()` | `() -> Integer` - requests served by the built-in server |
+| `monitor.info(n)` | `(Integer) -> String` - module id (0) / name (1) / version (2) |
+| `monitor.snapshot()` | `() -> Json` - every reading in one object |
+| `monitor.markStart()` | `()` - reset the uptime origin |
+| `HealthCheck` | interface - `name() -> String` / `healthy() -> Bool`; all implementors collected |
+| `MonitorController` | class - the `/monitor/*` endpoints (auto-registered) |
+
 ### `thread` - `std/thread.xi`
 
 **Share-nothing threads + channels.** A `parallel` block runs on a new OS thread

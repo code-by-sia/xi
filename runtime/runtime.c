@@ -881,6 +881,54 @@ xc_bool_t xstd_file_exists(xc_string_t path) {
 void xstd_exit(xc_integer_t code) { exit((int)code); }
 
 /* time */
+/* ─── Process metrics (std/monitor) ───────────────────────────────────────────
+ * Resident/peak memory, uptime, and the request counter the built-in server
+ * bumps. Everything here is read-only introspection of this process, so an
+ * app can expose a health/metrics endpoint without an external agent. */
+#include <sys/resource.h>
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#endif
+
+static xc_integer_t xw_started_ms = 0;      /* set on first use / server start */
+static xc_integer_t xw_request_count = 0;   /* bumped per served request */
+
+xc_integer_t xstd_mem_rss(void) {
+#if defined(__APPLE__)
+    mach_task_basic_info_data_t info;
+    mach_msg_type_number_t n = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &n) == KERN_SUCCESS)
+        return (xc_integer_t)info.resident_size;
+    return 0;
+#else
+    /* Linux: field 2 of /proc/self/statm is resident pages. */
+    FILE* fp = fopen("/proc/self/statm", "r");
+    if (!fp) return 0;
+    long total = 0, res = 0;
+    if (fscanf(fp, "%ld %ld", &total, &res) != 2) { fclose(fp); return 0; }
+    fclose(fp);
+    return (xc_integer_t)res * (xc_integer_t)sysconf(_SC_PAGESIZE);
+#endif
+}
+
+xc_integer_t xstd_mem_peak(void) {
+    struct rusage ru;
+    if (getrusage(RUSAGE_SELF, &ru) != 0) return 0;
+#if defined(__APPLE__)
+    return (xc_integer_t)ru.ru_maxrss;              /* bytes on macOS */
+#else
+    return (xc_integer_t)ru.ru_maxrss * 1024;       /* kilobytes on Linux */
+#endif
+}
+
+xc_integer_t xstd_uptime_ms(void) {
+    xc_integer_t now = xstd_now_nanos() / 1000000;
+    if (xw_started_ms == 0) xw_started_ms = now;
+    return now - xw_started_ms;
+}
+void         xstd_mark_start(void)      { xw_started_ms = xstd_now_nanos() / 1000000; }
+xc_integer_t xstd_request_count(void)   { return xw_request_count; }
+
 xc_integer_t xstd_now_nanos(void) {
     struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
     return (xc_integer_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
@@ -1137,10 +1185,16 @@ xc_string_t xstd_json_pretty(xc_Json_t v) {
 #define XJ_DEPTH_DEFAULT 200
 #define XJ_DEPTH_MIN      16
 #define XJ_DEPTH_MAX   10000
+static int xj_module_depth = 0;   /* set by a module's `jsonMaxDepth = N` */
+void xstd_set_json_max_depth(xc_integer_t n) { if (n > 0) xj_module_depth = (int)n; }
 static int xj_max_depth(void) {
     static int cached = 0;
     if (cached) return cached;
-    int v = XJ_DEPTH_DEFAULT;
+    /* Precedence: environment (deploy-time override) > module declaration >
+       built-in default. Clamped either way. */
+    int v = xj_module_depth > 0 ? xj_module_depth : XJ_DEPTH_DEFAULT;
+    if (v < XJ_DEPTH_MIN) v = XJ_DEPTH_MIN;
+    if (v > XJ_DEPTH_MAX) v = XJ_DEPTH_MAX;
     const char* e = getenv("XI_JSON_MAX_DEPTH");
     if (e && *e) {
         long n = strtol(e, NULL, 10);
@@ -1971,10 +2025,14 @@ void xstd_web_set_handler(void (*fn)(xc_HttpRequest_t, xc_HttpResponse_t)) { xc_
    enough to reject a normal request's headers. */
 #define XW_REQUEST_DEFAULT (32u * 1024u * 1024u)
 #define XW_REQUEST_MIN     (64u * 1024u)
+static size_t xw_module_request = 0;   /* set by a module's `maxRequestBytes = N` */
+void xstd_set_max_request(xc_integer_t n) { if (n > 0) xw_module_request = (size_t)n; }
 static size_t xw_max_request(void) {
     static size_t cached = 0;
     if (cached) return cached;
-    size_t v = XW_REQUEST_DEFAULT;
+    /* Precedence: environment > module declaration > built-in default. */
+    size_t v = xw_module_request > 0 ? xw_module_request : XW_REQUEST_DEFAULT;
+    if (v < XW_REQUEST_MIN) v = XW_REQUEST_MIN;
     const char* e = getenv("XI_MAX_REQUEST");
     if (e && *e) {
         long long n = strtoll(e, NULL, 10);
@@ -2058,6 +2116,7 @@ static void xw_serve_conn(void* conn, xw_rd_fn rd, xw_wr_fn wr) {
         req.body = xj_strdup_n(buf + hdr_end, len - hdr_end);
         req.blen = len - hdr_end;
     }
+    xw_request_count++;
     struct xc_web_response rs; memset(&rs, 0, sizeof(rs));
     struct xc_web_response* resp = NULL;
     /* Per-request arena (memory-management Phase 1). The handler's value

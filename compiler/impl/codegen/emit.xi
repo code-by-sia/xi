@@ -107,13 +107,22 @@ mapper funcDepPrologue(prog: Program, dlist: DepSpec[]) -> String {
 }
 
 // Add a function's deps to the context as locals (bare-name access).
+// The xtype a dependency binds to. A list dep (`d: I[]`, collecting every
+// implementor) is an array of fat pointers, so it must carry the array xtype —
+// otherwise iterating it yields untyped elements and `x.method()` cannot
+// dispatch through the vtable.
+mapper depXType(dep: DepSpec) -> String {
+    if dep.form == "list" { return "arr_" + dep.ifaceName }
+    return dep.ifaceName
+}
+
 mapper seedFuncDeps(ctx: GCtx, dlist: DepSpec[]) -> GCtx {
     let result = ctx
     let i = 0
     let n = depSpecLen(dlist)
     while i < n {
         let dep = depSpecGet(dlist, i)
-        result = result.addSym(dep.name, dep.ifaceName)
+        result = result.addSym(dep.name, depXType(dep))
         i = i + 1
     }
     return result
@@ -388,7 +397,7 @@ mapper seedDeps(ctx: GCtx, cs: ClassSpec) -> GCtx {
     let dn = depSpecLen(cs.depList)
     while di < dn {
         let dep = depSpecGet(cs.depList, di)
-        result = result.addDep(dep.name, dep.ifaceName)
+        result = result.addDep(dep.name, depXType(dep))
         di = di + 1
     }
     return result

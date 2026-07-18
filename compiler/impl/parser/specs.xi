@@ -89,7 +89,11 @@ type ModuleSpec = {
     dependencies: String[], // URLs to source archives, fetched by `xi install`
     constNames:  String[],  // "name:ctype" for module-scoped `const` values
     constInit:   Token[],   // tokens: `NAME = expr ,` per const (Module.NAME)
-    defaultScope: String    // `scope = ...`: default DI scope, "" when unset
+    defaultScope: String,   // `scope = ...`: default DI scope, "" when unset
+    // Runtime limits declared in the module; "" when unset (built-in default).
+    // An environment variable of the same purpose still wins at deploy time.
+    maxRequest:  String,    // `maxRequestBytes = N`  — largest buffered request
+    jsonDepth:   String     // `jsonMaxDepth = N`     — deepest JSON nesting
 }
 
 // The C type of a module const, or "" if `name` isn't a const of this module.

@@ -24,6 +24,7 @@ mapper genTestRunner(prog: Program, srcPath: String) -> String {
     }
     out = out + "/* === Test runner === */\n"
     out = out + "int main(int argc, char** argv) {\n"
+    out = out + genRuntimeConfig(prog)
     out = out + "    xc_init_singletons();\n"
     out = out + "    xc_atoms_init();\n"
     let j = 0
@@ -34,6 +35,50 @@ mapper genTestRunner(prog: Program, srcPath: String) -> String {
     }
     out = out + "    return xc_test_summary();\n"
     out = out + "}\n"
+    return out
+}
+
+// Runtime limits a module declared (`maxRequestBytes` / `jsonMaxDepth`), applied
+// at startup before anything serves. The environment variable of the same
+// purpose still overrides these, so a deployment can retune without a rebuild.
+// Module identity for std/monitor's /monitor/info (0=id, 1=name, 2=version).
+// Emitted from the module metadata, which only the compiler knows.
+mapper genModuleInfo(prog: Program) -> String {
+    let id = ""
+    let nm = ""
+    let ver = ""
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        if string_len(mod.id) > 0 { id = mod.id }
+        if string_len(mod.title) > 0 { nm = mod.title }
+        if string_len(mod.version) > 0 { ver = mod.version }
+        i = i + 1
+    }
+    return "/* === Module identity (std/monitor) === */\n"
+         + "xc_string_t xstd_module_info(xc_integer_t which) {\n"
+         + "    if (which == 0) return xc_string_from_cstr(\"" + id.cEscape() + "\");\n"
+         + "    if (which == 1) return xc_string_from_cstr(\"" + nm.cEscape() + "\");\n"
+         + "    if (which == 2) return xc_string_from_cstr(\"" + ver.cEscape() + "\");\n"
+         + "    return xc_string_from_cstr(\"\");\n"
+         + "}\n\n"
+}
+
+mapper genRuntimeConfig(prog: Program) -> String {
+    let out = ""
+    let i = 0
+    let n = moduleSpecLen(prog.modules)
+    while i < n {
+        let mod = moduleSpecGet(prog.modules, i)
+        if string_len(mod.maxRequest) > 0 {
+            out = out + "    xstd_set_max_request(" + mod.maxRequest + ");\n"
+        }
+        if string_len(mod.jsonDepth) > 0 {
+            out = out + "    xstd_set_json_max_depth(" + mod.jsonDepth + ");\n"
+        }
+        i = i + 1
+    }
     return out
 }
 
@@ -48,6 +93,7 @@ mapper genEntry(prog: Program, srcPath: String) -> String {
     out = out + prog.hoistDelays(es.bodyTokens, "entry", capN, capX)
     out = out + "/* === Entry point === */\n"
     out = out + "int main(int argc, char** argv) {\n"
+    out = out + genRuntimeConfig(prog)
     out = out + "    xc_init_singletons();\n"
     out = out + "    xc_atoms_init();\n"
     if prog.webEnabled() { out = out + "    xc_web_init();\n" }
@@ -456,6 +502,7 @@ mapper genAll(prog: Program, srcPath: String, codecs: Codecs) -> String {
          + genVtablesAndCasters(prog)
          + genCheckFns(prog)
          + genModuleConsts(prog)
+         + genModuleInfo(prog)
          + genSingletons(prog)
          + genCtorResolverFwd(prog)
          + genSingletonAccessors(prog)

@@ -23,6 +23,8 @@ mapper parseModule(ps: PState) -> ModuleResult {
     let mExcludes: String[] = []
     let mDeps: String[] = []        // dependency archive URLs (xi install)
     let mScope = ""                 // `scope = singleton|transient|scoped` — default for bare binds
+    let mMaxReq = ""                // `maxRequestBytes = N`
+    let mJsonDepth = ""             // `jsonMaxDepth = N`
     let constNames: String[] = []   // module-scoped `const` values ("name:ctype")
     let constInit: Token[] = []     // tokens: `NAME = expr` per const
     let mEntry = FuncSpec {
@@ -149,6 +151,8 @@ mapper parseModule(ps: PState) -> ModuleResult {
                     if key == "version"     { mVer = val }
                     if key == "license"     { mLic = val }
                     if key == "scope"       { mScope = val }   // default bind scope
+                    if key == "maxRequestBytes" { mMaxReq = val }
+                    if key == "jsonMaxDepth"    { mJsonDepth = val }
                     ps2 = advance(advance(advance(ps2)))     // key = value
                 } else {
                     ps2 = advance(ps2)
@@ -185,7 +189,8 @@ mapper parseModule(ps: PState) -> ModuleResult {
         name: name, bindings: bindings,
         id: mId, title: mTitle, description: mDesc, version: mVer, license: mLic,
         includes: mIncludes, excludes: mExcludes, dependencies: mDeps,
-        constNames: constNames, constInit: constInit, defaultScope: mScope
+        constNames: constNames, constInit: constInit, defaultScope: mScope,
+        maxRequest: mMaxReq, jsonDepth: mJsonDepth
     }
     return ModuleResult { spec: spec, ps: ps2, entry: mEntry, hasEntry: mHasEntry }
 }

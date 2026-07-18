@@ -229,6 +229,11 @@ xc_Response_t xstd_resp(xc_integer_t status, xc_string_t body, xc_string_t ctype
 xc_bool_t     xstd_web_match(xc_Request_t, xc_string_t method, xc_string_t pattern);
 void          xstd_web_set_dispatch(xc_Response_t (*fn)(xc_Request_t));
 void          xstd_web_serve(xc_integer_t port);
+/* Runtime limits declared in a module (`maxRequestBytes` / `jsonMaxDepth`);
+   emitted into main before anything serves. The matching environment variable
+   still wins, so a deployment can retune without a rebuild. */
+void          xstd_set_max_request(xc_integer_t n);
+void          xstd_set_json_max_depth(xc_integer_t n);
 
 /* Handler-interface model (std/web v2): the request and a *mutable* response are
    handed to a WebRequestHandler.handle(req,res); the handler fills the response

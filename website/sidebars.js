@@ -48,6 +48,7 @@ const sidebars = {
     'web',
     'query',
     'data',
+    'monitor',
     {
       type: 'category',
       label: 'Reference',

@@ -233,7 +233,15 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
                      + body + "      } }\n"
             return StmtRes { code: code, ctx: ctx, pos: close + 1 }
         }
-        let bctx = ctx.addSym(varName, "")
+        // for x in <T[]> — carry the element type into the body, so `x` supports
+        // field access and (for an interface array) method dispatch. Without it
+        // the binding was untyped and `x.method()` fell through to a raw struct
+        // field access.
+        let elemX = ""
+        if it.xtyp.startsWith2("arr_") {
+            elemX = string_slice(it.xtyp, 4, string_len(it.xtyp)).xnameFromArrSuffix()
+        }
+        let bctx = ctx.addSym(varName, elemX)
         let body = genStmts(toks, it.pos + 1, close, bctx)
         let code = "    { __auto_type " + itv + " = " + it.code + ";\n"
                  + "      for (xc_size_t " + idv + " = 0; " + idv + " < " + itv + ".len; " + idv + " = " + idv + " + 1) {\n"
