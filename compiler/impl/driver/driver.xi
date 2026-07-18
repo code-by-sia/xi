@@ -532,7 +532,7 @@ producer packLibrary(srcPath: String) -> Integer {
 }
 
 // The toolchain version (kept in sync with the xi tool); printed by `xc version`.
-mapper xcVersion() -> String { return "0.1.6" }
+mapper xcVersion() -> String { return "0.1.7" }
 
 // The release codename, shown alongside the version.
 mapper xcCodename() -> String { return "Berlin" }

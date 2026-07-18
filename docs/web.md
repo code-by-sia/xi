@@ -270,4 +270,15 @@ one open transport.
   rejects nesting deeper than **200** levels, so an untrusted body cannot
   exhaust the stack. Both limits return an error rather than failing the process.
 
+  Tune either per service with an environment variable:
+
+  | Variable | Default | Effect |
+  |---|---|---|
+  | `XI_MAX_REQUEST` | `33554432` (32 MB) | largest buffered request, in bytes (floor 64 KB) |
+  | `XI_JSON_MAX_DEPTH` | `200` | deepest JSON nesting accepted (clamped to 16..10000) |
+
+  Raise `XI_MAX_REQUEST` for an endpoint that takes large uploads, or lower it to
+  tighten the blast radius of a hostile client. Values are read once at first use
+  and clamped, so a mistaken setting cannot disable the guard.
+
 See `examples/web/web_demo.xi`.

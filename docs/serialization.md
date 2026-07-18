@@ -75,6 +75,10 @@ if not json.isValid(v) {
 }
 ```
 
+Nesting is bounded at **200** levels, so a hostile document cannot exhaust the
+stack - anything deeper simply fails `isValid` like other malformed input. Raise
+or lower it per service with `XI_JSON_MAX_DEPTH` (clamped to 16..10000).
+
 Then read it. Object/array access never traps - a missing key or out-of-range
 index returns a `null` node, and the `as*` coercions return a zero value on a
 kind mismatch:

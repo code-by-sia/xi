@@ -1129,8 +1129,30 @@ xc_string_t xstd_json_pretty(xc_Json_t v) {
 /* ── parse ── */
 /* `depth` bounds nesting: xj_parse_value recurses per `[`/`{`, so a deeply
    nested document from an untrusted source (a request body, a config file)
-   would otherwise exhaust the C stack and crash the process. */
-#define XJ_MAX_DEPTH 200
+   would otherwise exhaust the C stack and crash the process.
+
+   Tunable per service with XI_JSON_MAX_DEPTH. Read once and clamped: a value
+   below the floor would reject ordinary documents, and one above the ceiling
+   would put the stack back within reach of the very input this guards. */
+#define XJ_DEPTH_DEFAULT 200
+#define XJ_DEPTH_MIN      16
+#define XJ_DEPTH_MAX   10000
+static int xj_max_depth(void) {
+    static int cached = 0;
+    if (cached) return cached;
+    int v = XJ_DEPTH_DEFAULT;
+    const char* e = getenv("XI_JSON_MAX_DEPTH");
+    if (e && *e) {
+        long n = strtol(e, NULL, 10);
+        if (n > 0) {
+            if (n < XJ_DEPTH_MIN) n = XJ_DEPTH_MIN;
+            if (n > XJ_DEPTH_MAX) n = XJ_DEPTH_MAX;
+            v = (int)n;
+        }
+    }
+    cached = v;
+    return cached;
+}
 typedef struct { const char* p; const char* end; int err; int depth; } xj_parser;
 static void xj_skip_ws(xj_parser* P) {
     while (P->p < P->end && (*P->p == ' ' || *P->p == '\t' || *P->p == '\n' || *P->p == '\r')) P->p++;
@@ -1175,7 +1197,7 @@ static char* xj_parse_raw_string(xj_parser* P, size_t* outn) {
 static struct xc_json_node* xj_parse_value(xj_parser* P) {
     xj_skip_ws(P);
     if (P->p >= P->end) { P->err = 1; return xj_alloc(XJ_ERROR); }
-    if (P->depth >= XJ_MAX_DEPTH) { P->err = 1; return xj_alloc(XJ_ERROR); }
+    if (P->depth >= xj_max_depth()) { P->err = 1; return xj_alloc(XJ_ERROR); }
     char c = *P->p;
     if (c == '"') {
         size_t n; char* str = xj_parse_raw_string(P, &n);
@@ -1941,8 +1963,26 @@ void xstd_web_set_handler(void (*fn)(xc_HttpRequest_t, xc_HttpResponse_t)) { xc_
 
 /* Content-Length from a complete header block (case-insensitive, portable). */
 /* Largest request the built-in server will buffer (headers + body). Beyond this
-   the connection is dropped rather than grown without bound. */
-#define XW_MAX_REQUEST (32u * 1024u * 1024u)
+   the connection is dropped rather than grown without bound.
+
+   Tunable per service with XI_MAX_REQUEST (bytes) — raise it for an endpoint
+   that legitimately accepts large uploads, lower it to tighten the blast radius
+   of a hostile client. Read once and floored so it can never be set small
+   enough to reject a normal request's headers. */
+#define XW_REQUEST_DEFAULT (32u * 1024u * 1024u)
+#define XW_REQUEST_MIN     (64u * 1024u)
+static size_t xw_max_request(void) {
+    static size_t cached = 0;
+    if (cached) return cached;
+    size_t v = XW_REQUEST_DEFAULT;
+    const char* e = getenv("XI_MAX_REQUEST");
+    if (e && *e) {
+        long long n = strtoll(e, NULL, 10);
+        if (n > 0) v = (size_t)n < XW_REQUEST_MIN ? XW_REQUEST_MIN : (size_t)n;
+    }
+    cached = v;
+    return cached;
+}
 
 static long xw_content_length(const char* hdr) {
     const char* p = hdr;
@@ -1986,7 +2026,7 @@ static void xw_serve_conn(void* conn, xw_rd_fn rd, xw_wr_fn wr) {
         }
         /* Bound the request: an attacker-supplied Content-Length (or a socket
            that never closes) otherwise grows this buffer until the process dies. */
-        if (len > XW_MAX_REQUEST) { free(buf); return; }
+        if (len > xw_max_request()) { free(buf); return; }
         long n = rd(conn, buf + len, 4096);
         if (n <= 0) break;
         len += (size_t)n;
@@ -1996,7 +2036,7 @@ static void xw_serve_conn(void* conn, xw_rd_fn rd, xw_wr_fn wr) {
             if (h) {
                 hdr_end = (size_t)(h - buf) + 4;
                 long clen = xw_content_length(buf);
-                if (clen > (long)XW_MAX_REQUEST) { free(buf); return; }
+                if (clen > 0 && (size_t)clen > xw_max_request()) { free(buf); return; }
                 need_total = (long)hdr_end + (clen > 0 ? clen : 0);
             }
         }
