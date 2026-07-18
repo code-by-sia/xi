@@ -261,7 +261,7 @@ mapper genResolvers(prog: Program) -> String {
             out = out + "    xc_" + ifn + "_t _z; memset(&_z, 0, sizeof(_z)); return _z;\n"
         } else {
             if bindScopeFor(prog, ifn) == "singleton" {
-                out = out + "    return xc_" + chosen + "_as_" + ifn + "(&xc_singleton_" + chosen + ");\n"
+                out = out + "    return xc_" + chosen + "_as_" + ifn + "(xc_singleton_" + chosen + "_get());\n"
             } else {
                 out = out + "    return xc_" + chosen + "_as_" + ifn + "(xc_new_" + chosen + "());\n"
             }
@@ -273,10 +273,13 @@ mapper genResolvers(prog: Program) -> String {
     return out + "\n"
 }
 
-mapper genSingletons(prog: Program) -> String {
-    let out = "/* === Singleton storage === */\n"
-    // One storage slot per concrete class — a class bound (as singleton) to more
-    // than one of the interfaces it implements shares a single instance.
+// Every concrete class that needs a singleton slot. One slot per class — a
+// class bound (as singleton) to several of the interfaces it implements shares
+// one instance. Sources: an explicit `bind … as singleton`, a `d: I as
+// singleton` dep marker, and — when a module declares `scope = singleton` — the
+// chosen implementor of any interface that is resolved without a `bind`.
+// Config-backed binds are excluded: they have their own impl, not an xc_new_.
+mapper singletonClasses(prog: Program) -> String[] {
     let seen: String[] = []
     let i = 0
     let n = moduleSpecLen(prog.modules)
@@ -286,19 +289,15 @@ mapper genSingletons(prog: Program) -> String {
         let m = bindSpecLen(mod.bindings)
         while j < m {
             let b = bindSpecGet(mod.bindings, j)
-            let already = false
-            let s = 0
-            while s < stringArrLen(seen) { if stringArrGet(seen, s) == b.concreteName { already = true }  s = s + 1 }
-            if b.scopeKind == "singleton" and string_len(b.configPath) == 0 and not already {
+            if b.scopeKind == "singleton" and string_len(b.configPath) == 0
+               and not strArrContains(seen, b.concreteName) {
                 seen = appendString(seen, b.concreteName)
-                out = out + "static xc_" + b.concreteName + "_t xc_singleton_" + b.concreteName + ";\n"
-                out = out + "static bool xc_singleton_" + b.concreteName + "_initialized = false;\n"
             }
             j = j + 1
         }
         i = i + 1
     }
-    // `d: I as singleton` markers: one storage slot per chosen implementor.
+    // `d: I as singleton` markers: one slot per chosen implementor.
     let ci = 0
     let cn2 = classSpecLen(prog.classes)
     while ci < cn2 {
@@ -309,20 +308,66 @@ mapper genSingletons(prog: Program) -> String {
             let dep = depSpecGet(cs.depList, di)
             if dep.scopeKind == "singleton" {
                 let conc = chosenImpl(prog, dep.ifaceName)
-                let already2 = false
-                let s2 = 0
-                while s2 < stringArrLen(seen) { if stringArrGet(seen, s2) == conc { already2 = true }  s2 = s2 + 1 }
-                if string_len(conc) > 0 and not already2 {
+                if string_len(conc) > 0 and not strArrContains(seen, conc) {
                     seen = appendString(seen, conc)
-                    out = out + "static xc_" + conc + "_t xc_singleton_" + conc + ";\n"
-                    out = out + "static bool xc_singleton_" + conc + "_initialized = false;\n"
                 }
             }
             di = di + 1
         }
         ci = ci + 1
     }
+    // Program-wide default: interfaces never named in a `bind` still resolve to
+    // a singleton, so their implementor needs a slot.
+    if prog.defaultScope() == "singleton" {
+        let ii = 0
+        let inn = ifaceSpecLen(prog.ifaces)
+        while ii < inn {
+            let ifn = ifaceSpecGet(prog.ifaces, ii).name
+            if bindScopeFor(prog, ifn) == "singleton" {
+                let conc3 = chosenImpl(prog, ifn)
+                if string_len(conc3) > 0 and not strArrContains(seen, conc3) {
+                    seen = appendString(seen, conc3)
+                }
+            }
+            ii = ii + 1
+        }
+    }
+    return seen
+}
+
+mapper genSingletons(prog: Program) -> String {
+    let out = "/* === Singleton storage === */\n"
+    let seen = singletonClasses(prog)
+    let i = 0
+    while i < stringArrLen(seen) {
+        let cn = stringArrGet(seen, i)
+        out = out + "static xc_" + cn + "_t xc_singleton_" + cn + ";\n"
+        out = out + "static bool xc_singleton_" + cn + "_initialized = false;\n"
+        i = i + 1
+    }
     return out + "\n"
+}
+
+// Lazy accessor per slot: constructs on first use, so a slot nothing resolves is
+// never built. Emitted after the xc_new_ prototypes. Eager init (below) stays
+// correct and idempotent — it just warms the slots it already knew about.
+mapper genSingletonAccessors(prog: Program) -> String {
+    let seen = singletonClasses(prog)
+    let out = ""
+    let i = 0
+    while i < stringArrLen(seen) {
+        let cn = stringArrGet(seen, i)
+        out = out + "static xc_" + cn + "_t* xc_singleton_" + cn + "_get(void) {\n"
+        out = out + "    if (!xc_singleton_" + cn + "_initialized) {\n"
+        out = out + "        xc_singleton_" + cn + "_initialized = true;\n"
+        out = out + "        xc_singleton_" + cn + " = *xc_new_" + cn + "();\n"
+        out = out + "    }\n"
+        out = out + "    return &xc_singleton_" + cn + ";\n"
+        out = out + "}\n"
+        i = i + 1
+    }
+    if string_len(out) > 0 { out = out + "\n" }
+    return out
 }
 
 mapper genSingletonInit(prog: Program) -> String {
@@ -406,9 +451,9 @@ mapper genFactories(prog: Program) -> String {
             out = out + "static " + retType + " xc_" + mname + "_resolve_" + ifn + "(void) {\n"
             if b.scopeKind == "singleton" and string_len(b.configPath) == 0 {
                 if isInterface(prog, ifn) {
-                    out = out + "    return xc_" + cn + "_as_" + ifn + "(&xc_singleton_" + cn + ");\n"
+                    out = out + "    return xc_" + cn + "_as_" + ifn + "(xc_singleton_" + cn + "_get());\n"
                 } else {
-                    out = out + "    return &xc_singleton_" + cn + ";\n"
+                    out = out + "    return xc_singleton_" + cn + "_get();\n"
                 }
             } else {
                 // Transient: heap-allocate and wire deps
@@ -426,7 +471,7 @@ mapper genFactories(prog: Program) -> String {
                     if string_len(depConc) > 0 {
                         if isInterface(prog, dep.ifaceName) {
                             if depScope == "singleton" {
-                                out = out + "    _obj->" + dep.name + " = xc_" + depConc + "_as_" + dep.ifaceName + "(&xc_singleton_" + depConc + ");\n"
+                                out = out + "    _obj->" + dep.name + " = xc_" + depConc + "_as_" + dep.ifaceName + "(xc_singleton_" + depConc + "_get());\n"
                             } else {
                                 out = out + "    xc_" + depConc + "_t* _dep_" + dep.name + " = (xc_" + depConc + "_t*)xc_obj_alloc(sizeof(xc_" + depConc + "_t));\n"
                                 out = out + "    memset(_dep_" + dep.name + ", 0, sizeof(xc_" + depConc + "_t));\n"

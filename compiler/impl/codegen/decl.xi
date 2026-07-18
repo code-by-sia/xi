@@ -430,7 +430,24 @@ mapper bindScopeFor(prog: Program, iface: String) -> String {
     }
     // A `d: I as singleton` marker on any dep upgrades I to singleton scope.
     if found != "singleton" and prog.isDepMarkedSingleton(iface) { return "singleton" }
+    // No explicit bind: a module's `scope = ...` is the program-wide default, so
+    // auto-resolved interfaces (never named in a `bind`) follow it too.
+    if string_len(found) == 0 { return prog.defaultScope() }
     return found
+}
+
+// The declared default DI scope (`scope = ...` on any module), or "" when no
+// module sets one. Last declaration wins, matching bind resolution.
+mapper Program.defaultScope() -> String {
+    let i = 0
+    let n = moduleSpecLen(this.modules)
+    let out = ""
+    while i < n {
+        let ds = moduleSpecGet(this.modules, i).defaultScope
+        if string_len(ds) > 0 { out = ds }
+        i = i + 1
+    }
+    return out
 }
 
 // The single chosen implementor of I: explicit bind wins; else the sole (or

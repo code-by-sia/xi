@@ -88,7 +88,8 @@ type ModuleSpec = {
     excludes:    String[],  // globs to drop (default [])
     dependencies: String[], // URLs to source archives, fetched by `xi install`
     constNames:  String[],  // "name:ctype" for module-scoped `const` values
-    constInit:   Token[]    // tokens: `NAME = expr ,` per const (Module.NAME)
+    constInit:   Token[],   // tokens: `NAME = expr ,` per const (Module.NAME)
+    defaultScope: String    // `scope = ...`: default DI scope, "" when unset
 }
 
 // The C type of a module const, or "" if `name` isn't a const of this module.

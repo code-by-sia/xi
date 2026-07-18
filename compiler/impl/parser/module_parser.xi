@@ -185,7 +185,7 @@ mapper parseModule(ps: PState) -> ModuleResult {
         name: name, bindings: bindings,
         id: mId, title: mTitle, description: mDesc, version: mVer, license: mLic,
         includes: mIncludes, excludes: mExcludes, dependencies: mDeps,
-        constNames: constNames, constInit: constInit
+        constNames: constNames, constInit: constInit, defaultScope: mScope
     }
     return ModuleResult { spec: spec, ps: ps2, entry: mEntry, hasEntry: mHasEntry }
 }

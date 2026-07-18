@@ -235,9 +235,27 @@ module App {
 }
 ```
 
-A bare `bind I -> C` takes the module default; an explicit `as …` always wins.
-The field applies to that module's binds - auto-resolved interfaces (no `bind`
-line) stay transient unless a dependency site marks them.
+The default is **program-wide**, not just a shortcut for the lines below it: an
+interface that is never named in a `bind` at all still follows it, so
+`scope = singleton` makes the whole graph shared without annotating anything.
+
+```x
+interface Registry { … }
+class MemRegistry implements Registry { … }      // no bind line anywhere
+
+module App { scope = singleton }
+
+let a = App.resolve(Registry)
+let b = App.resolve(Registry)                    // the same instance
+```
+
+Precedence, strongest first: an explicit `as …` on the bind, a `d: I as
+singleton` marker at an injection site, then the module default, then
+`transient`. An injected dependency and a direct `resolve` of the same interface
+give the same instance.
+
+Default-scoped singletons are created **lazily**, on first resolve, so declaring
+the default costs nothing for services a run never touches.
 
 Singletons live for the whole process (and are never freed by design); transients
 are created where needed.

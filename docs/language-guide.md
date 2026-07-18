@@ -523,18 +523,21 @@ module App {
 }
 ```
 
-A module can change the **default scope** for its binds with a `scope` field -
-`singleton`, `transient`, or `scoped`. Bare binds take the default; an explicit
-`as ...` is the per-bind exception:
+A module can change the **default scope** with a `scope` field - `singleton`,
+`transient`, or `scoped`. It applies program-wide: bare binds take it, and so do
+interfaces that are auto-resolved without any `bind`. An explicit `as ...` is the
+per-bind exception:
 
 ```x
 module App {
-    scope = singleton                    // every bare bind below is a singleton
+    scope = singleton                    // default for the whole program
     bind Logger   -> ConsoleLogger
-    bind Store    -> DbStore
     bind Reporter -> HtmlReporter as transient   // exception: fresh per resolve
 }
 ```
+
+See [scopes](dependency-injection.md#a-module-wide-default) for precedence and
+the lazy-construction rule.
 
 ### Mutable class state
 
