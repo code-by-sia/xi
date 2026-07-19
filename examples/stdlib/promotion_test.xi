@@ -12,8 +12,13 @@
 import "std/json.xi"
 import "std/text.xi"
 
+type Addr = { city: String }
+type User = { id: Integer, name: String, addr: Addr }   // nested compound w/ String
+
 interface Store {
     consumer put(s: String)
+    consumer putUser(u: User)
+    producer users() -> String
     consumer putJson(j: Json)
     producer joined() -> String
     producer firstName() -> String
@@ -22,10 +27,16 @@ interface Store {
 
 class MemStore implements Store {
     deps {}
-    state { items: List<String> = empty List<String>, rows: List<Json> = empty List<Json> }
+    state { items: List<String> = empty List<String>, rows: List<Json> = empty List<Json>, people: List<User> = empty List<User> }
 
     consumer put(s: String) { this.items.push(s) }
     consumer putJson(j: Json) { this.rows.push(j) }
+    consumer putUser(u: User) { this.people.push(u) }
+    producer users() -> String {
+        let out = ""
+        for u in this.people { out = out + "[" + u.name + "@" + u.addr.city + "]" }
+        return out
+    }
     projector count() -> Integer => this.items.len()
 
     producer joined() -> String {
@@ -64,6 +75,15 @@ test "json stored into state keeps its contents" (st: Store as singleton) {
     o = json.set(o, "name", json.str("n-" + text.repeat("z", 2)))
     st.putJson(o)
     assertEq(st.firstName(), "n-zz")
+}
+
+test "a compound with string fields survives storage" (st: Store as singleton) {
+    // The whole point of the per-type promoter: `List<User>` in a singleton.
+    // Both the direct String field and the one nested inside Addr must come
+    // along, not just the struct's bytes.
+    let x = text.repeat("q", 3)
+    st.putUser(User { id: 1, name: "n-" + x, addr: Addr { city: "c-" + x } })
+    assertEq(st.users(), "[n-qqq@c-qqq]")
 }
 
 test "a deep json tree survives storage" (st: Store as singleton) {

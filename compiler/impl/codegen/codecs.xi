@@ -503,3 +503,84 @@ class JsonCodecs implements Codecs {
     }
 
 }
+
+// ── Promoters: deep-copy a value out of the active arena ──────────────────────
+// A compound stored into long-lived state (a singleton's `state`) must not carry
+// pointers into a request/thread arena — the arena dies and they dangle. For a
+// type with pointer-bearing fields we emit xc_promote_<T>, which rewrites each
+// such field through the matching promoter. Fields that are plain scalars are
+// copied by value already and need nothing.
+//
+// Every leaf promoter is a no-op when no arena is active, so these cost nothing
+// outside a server and there is no separate "is an arena active" check.
+
+// The promoter call for one field ctype, or "" when the field needs none.
+mapper fieldPromoter(prog: Program, fct: String, expr: String) -> String {
+    if fct == "xc_string_t" { return "xc_promote_string(" + expr + ")" }
+    if fct == "xc_bytes_t"  { return "xc_promote_bytes(" + expr + ")" }
+    if fct == "xc_Json_t"   { return "xc_promote_json(" + expr + ")" }
+    let xn = fct.ctypeToXName()
+    if prog.typeNeedsPromotion(xn) { return "xc_promote_" + xn + "(" + expr + ")" }
+    return ""
+}
+
+// Does a value of this X type carry a pointer that could live in an arena?
+// Guarded against a type that (transitively) contains itself.
+predicate Program.typeNeedsPromotion(xn: String) {
+    if xn == "String" or xn == "Bytes" or xn == "Json" { return true }
+    if not this.isCompoundTypeC(xn) { return false }
+    let ts = findTypeSpec(this, xn)
+    let i = 0
+    while i < stringArrLen(ts.fields) {
+        let entry = stringArrGet(ts.fields, i)
+        let colon = findChar(entry, 58)
+        let fct = string_slice(entry, colon + 1, string_len(entry))
+        if fct == "xc_string_t" or fct == "xc_bytes_t" or fct == "xc_Json_t" { return true }
+        // one level of nesting: a field of another compound that itself needs it.
+        // (Deeper nesting is covered because that type gets its own promoter.)
+        let fxn = fct.ctypeToXName()
+        if fxn != xn and this.isCompoundTypeC(fxn) {
+            let ts2 = findTypeSpec(this, fxn)
+            let j = 0
+            while j < stringArrLen(ts2.fields) {
+                let e2 = stringArrGet(ts2.fields, j)
+                let c2 = findChar(e2, 58)
+                let f2 = string_slice(e2, c2 + 1, string_len(e2))
+                if f2 == "xc_string_t" or f2 == "xc_bytes_t" or f2 == "xc_Json_t" { return true }
+                j = j + 1
+            }
+        }
+        i = i + 1
+    }
+    return false
+}
+
+mapper genPromoters(prog: Program) -> String {
+    let out = "/* === Promoters (copy a value out of the arena on store) === */\n"
+    let decls = ""
+    let bodies = ""
+    let i = 0
+    let n = typeSpecLen(prog.types)
+    while i < n {
+        let ts = typeSpecGet(prog.types, i)
+        if not isCompositeAlias(ts) and prog.typeNeedsPromotion(ts.name) {
+            let sig = "static xc_" + ts.name + "_t xc_promote_" + ts.name + "(xc_" + ts.name + "_t v)"
+            decls = decls + sig + ";\n"
+            let body = sig + " {\n"
+            let j = 0
+            while j < stringArrLen(ts.fields) {
+                let entry = stringArrGet(ts.fields, j)
+                let colon = findChar(entry, 58)
+                let fname = string_slice(entry, 0, colon)
+                let fct = string_slice(entry, colon + 1, string_len(entry))
+                let p = fieldPromoter(prog, fct, "v." + fname)
+                if string_len(p) > 0 { body = body + "    v." + fname + " = " + p + ";\n" }
+                j = j + 1
+            }
+            bodies = bodies + body + "    return v;\n}\n"
+        }
+        i = i + 1
+    }
+    if string_len(decls) == 0 { return "" }
+    return out + decls + bodies + "\n"
+}

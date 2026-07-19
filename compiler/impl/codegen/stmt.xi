@@ -304,7 +304,7 @@ mapper genStmt(toks: Token[], pos: Integer, ctx: GCtx) -> StmtRes {
         // `this.field = <arena value>` would store a pointer that dies with the
         // arena; copy it out first (no-op outside an arena).
         let rval = rhs.code
-        if isLongLivedDest(e.code) { rval = promoteForStore(rhs.code, rhs.xtyp) }
+        if isLongLivedDest(e.code) { rval = promoteForStore(ctx.prog, rhs.code, rhs.xtyp) }
         return StmtRes { code: "    " + e.code + op + rval + ";\n", ctx: ctx, pos: rhs.pos }
     }
     // bare `expr?` statement — propagate Err, discard the Ok value

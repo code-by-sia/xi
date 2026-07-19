@@ -105,10 +105,12 @@ mapper String.ctypeToXName() -> String {
 // than failing loudly. Wrap the value so it is copied out when an arena is
 // active; with none active this is a no-op, so non-server code pays nothing.
 // Only pointer-bearing scalars need it — an Integer or Bool is copied by value.
-mapper promoteForStore(code: String, xtyp: String) -> String {
+mapper promoteForStore(prog: Program, code: String, xtyp: String) -> String {
     if xtyp == "String" { return "xc_promote_string(" + code + ")" }
     if xtyp == "Bytes"  { return "xc_promote_bytes(" + code + ")" }
     if xtyp == "Json"   { return "xc_promote_json(" + code + ")" }
+    // a compound with pointer-bearing fields has its own generated promoter
+    if prog.typeNeedsPromotion(xtyp) { return "xc_promote_" + xtyp + "(" + code + ")" }
     return code
 }
 

@@ -494,6 +494,7 @@ mapper genAll(prog: Program, srcPath: String, codecs: Codecs) -> String {
          + genSumBoxHelpers(prog)
          + genOptTypedefs(prog)
          + genResTypedefs(prog)
+         + genPromoters(prog)
          + codecs.genEventCodecs(prog)
          + genExternDecls(prog)
          + genIfaceDecls(prog)
