@@ -76,5 +76,5 @@ the JS↔WASM boundary - is a planned next step and not yet wired up.
 
 ## See also
 
-- [CLI › `xc --target wasm`](cli.md#webassembly--xc---target-wasm)
+- [CLI › `xc --target wasm`](cli.md#webassembly---xc---target-wasm)
 - [FFI](ffi.md) - the same C-interop seam the WASM target builds on

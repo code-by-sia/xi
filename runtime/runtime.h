@@ -73,6 +73,9 @@ void  xc_release(const void* p); /* --rc, free at zero; else no-op             *
    conversions route through it so an enclosing arena (thread/request/scope)
    reclaims them. */
 void* xc_heap_alloc(size_t n);
+/* Move a value out of the active arena so it can outlive it (see runtime.c).
+   No-ops when no arena is active. (xc_promote_bytes is declared with Bytes.) */
+xc_string_t   xc_promote_string(xc_string_t s);
 /* Copy a C string into arena-aware heap memory. */
 static inline xc_string_t xc_heap_strdup(const char* s) {
     size_t n = s ? strlen(s) : 0;
@@ -152,6 +155,8 @@ typedef struct {
     xc_size_t            len;
 } xc_bytes_t;
 
+xc_bytes_t xc_promote_bytes(xc_bytes_t b);   /* see xc_promote_string */
+
 static inline xc_integer_t bytes_len(xc_bytes_t b) { return (xc_integer_t)b.len; }
 
 static inline xc_integer_t bytes_get(xc_bytes_t b, xc_integer_t i) {
@@ -205,6 +210,7 @@ typedef struct { xc_bytes_t* data; xc_size_t len; xc_size_t cap; } xc_arr_bytes_
    serialization library). It is referenced from X as the `Json` type; the
    struct itself is private to runtime.c. */
 typedef struct xc_json_node* xc_Json_t;
+xc_Json_t xc_promote_json(xc_Json_t v);   /* deep copy out of the arena */
 
 /* Event system (std/events). An event is a type-erased envelope: a topic, the
    payload's type name, and an opaque pointer to a heap copy of the typed value.

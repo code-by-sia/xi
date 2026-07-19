@@ -950,6 +950,35 @@ xc_integer_t xstd_mon_gauge_value(xc_integer_t i) {
     return (i >= 0 && i < xm_gauge_n) ? xm_gauges[i].value : 0;
 }
 
+/* ─── Promotion: move a value out of the active arena ─────────────────────────
+ * A value allocated in a request/thread arena dies when that arena is destroyed.
+ * Storing one into something longer-lived — a singleton's `state`, a container
+ * created outside the arena — leaves a dangling pointer, which reads as garbage
+ * rather than failing loudly. Codegen calls these when a value crosses into
+ * long-lived storage; with no arena active they are a no-op, so a CLI pays
+ * nothing. `xc_rc_alloc` is the non-arena allocator, so the copy outlives every
+ * arena. */
+xc_string_t xc_promote_string(xc_string_t s) {
+    if (!xc_tls_arena || !s.data) return s;      /* no arena: already long-lived */
+    char* b = (char*)xc_rc_alloc(s.len + 1); if (!b) abort();
+    if (s.len) memcpy(b, s.data, s.len);
+    b[s.len] = '\0';
+    return (xc_string_t){ .data = b, .len = s.len };
+}
+
+/* Deep-copy a Json tree out of the arena. A node's children, key strings and
+   string payloads are all arena-allocated, so a shallow copy would still dangle;
+   this rebuilds the whole tree with the non-arena allocator. Declared later than
+   the json internals it touches, so it is defined beside them (see xj_promote). */
+xc_Json_t xc_promote_json(xc_Json_t v);
+
+xc_bytes_t xc_promote_bytes(xc_bytes_t b) {
+    if (!xc_tls_arena || !b.data) return b;
+    unsigned char* p = (unsigned char*)xc_rc_alloc(b.len ? b.len : 1); if (!p) abort();
+    if (b.len) memcpy(p, b.data, b.len);
+    return (xc_bytes_t){ .data = p, .len = b.len };
+}
+
 xc_integer_t xstd_mem_rss(void) {
 #if defined(__APPLE__)
     mach_task_basic_info_data_t info;
@@ -1062,6 +1091,36 @@ static char* xj_adup_n(const char* p, size_t n) {
 xc_Json_t xstd_json_string(xc_string_t v) {
     struct xc_json_node* n = xj_alloc(XJ_STRING);
     n->str = xj_adup_n(v.data, v.len);
+    return n;
+}
+
+/* See the forward declaration near xc_promote_string. Copies with xc_rc_alloc
+   (the non-arena allocator) so the result outlives any arena; a no-op when no
+   arena is active, since the tree is already long-lived. */
+static char* xj_rc_dup(const char* p) {
+    if (!p) return NULL;
+    size_t n = strlen(p);
+    char* d = (char*)xc_rc_alloc(n + 1); if (!d) abort();
+    memcpy(d, p, n); d[n] = '\0';
+    return d;
+}
+xc_Json_t xc_promote_json(xc_Json_t v) {
+    if (!xc_tls_arena || !v) return v;
+    struct xc_json_node* n = (struct xc_json_node*)xc_rc_alloc(sizeof(*n));
+    if (!n) abort();
+    memset(n, 0, sizeof(*n));
+    n->kind = v->kind; n->b = v->b; n->num = v->num;
+    n->str = xj_rc_dup(v->str);
+    n->len = v->len; n->cap = v->len;
+    if (v->len > 0) {
+        n->items = (struct xc_json_node**)xc_rc_alloc((size_t)v->len * sizeof(*n->items));
+        n->keys  = (char**)xc_rc_alloc((size_t)v->len * sizeof(*n->keys));
+        if (!n->items || !n->keys) abort();
+        for (long i = 0; i < v->len; i++) {
+            n->items[i] = xc_promote_json(v->items[i]);
+            n->keys[i]  = v->keys ? xj_rc_dup(v->keys[i]) : NULL;
+        }
+    }
     return n;
 }
 

@@ -98,3 +98,22 @@ mapper String.ctypeToXName() -> String {
         }
     }
 }
+
+// A value stored into long-lived storage (a class's `state`, or a container that
+// lives there) must not point into the current arena: the arena dies with the
+// request/thread and the pointer is left dangling, which reads as garbage rather
+// than failing loudly. Wrap the value so it is copied out when an arena is
+// active; with none active this is a no-op, so non-server code pays nothing.
+// Only pointer-bearing scalars need it — an Integer or Bool is copied by value.
+mapper promoteForStore(code: String, xtyp: String) -> String {
+    if xtyp == "String" { return "xc_promote_string(" + code + ")" }
+    if xtyp == "Bytes"  { return "xc_promote_bytes(" + code + ")" }
+    if xtyp == "Json"   { return "xc_promote_json(" + code + ")" }
+    return code
+}
+
+// Does this destination outlive the current arena? `self->…` is a class's state,
+// which lives as long as the instance (a singleton: the whole process).
+predicate isLongLivedDest(dest: String) {
+    return dest.startsWith2("self->")
+}

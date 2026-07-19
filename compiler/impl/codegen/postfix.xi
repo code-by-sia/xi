@@ -125,7 +125,11 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     let elem = typ.listElemCtype()
                     if fld == "push" {
                         let ae = genExpr(toks, p + 3, ctx)
-                        code = "xstd_list_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
+                        // Pushing into a list that lives in `state` outlives the
+                        // arena the value came from — copy it out first.
+                        let pv = ae.code
+                        if isLongLivedDest(recv) { pv = promoteForStore(ae.code, typ.listElemXName()) }
+                        code = "xstd_list_push(" + recv + ", (" + elem + "[]){ " + pv + " })"
                         typ = ""
                         p = ae.pos
                         if toks.kindAt(p) == 101 { p = p + 1 }
@@ -143,7 +147,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         let ve = genExpr(toks, q, ctx)
                         let op = "xstd_list_set"
                         if fld == "insert" { op = "xstd_list_insert" }
-                        code = op + "(" + recv + ", " + ie.code + ", (" + elem + "[]){ " + ve.code + " })"
+                        let sv = ve.code
+                        if isLongLivedDest(recv) { sv = promoteForStore(ve.code, typ.listElemXName()) }
+                        code = op + "(" + recv + ", " + ie.code + ", (" + elem + "[]){ " + sv + " })"
                         typ = ""
                         p = ve.pos
                         if toks.kindAt(p) == 101 { p = p + 1 }
@@ -162,7 +168,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     let elem = typ.setElemCtype()
                     if fld == "add" {
                         let ae = genExpr(toks, p + 3, ctx)
-                        code = "xstd_set_add(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
+                        let av = ae.code
+                        if isLongLivedDest(recv) { av = promoteForStore(ae.code, typ.setElemXName()) }
+                        code = "xstd_set_add(" + recv + ", (" + elem + "[]){ " + av + " })"
                         typ = ""
                         p = ae.pos
                         if toks.kindAt(p) == 101 { p = p + 1 }
@@ -198,7 +206,13 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                         let q = ke.pos
                         if toks.kindAt(q) == 106 { q = q + 1 }   // ,
                         let ve = genExpr(toks, q, ctx)
-                        code = "xstd_map_put(" + recv + ", (" + kc + "[]){ " + ke.code + " }, (" + vc + "[]){ " + ve.code + " })"
+                        let kv = ke.code
+                        let mv = ve.code
+                        if isLongLivedDest(recv) {
+                            kv = promoteForStore(ke.code, ke.xtyp)
+                            mv = promoteForStore(ve.code, ve.xtyp)
+                        }
+                        code = "xstd_map_put(" + recv + ", (" + kc + "[]){ " + kv + " }, (" + vc + "[]){ " + mv + " })"
                         typ = ""
                         p = ve.pos
                         if toks.kindAt(p) == 101 { p = p + 1 }
@@ -249,7 +263,9 @@ mapper genPostfix(toks: Token[], pos: Integer, ctx: GCtx) -> ExprRes {
                     let elemX = typ.stackElemXName()
                     if fld == "push" {
                         let ae = genExpr(toks, p + 3, ctx)
-                        code = "xstd_stack_push(" + recv + ", (" + elem + "[]){ " + ae.code + " })"
+                        let tv = ae.code
+                        if isLongLivedDest(recv) { tv = promoteForStore(ae.code, typ.stackElemXName()) }
+                        code = "xstd_stack_push(" + recv + ", (" + elem + "[]){ " + tv + " })"
                         typ = ""  p = ae.pos
                         if toks.kindAt(p) == 101 { p = p + 1 }
                     } else {
